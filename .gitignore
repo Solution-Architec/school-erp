@@ -1,0 +1,25 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node.js
+node_modules/
+dist/
+frontend/node_modules/
+frontend/dist/
+
+# Local databases and backups
+*.sql
+*.dump
+*.sqlite3
+*.db
+
+# Logs and operating-system files
+*.log
