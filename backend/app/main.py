@@ -68,7 +68,14 @@ def register_crud(path, model, schema_in, schema_out, roles):
                    offset: int = Query(default=0, ge=0), db: Session = Depends(get_db),
                    user: models.User = Depends(require_roles(*roles))):
         stmt = select(model)
-        if q and hasattr(model, "full_name"):
+        if q and model is models.Student:
+            term = f"%{q}%"
+            stmt = stmt.where(or_(
+                models.Student.full_name.ilike(term),
+                models.Student.admission_no.ilike(term),
+                models.Student.guardian_phone.ilike(term),
+            ))
+        elif q and hasattr(model, "full_name"):
             stmt = stmt.where(model.full_name.ilike(f"%{q}%"))
         elif q and hasattr(model, "name"):
             stmt = stmt.where(model.name.ilike(f"%{q}%"))
