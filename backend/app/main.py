@@ -6,7 +6,7 @@ from uuid import uuid4
 from sqlalchemy import and_, or_
 from contextlib import asynccontextmanager
 from typing import Any
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -137,6 +137,74 @@ def register_crud(path, model, schema_in, schema_out, roles):
     app.add_api_route(f"/api/{path}/{{item_id}}", get_item, methods=["GET"], response_model=schema_out, tags=[path])
     app.add_api_route(f"/api/{path}/{{item_id}}", update_item, methods=["PUT"], response_model=schema_out, tags=[path])
     app.add_api_route(f"/api/{path}/{{item_id}}", delete_item, methods=["DELETE"], tags=[path])
+
+
+@app.post("/api/students/import", tags=["students"])
+async def import_students(file: UploadFile = File(...), db: Session = Depends(get_db),
+                         user: models.User = Depends(require_roles("super_admin", "admin"))):
+    filename = (file.filename or "").lower()
+    if not (filename.endswith(".csv") or filename.endswith(".xlsx")):
+        raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
+    raw = await file.read()
+    if len(raw) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File is larger than 10 MB")
+    try:
+        if filename.endswith(".csv"):
+            import csv, io
+            reader = csv.DictReader(io.StringIO(raw.decode("utf-8-sig")))
+            records = list(reader)
+        else:
+            from openpyxl import load_workbook
+            import io
+            workbook = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+            sheet = workbook.active
+            values = sheet.iter_rows(values_only=True)
+            headers = [str(v).strip() if v is not None else "" for v in next(values, ())]
+            records = [dict(zip(headers, row)) for row in values if any(v is not None for v in row)]
+            workbook.close()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read file: {exc}")
+    if not records:
+        raise HTTPException(status_code=400, detail="The file has no student rows")
+    if len(records) > 5000:
+        raise HTTPException(status_code=400, detail="Maximum 5,000 students per upload")
+    allowed = set(schemas.StudentIn.model_fields.keys())
+    existing = set(db.scalars(select(models.Student.admission_no)).all())
+    seen, accepted, errors = set(), [], []
+    skipped = 0
+    for row_number, source in enumerate(records, start=2):
+        row = {str(k).strip().lower(): v for k, v in source.items() if k is not None}
+        data = {k: v for k, v in row.items() if k in allowed and v is not None}
+        admission = str(data.get("admission_no", "")).strip()
+        if not admission:
+            errors.append({"row": row_number, "error": "Admission number is required"})
+            skipped += 1
+            continue
+        if admission in existing or admission in seen:
+            errors.append({"row": row_number, "error": f"Duplicate admission number: {admission}"})
+            skipped += 1
+            continue
+        for key in ("transport_required", "hostel_required"):
+            if key in data and isinstance(data[key], str):
+                data[key] = data[key].strip().lower() in ("1", "true", "yes", "y")
+        if "date_of_birth" in data and hasattr(data["date_of_birth"], "isoformat"):
+            value = data["date_of_birth"]
+            data["date_of_birth"] = value.date().isoformat() if isinstance(value, datetime) else value.isoformat()
+        try:
+            student = schemas.StudentIn.model_validate(data)
+            accepted.append(models.Student(**student.model_dump()))
+            seen.add(admission)
+        except Exception as exc:
+            errors.append({"row": row_number, "error": str(exc)[:400]})
+            skipped += 1
+    if accepted:
+        db.add_all(accepted)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Import conflicted with an existing admission number. No rows were imported; please retry.")
+    return {"created": len(accepted), "skipped": skipped, "errors": errors[:100]}
 
 ADMIN_ROLES = ("super_admin", "admin")
 FINANCE_ROLES = ("super_admin", "admin", "accountant")
