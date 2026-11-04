@@ -139,6 +139,8 @@ def register_crud(path, model, schema_in, schema_out, roles):
 
     def create_item(payload: Any, db: Session = Depends(get_db),
                     user: models.User = Depends(require_roles(*roles))):
+        if user.role != "super_admin" and not user.school_id:
+            raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
         values = payload.model_dump()
         validate_related_records(values, user, db)
         if hasattr(model, "school_id"):
@@ -355,6 +357,8 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
                 school_id: int | None = Query(default=None, gt=0),
                 db: Session = Depends(get_db),
                 user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
+    if user.role != "super_admin" and not user.school_id:
+        raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
     target_school_id = user.school_id if user.role != "super_admin" else school_id
     payment_stmt = select(models.FeePayment, models.Student, models.School).join(
         models.StudentFee, models.FeePayment.student_fee_id == models.StudentFee.id
@@ -417,6 +421,8 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
 @app.get("/api/fee-dues", tags=["payments"])
 def fee_dues(db: Session = Depends(get_db),
              user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
+    if user.role != "super_admin" and not user.school_id:
+        raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
     stmt = select(models.StudentFee, models.Student).join(
         models.Student, models.StudentFee.student_id == models.Student.id
     ).order_by(models.Student.full_name)
