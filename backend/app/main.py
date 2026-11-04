@@ -10,7 +10,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.exc import IntegrityError
 from .database import Base, engine, get_db, SessionLocal
 from . import models, schemas
@@ -19,6 +19,14 @@ from .security import hash_password, verify_password, create_access_token, curre
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        for table in ("users", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments"):
+            conn.execute(text('ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)'))
+        for index_name in ("ix_students_admission_no", "ix_staff_employee_no", "ix_vehicles_registration_no", "ix_fee_payments_receipt_no"):
+            conn.execute(text('DROP INDEX IF EXISTS "' + index_name + '"'))
+        conn.execute(text("ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS uq_fee_structure_name_year_term"))
+        conn.execute(text("ALTER TABLE fee_structures ADD CONSTRAINT uq_fee_structure_school_year_term UNIQUE (school_id, name, academic_year, term)"))
+        conn.execute(text("ALTER TABLE fee_payments ADD CONSTRAINT uq_fee_payment_school_receipt UNIQUE (school_id, receipt_no)"))
     email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
     password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "ChangeMe123!")
     with SessionLocal() as db:
@@ -51,23 +59,43 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
 def me(user: models.User = Depends(current_user)):
     return user
 
+def school_scope(model, user):
+    if user.role == "super_admin":
+        return None
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
+    return model.school_id == user.school_id
+
+
 @app.get("/api/dashboard")
 def dashboard(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+    def count(model, *conditions):
+        stmt = select(func.count()).select_from(model)
+        scope = school_scope(model, user)
+        if scope is not None:
+            stmt = stmt.where(scope)
+        if conditions:
+            stmt = stmt.where(*conditions)
+        return db.scalar(stmt) or 0
     return {
-        "students": db.scalar(select(func.count()).select_from(models.Student)) or 0,
-        "staff": db.scalar(select(func.count()).select_from(models.Staff)) or 0,
-        "classes": db.scalar(select(func.count()).select_from(models.SchoolClass)) or 0,
-        "vehicles": db.scalar(select(func.count()).select_from(models.Vehicle)) or 0,
-        "hostel_rooms": db.scalar(select(func.count()).select_from(models.Hostel)) or 0,
-        "open_maintenance": db.scalar(select(func.count()).select_from(models.MaintenanceRequest).where(models.MaintenanceRequest.status == "open")) or 0,
+        "students": count(models.Student),
+        "staff": count(models.Staff),
+        "classes": count(models.SchoolClass),
+        "vehicles": count(models.Vehicle),
+        "hostel_rooms": count(models.Hostel),
+        "open_maintenance": count(models.MaintenanceRequest, models.MaintenanceRequest.status == "open"),
         "user_role": user.role
     }
+
 
 def register_crud(path, model, schema_in, schema_out, roles):
     def list_items(q: str = Query(default="", max_length=120), limit: int = Query(default=100, ge=1, le=500),
                    offset: int = Query(default=0, ge=0), db: Session = Depends(get_db),
                    user: models.User = Depends(require_roles(*roles))):
         stmt = select(model)
+        scope = school_scope(model, user)
+        if scope is not None:
+            stmt = stmt.where(scope)
         if q and model is models.Student:
             term = f"%{q}%"
             stmt = stmt.where(or_(
@@ -84,7 +112,15 @@ def register_crud(path, model, schema_in, schema_out, roles):
 
     def create_item(payload: Any, db: Session = Depends(get_db),
                     user: models.User = Depends(require_roles(*roles))):
-        obj = model(**payload.model_dump())
+        values = payload.model_dump()
+        if hasattr(model, "school_id"):
+            if user.role != "super_admin":
+                values["school_id"] = user.school_id
+            elif not values.get("school_id"):
+                raise HTTPException(status_code=422, detail="school_id is required for Super Admin record creation")
+        if model is models.Document:
+            values["uploaded_by"] = user.id
+        obj = model(**values)
         db.add(obj)
         try:
             db.commit()
@@ -97,14 +133,14 @@ def register_crud(path, model, schema_in, schema_out, roles):
     def get_item(item_id: int, db: Session = Depends(get_db),
                  user: models.User = Depends(require_roles(*roles))):
         obj = db.get(model, item_id)
-        if not obj:
+        if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
         return obj
 
     def update_item(item_id: int, payload: Any, db: Session = Depends(get_db),
                     user: models.User = Depends(require_roles(*roles))):
         obj = db.get(model, item_id)
-        if not obj:
+        if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
         for key, value in payload.model_dump().items():
             setattr(obj, key, value)
@@ -119,7 +155,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
     def delete_item(item_id: int, db: Session = Depends(get_db),
                     user: models.User = Depends(require_roles("super_admin", "admin"))):
         obj = db.get(model, item_id)
-        if not obj:
+        if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
         db.delete(obj)
         db.commit()
