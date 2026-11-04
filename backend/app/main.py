@@ -149,6 +149,7 @@ register_crud("hostels", models.Hostel, schemas.HostelIn, schemas.HostelOut, ADM
 register_crud("documents", models.Document, schemas.DocumentIn, schemas.DocumentOut, ADMIN_ROLES + ("accountant", "teacher", "transport_manager", "hostel_warden"))
 register_crud("maintenance", models.MaintenanceRequest, schemas.MaintenanceIn, schemas.MaintenanceOut, ADMIN_ROLES + ("transport_manager", "hostel_warden"))
 register_crud("fee-structures", models.FeeStructure, schemas.FeeStructureIn, schemas.FeeStructureOut, FINANCE_ROLES)
+register_crud("student-fees", models.StudentFee, schemas.StudentFeeIn, schemas.StudentFeeOut, FINANCE_ROLES)
 
 @app.get("/api/users", response_model=list[schemas.UserOut], tags=["users"])
 def list_users(db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin", "admin"))):
