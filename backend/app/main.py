@@ -410,3 +410,19 @@ def record_payment(fee_id: int, payload: schemas.PaymentIn, db: Session = Depend
     db.commit()
     db.refresh(payment)
     return payment
+
+
+
+@app.patch("/api/users/{user_id}/school", response_model=schemas.UserOut, tags=["users"])
+def assign_user_school(user_id: int, payload: dict, db: Session = Depends(get_db),
+                       user: models.User = Depends(require_roles("super_admin"))):
+    target = db.get(models.User, user_id)
+    school_id = payload.get("school_id")
+    if not target or target.role == "super_admin":
+        raise HTTPException(status_code=404, detail="School owner account not found")
+    if not school_id or not db.get(models.School, int(school_id)):
+        raise HTTPException(status_code=404, detail="School not found")
+    target.school_id = int(school_id)
+    db.commit()
+    db.refresh(target)
+    return target
