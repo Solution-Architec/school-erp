@@ -22,6 +22,9 @@ async def lifespan(app: FastAPI):
     with engine.begin() as conn:
         for table in ("users", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments"):
             conn.execute(text('ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)'))
+        for table in ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments"):
+            conn.execute(text('ALTER TABLE "' + table + '" ALTER COLUMN school_id SET NOT NULL'))
+
         for index_name in ("ix_students_admission_no", "ix_staff_employee_no", "ix_vehicles_registration_no", "ix_fee_payments_receipt_no"):
             conn.execute(text('DROP INDEX IF EXISTS "' + index_name + '"'))
         conn.execute(text("ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS uq_fee_structure_name_year_term"))
