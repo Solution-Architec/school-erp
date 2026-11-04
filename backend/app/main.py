@@ -268,12 +268,14 @@ register_crud("fee-structures", models.FeeStructure, schemas.FeeStructureIn, sch
 register_crud("student-fees", models.StudentFee, schemas.StudentFeeIn, schemas.StudentFeeOut, FINANCE_ROLES)
 
 @app.get("/api/schools", response_model=list[schemas.SchoolOut], tags=["schools"])
-def list_schools(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+def list_schools(q: str = Query(default="", max_length=120), db: Session = Depends(get_db), user: models.User = Depends(current_user)):
     stmt = select(models.School).order_by(models.School.name)
     if user.role != "super_admin":
         if not user.school_id:
             raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
         stmt = stmt.where(models.School.id == user.school_id)
+    if q:
+        stmt = stmt.where(models.School.name.ilike("%" + q + "%"))
     return list(db.scalars(stmt).all())
 
 
