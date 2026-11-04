@@ -13,10 +13,25 @@ class LoginInput(BaseModel):
 
 class UserOut(BaseModel):
     id: int
+    school_id: int | None = None
     name: str
     email: EmailStr
     role: str
     model_config = ConfigDict(from_attributes=True)
+
+class SchoolIn(BaseModel):
+    name: str = Field(min_length=2, max_length=180)
+    code: str = Field(min_length=2, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class SchoolOut(BaseModel):
+    id: int
+    name: str
+    code: str
+    is_active: bool
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
 
 class StudentIn(BaseModel):
     admission_no: str = Field(min_length=1, max_length=80)
@@ -188,6 +203,7 @@ class FeeStructureSummary(BaseModel):
 
 class PaymentOut(BaseModel):
     id: int
+    school_id: int | None = None
     student_fee_id: int
     receipt_no: str
     amount: Decimal
