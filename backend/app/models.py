@@ -134,7 +134,7 @@ class FeeStructure(Base):
     __table_args__ = (
         UniqueConstraint(
             "school_id", "name", "academic_year", "term",
-            name="uq_fee_structure_name_year_term"
+            name="uq_fee_structure_school_year_term"
         ),
         CheckConstraint("amount >= 0", name="ck_fee_structure_amount"),
     )
@@ -185,6 +185,7 @@ class FeePayment(Base):
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_fee_payment_amount"),
+        UniqueConstraint("school_id", "receipt_no", name="uq_fee_payment_school_receipt"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
