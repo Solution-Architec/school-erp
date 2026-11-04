@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Activity, Bus, Building2, ChevronDown, FileText, GraduationCap, LayoutDashboard, LogOut, Menu, Search, Settings, Users, Wallet, Wrench, BookOpen, Bell, Plus, RefreshCw, X, Upload, Download } from 'lucide-react'
 
 const API = (import.meta as any).env?.VITE_API_URL || ''
-type User = { id:number; name:string; email:string; role:string }
+type User = { id:number; name:string; email:string; role:string; school_id?:number|null }
 type ModuleDef = { key:string; label:string; icon:any; endpoint?:string; fields?:{key:string;label:string;type?:string;required?:boolean}[]; description:string }
 const modules: ModuleDef[] = [
  {key:'dashboard',label:'Dashboard',icon:LayoutDashboard,description:'School overview and operational alerts'},
@@ -77,6 +77,11 @@ function App(){
  const [studentSearch,setStudentSearch]=useState('')
  const [studentResults,setStudentResults]=useState<any[]>([])
  const [selectedStudent,setSelectedStudent]=useState<any|null>(null)
+ const [reportData,setReportData]=useState<any>({collected:0,outstanding:0,chart:[],recent_payments:[]})
+ const [reportMonth,setReportMonth]=useState('')
+ const [reportYear,setReportYear]=useState(String(new Date().getFullYear()))
+ const [reportSchool,setReportSchool]=useState('')
+ const [schools,setSchools]=useState<any[]>([])
  const selected=modules.find(m=>m.key===active)||modules[0]
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
  useEffect(()=>{if(!token)return;fetch(`${API}/api/auth/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setUser).catch(()=>{localStorage.removeItem('erp_token');setToken('');setUser(null)})},[token,authHeaders])
@@ -86,8 +91,10 @@ function App(){
 
  function downloadStudentTemplate(){const csv="admission_no,full_name,class_name,section,guardian_name,guardian_phone,email,address,date_of_birth,transport_required,hostel_required,status\nADM001,Student Name,Class 1,A,Parent Name,9876543210,student@example.com,Hyderabad,2015-04-20,false,false,active\n";const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));const link=document.createElement('a');link.href=url;link.download='campusflow-student-template.csv';link.click();URL.revokeObjectURL(url)}
  async function importStudents(e:any){const file=e.target.files?.[0] as File|undefined;e.target.value='';if(!file)return;setImporting(true);setError('');setNotice('');try{const body=new FormData();body.append('file',file);const response=await fetch(API+'/api/students/import',{method:'POST',headers:{Authorization:'Bearer '+token},body});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail||'Import failed ('+response.status+')');setNotice('Import complete: '+data.created+' students added, '+data.skipped+' skipped.'+(data.errors?.length?' First issue: row '+data.errors[0].row+' — '+data.errors[0].error:''));await load()}catch(err:any){setError(err.message||'Student import failed')}finally{setImporting(false)}}
- async function load(){if(!user)return;setLoading(true);setError('');try{if(active==='dashboard'){setStats(await request('/api/dashboard'));setRows([])}else if(selected.endpoint){setRows(await request(`${selected.endpoint}?q=${encodeURIComponent(query)}`))}}catch(e:any){setError(e.message)}finally{setLoading(false)}}
- useEffect(()=>{if(user)load()},[active,user,query])
+ async function load(){if(!user)return;setLoading(true);setError('');try{if(active==='dashboard'){setStats(await request('/api/dashboard'));setRows([])}else if(active==='fee-reports'){const params=new URLSearchParams({year:reportYear});if(reportMonth)params.set('month',reportMonth);if(user.role==='super_admin'&&reportSchool)params.set('school_id',reportSchool);setReportData(await request('/api/fee-reports?'+params.toString()));setRows([])}else if(selected.endpoint){setRows(await request(selected.endpoint+'?q='+encodeURIComponent(query)))}}catch(e:any){setError(e.message)}finally{setLoading(false)}}
+ useEffect(()=>{if(user&&active!=='fee-reports')load()},[active,user,query])
+ useEffect(()=>{if(user&&active==='fee-reports')load()},[active,user,reportMonth,reportYear,reportSchool])
+ useEffect(()=>{if(user?.role==='super_admin')request('/api/schools').then(setSchools).catch(()=>setSchools([]))},[user,token])
  useEffect(()=>{let cancelled=false;const timer=setTimeout(async()=>{if(!user||studentSearch.trim().length<2){setStudentResults([]);return}try{const found=await request('/api/students?q='+encodeURIComponent(studentSearch.trim()));if(!cancelled)setStudentResults(found)}catch{if(!cancelled)setStudentResults([])}},250);return()=>{cancelled=true;clearTimeout(timer)}},[studentSearch,user,token])
  function chooseStudent(student:any){setSelectedStudent(student);setStudentSearch('');setStudentResults([]);if(active==='student-fees'){setForm({total_amount:''});setShowForm(true)}if(active==='documents'){setForm(current=>({...current,owner_type:'student',owner_id:student.id}));setShowForm(true)}}
  async function save(e: FormEvent<HTMLFormElement>) {e.preventDefault();try{const payload={...form};for(const f of selected.fields||[]){if(f.type==='number'&&payload[f.key]!==''&&payload[f.key]!=null)payload[f.key]=Number(payload[f.key]);if(f.type==='checkbox')payload[f.key]=Boolean(payload[f.key]);if(payload[f.key]==='')delete payload[f.key]}if(active==='student-fees'){if(!selectedStudent)throw new Error('Search and select a student before adding a fee.');payload.student_id=selectedStudent.id;payload.category='tuition';payload.academic_year=`${new Date().getFullYear()}-${String(new Date().getFullYear()+1).slice(-2)}`;payload.term='annual';payload.discount=0;payload.description='Tuition fee'}const created=await request(selected.endpoint!,{method:'POST',body:JSON.stringify(payload)});if(active==='students')setSelectedStudent(created);setShowForm(false);setForm({});setNotice('Record created successfully');await load()}catch(e:any){setError(e.message)}}
