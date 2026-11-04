@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
         for index_name in ("ix_students_admission_no", "ix_staff_employee_no", "ix_vehicles_registration_no", "ix_fee_payments_receipt_no"):
             conn.execute(text('DROP INDEX IF EXISTS "' + index_name + '"'))
         conn.execute(text("ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS uq_fee_structure_name_year_term"))
+        conn.execute(text("ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS uq_fee_structure_school_year_term"))
         conn.execute(text("ALTER TABLE fee_structures ADD CONSTRAINT uq_fee_structure_school_year_term UNIQUE (school_id, name, academic_year, term)"))
         conn.execute(text("ALTER TABLE fee_payments DROP CONSTRAINT IF EXISTS uq_fee_payment_school_receipt"))
         conn.execute(text("ALTER TABLE fee_payments ADD CONSTRAINT uq_fee_payment_school_receipt UNIQUE (school_id, receipt_no)"))
@@ -188,7 +189,9 @@ ADMIN_ROLES = ("super_admin", "admin")
 FINANCE_ROLES = ("super_admin", "admin", "accountant")
 @app.post("/api/students/import", tags=["students"])
 async def import_students(file: UploadFile = File(...), db: Session = Depends(get_db),
-                         user: models.User = Depends(require_roles("super_admin", "admin"))):
+                         user: models.User = Depends(require_roles("admin"))):
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="Assign this admin account to a school before importing students")
     filename = (file.filename or "").lower()
     if not (filename.endswith(".csv") or filename.endswith(".xlsx")):
         raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
