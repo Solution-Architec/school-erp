@@ -28,6 +28,14 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE fee_structures ADD CONSTRAINT uq_fee_structure_school_year_term UNIQUE (school_id, name, academic_year, term)"))
         conn.execute(text("ALTER TABLE fee_payments DROP CONSTRAINT IF EXISTS uq_fee_payment_school_receipt"))
         conn.execute(text("ALTER TABLE fee_payments ADD CONSTRAINT uq_fee_payment_school_receipt UNIQUE (school_id, receipt_no)"))
+        for table, constraint, columns in (
+            ("students", "uq_student_school_admission", "school_id, admission_no"),
+            ("staff", "uq_staff_school_employee", "school_id, employee_no"),
+            ("vehicles", "uq_vehicle_school_registration", "school_id, registration_no"),
+        ):
+            conn.execute(text('ALTER TABLE "' + table + '" DROP CONSTRAINT IF EXISTS "' + constraint + '"'))
+            conn.execute(text('ALTER TABLE "' + table + '" ADD CONSTRAINT "' + constraint + '" UNIQUE (' + columns + ')'))
+
     email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
     password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "ChangeMe123!")
     with SessionLocal() as db:
