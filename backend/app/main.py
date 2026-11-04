@@ -327,15 +327,17 @@ def create_user(payload: dict, db: Session = Depends(get_db),
 @app.get("/api/fee-reports", tags=["fee-reports"])
 def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
                 year: int | None = Query(default=None, ge=2000, le=2100),
+                school_id: int | None = Query(default=None, gt=0),
                 db: Session = Depends(get_db),
                 user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
+    target_school_id = user.school_id if user.role != "super_admin" else school_id
     payment_stmt = select(models.FeePayment, models.Student, models.School).join(
         models.StudentFee, models.FeePayment.student_fee_id == models.StudentFee.id
     ).join(models.Student, models.StudentFee.student_id == models.Student.id).join(
         models.School, models.FeePayment.school_id == models.School.id
     )
-    if user.role != "super_admin":
-        payment_stmt = payment_stmt.where(models.FeePayment.school_id == user.school_id)
+    if target_school_id is not None:
+        payment_stmt = payment_stmt.where(models.FeePayment.school_id == target_school_id)
     if year:
         payment_stmt = payment_stmt.where(func.extract("year", models.FeePayment.payment_date) == year)
     if month:
@@ -343,8 +345,8 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
     payments = db.execute(payment_stmt.order_by(models.FeePayment.payment_date.desc()).limit(100)).all()
 
     collected_stmt = select(func.coalesce(func.sum(models.FeePayment.amount), 0))
-    if user.role != "super_admin":
-        collected_stmt = collected_stmt.where(models.FeePayment.school_id == user.school_id)
+    if target_school_id is not None:
+        collected_stmt = collected_stmt.where(models.FeePayment.school_id == target_school_id)
     if year:
         collected_stmt = collected_stmt.where(func.extract("year", models.FeePayment.payment_date) == year)
     if month:
@@ -357,8 +359,8 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
     outstanding_stmt = select(func.coalesce(func.sum(
         models.StudentFee.total_amount - models.StudentFee.discount - paid_subquery
     ), 0))
-    if user.role != "super_admin":
-        outstanding_stmt = outstanding_stmt.where(models.StudentFee.school_id == user.school_id)
+    if target_school_id is not None:
+        outstanding_stmt = outstanding_stmt.where(models.StudentFee.school_id == target_school_id)
     if year:
         outstanding_stmt = outstanding_stmt.where(func.extract("year", models.StudentFee.created_at) == year)
     if month:
@@ -371,8 +373,8 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
     ).group_by(func.date_trunc("month", models.FeePayment.payment_date)).order_by(
         func.date_trunc("month", models.FeePayment.payment_date)
     )
-    if user.role != "super_admin":
-        chart_stmt = chart_stmt.where(models.FeePayment.school_id == user.school_id)
+    if target_school_id is not None:
+        chart_stmt = chart_stmt.where(models.FeePayment.school_id == target_school_id)
     if year:
         chart_stmt = chart_stmt.where(func.extract("year", models.FeePayment.payment_date) == year)
     chart = [{"period": period, "amount": float(amount or 0)}
