@@ -31,3 +31,11 @@
 .school-owner-assign label{display:flex;flex-direction:column;gap:6px;min-width:190px;color:#536b78;font-size:10px;font-weight:700}
 .school-owner-assign select{border:1px solid #dfe8ec;border-radius:7px;padding:10px;background:#fff;color:#29414f;font:inherit;font-size:11px}
 @media(max-width:720px){.school-owner-assign{margin:0 12px 12px;padding:12px}.school-owner-assign label{flex:1;min-width:100%}}
+
+.payment-entry-panel{padding:20px}
+.payment-entry-form{display:grid;grid-template-columns:2fr 1fr 1fr auto;align-items:end;gap:12px;margin:20px 0;padding:16px;border:1px solid #dcece8;background:#fbfefd;border-radius:10px}
+.payment-entry-form label{display:flex;flex-direction:column;gap:6px;color:#536b78;font-size:10px;font-weight:700}
+.payment-entry-form input,.payment-entry-form select{width:100%;border:1px solid #dfe8ec;border-radius:7px;padding:10px;background:#fff;color:#29414f;font:inherit;font-size:11px}
+.payment-entry-panel .table-wrap{margin-top:12px}
+@media(max-width:900px){.payment-entry-form{grid-template-columns:1fr 1fr}.payment-entry-form label:first-child{grid-column:1/-1}}
+@media(max-width:560px){.payment-entry-form{grid-template-columns:1fr}.payment-entry-form label:first-child{grid-column:auto}.payment-entry-form button{width:100%}}
