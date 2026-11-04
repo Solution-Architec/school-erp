@@ -313,3 +313,92 @@ def create_user(payload: dict, db: Session = Depends(get_db),
         db.rollback()
         raise HTTPException(status_code=409, detail="Email already exists")
     return user_obj
+
+
+
+@app.get("/api/fee-reports", tags=["fee-reports"])
+def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
+                year: int | None = Query(default=None, ge=2000, le=2100),
+                db: Session = Depends(get_db),
+                user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
+    payment_stmt = select(models.FeePayment, models.Student, models.School).join(
+        models.StudentFee, models.FeePayment.student_fee_id == models.StudentFee.id
+    ).join(models.Student, models.StudentFee.student_id == models.Student.id).join(
+        models.School, models.FeePayment.school_id == models.School.id
+    )
+    if user.role != "super_admin":
+        payment_stmt = payment_stmt.where(models.FeePayment.school_id == user.school_id)
+    if year:
+        payment_stmt = payment_stmt.where(func.extract("year", models.FeePayment.payment_date) == year)
+    if month:
+        payment_stmt = payment_stmt.where(func.extract("month", models.FeePayment.payment_date) == month)
+    payments = db.execute(payment_stmt.order_by(models.FeePayment.payment_date.desc()).limit(100)).all()
+
+    collected_stmt = select(func.coalesce(func.sum(models.FeePayment.amount), 0))
+    if user.role != "super_admin":
+        collected_stmt = collected_stmt.where(models.FeePayment.school_id == user.school_id)
+    if year:
+        collected_stmt = collected_stmt.where(func.extract("year", models.FeePayment.payment_date) == year)
+    if month:
+        collected_stmt = collected_stmt.where(func.extract("month", models.FeePayment.payment_date) == month)
+    collected = db.scalar(collected_stmt) or 0
+
+    paid_subquery = select(func.coalesce(func.sum(models.FeePayment.amount), 0)).where(
+        models.FeePayment.student_fee_id == models.StudentFee.id
+    ).correlate(models.StudentFee).scalar_subquery()
+    outstanding_stmt = select(func.coalesce(func.sum(
+        models.StudentFee.total_amount - models.StudentFee.discount - paid_subquery
+    ), 0))
+    if user.role != "super_admin":
+        outstanding_stmt = outstanding_stmt.where(models.StudentFee.school_id == user.school_id)
+    if year:
+        outstanding_stmt = outstanding_stmt.where(func.extract("year", models.StudentFee.created_at) == year)
+    if month:
+        outstanding_stmt = outstanding_stmt.where(func.extract("month", models.StudentFee.created_at) == month)
+    outstanding = db.scalar(outstanding_stmt) or 0
+
+    chart_stmt = select(
+        func.to_char(func.date_trunc("month", models.FeePayment.payment_date), "YYYY-MM"),
+        func.sum(models.FeePayment.amount)
+    ).group_by(func.date_trunc("month", models.FeePayment.payment_date)).order_by(
+        func.date_trunc("month", models.FeePayment.payment_date)
+    )
+    if user.role != "super_admin":
+        chart_stmt = chart_stmt.where(models.FeePayment.school_id == user.school_id)
+    if year:
+        chart_stmt = chart_stmt.where(func.extract("year", models.FeePayment.payment_date) == year)
+    chart = [{"period": period, "amount": float(amount or 0)}
+             for period, amount in db.execute(chart_stmt).all()]
+    recent = [{
+        "id": payment.id, "school_name": school.name, "receipt_no": payment.receipt_no,
+        "amount": float(payment.amount), "payment_method": payment.payment_method,
+        "payment_date": payment.payment_date.isoformat(), "student_name": student.full_name,
+        "admission_no": student.admission_no
+    } for payment, student, school in payments]
+    return {"collected": float(collected), "outstanding": float(outstanding),
+            "chart": chart, "recent_payments": recent}
+
+
+@app.post("/api/student-fees/{fee_id}/payments", response_model=schemas.PaymentOut, tags=["payments"])
+def record_payment(fee_id: int, payload: schemas.PaymentIn, db: Session = Depends(get_db),
+                   user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
+    fee = db.get(models.StudentFee, fee_id)
+    if not fee or (user.role != "super_admin" and fee.school_id != user.school_id):
+        raise HTTPException(status_code=404, detail="Student fee not found")
+    payment = models.FeePayment(
+        school_id=fee.school_id, student_fee_id=fee.id,
+        receipt_no=f"CF-{fee.school_id}-{uuid4().hex[:12].upper()}",
+        amount=payload.amount, payment_method=payload.payment_method,
+        transaction_reference=payload.transaction_reference, notes=payload.notes,
+        payment_date=payload.payment_date or datetime.utcnow(), received_by=user.id
+    )
+    db.add(payment)
+    db.flush()
+    paid = db.scalar(select(func.coalesce(func.sum(models.FeePayment.amount), 0)).where(
+        models.FeePayment.student_fee_id == fee.id
+    )) or 0
+    due = Decimal(str(fee.total_amount)) - Decimal(str(fee.discount))
+    fee.status = "paid" if Decimal(str(paid)) >= due else "partial"
+    db.commit()
+    db.refresh(payment)
+    return payment
