@@ -20,10 +20,35 @@ from .security import hash_password, verify_password, create_access_token, curre
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     with engine.begin() as conn:
-        for table in ("users", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments"):
+        tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments")
+        all_school_tables = ("users",) + tenant_tables
+        for table in all_school_tables:
             conn.execute(text('ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)'))
-        for table in ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments"):
-            conn.execute(text('ALTER TABLE "' + table + '" ALTER COLUMN school_id SET NOT NULL'))
+
+        # Preserve pre-multi-school records by placing unassigned legacy data
+        # into a dedicated school before enforcing tenant isolation constraints.
+        conn.execute(text("""
+            INSERT INTO schools (name, code, is_active, created_at)
+            VALUES ('Migrated Legacy School', 'LEGACY-MIGRATED', TRUE, CURRENT_TIMESTAMP)
+            ON CONFLICT (code) DO NOTHING
+        """))
+        legacy_school_id = conn.execute(
+            text("SELECT id FROM schools WHERE code = 'LEGACY-MIGRATED'")
+        ).scalar_one()
+        for table in tenant_tables:
+            conn.execute(text(
+                'UPDATE "' + table + '" SET school_id = :school_id WHERE school_id IS NULL'
+            ), {"school_id": legacy_school_id})
+            conn.execute(text(
+                'ALTER TABLE "' + table + '" ALTER COLUMN school_id SET NOT NULL'
+            ))
+
+        # Super Admin remains global; any legacy school-level users belong to
+        # the migrated school until explicitly reassigned in the Schools screen.
+        conn.execute(text("""
+            UPDATE users SET school_id = :school_id
+            WHERE school_id IS NULL AND role <> 'super_admin'
+        """), {"school_id": legacy_school_id})
 
         for index_name in ("ix_students_admission_no", "ix_staff_employee_no", "ix_vehicles_registration_no", "ix_fee_payments_receipt_no"):
             conn.execute(text('DROP INDEX IF EXISTS "' + index_name + '"'))
