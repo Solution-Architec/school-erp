@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
             conn.execute(text('DROP INDEX IF EXISTS "' + index_name + '"'))
         conn.execute(text("ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS uq_fee_structure_name_year_term"))
         conn.execute(text("ALTER TABLE fee_structures ADD CONSTRAINT uq_fee_structure_school_year_term UNIQUE (school_id, name, academic_year, term)"))
+        conn.execute(text("ALTER TABLE fee_payments DROP CONSTRAINT IF EXISTS uq_fee_payment_school_receipt"))
         conn.execute(text("ALTER TABLE fee_payments ADD CONSTRAINT uq_fee_payment_school_receipt UNIQUE (school_id, receipt_no)"))
     email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
     password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "ChangeMe123!")
@@ -207,7 +208,10 @@ async def import_students(file: UploadFile = File(...), db: Session = Depends(ge
     if len(records) > 5000:
         raise HTTPException(status_code=400, detail="Maximum 5,000 students per upload")
     allowed = set(schemas.StudentIn.model_fields.keys())
-    existing = set(db.scalars(select(models.Student.admission_no)).all())
+    existing_stmt = select(models.Student.admission_no)
+    if user.role != "super_admin":
+        existing_stmt = existing_stmt.where(models.Student.school_id == user.school_id)
+    existing = set(db.scalars(existing_stmt).all())
     seen, accepted, errors = set(), [], []
     skipped = 0
     for row_number, source in enumerate(records, start=2):
@@ -230,7 +234,7 @@ async def import_students(file: UploadFile = File(...), db: Session = Depends(ge
             data["date_of_birth"] = value.date().isoformat() if isinstance(value, datetime) else value.isoformat()
         try:
             student = schemas.StudentIn.model_validate(data)
-            accepted.append(models.Student(**student.model_dump()))
+            accepted.append(models.Student(**student.model_dump(), school_id=user.school_id))
             seen.add(admission)
         except Exception as exc:
             errors.append({"row": row_number, "error": str(exc)[:400]})
@@ -255,18 +259,52 @@ register_crud("maintenance", models.MaintenanceRequest, schemas.MaintenanceIn, s
 register_crud("fee-structures", models.FeeStructure, schemas.FeeStructureIn, schemas.FeeStructureOut, FINANCE_ROLES)
 register_crud("student-fees", models.StudentFee, schemas.StudentFeeIn, schemas.StudentFeeOut, FINANCE_ROLES)
 
+@app.get("/api/schools", response_model=list[schemas.SchoolOut], tags=["schools"])
+def list_schools(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+    stmt = select(models.School).order_by(models.School.name)
+    if user.role != "super_admin":
+        if not user.school_id:
+            raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
+        stmt = stmt.where(models.School.id == user.school_id)
+    return list(db.scalars(stmt).all())
+
+
+@app.post("/api/schools", response_model=schemas.SchoolOut, tags=["schools"])
+def create_school(payload: schemas.SchoolIn, db: Session = Depends(get_db),
+                  user: models.User = Depends(require_roles("super_admin"))):
+    school = models.School(name=payload.name.strip(), code=payload.code.strip().upper())
+    db.add(school)
+    try:
+        db.commit()
+        db.refresh(school)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="School name or code already exists")
+    return school
+
+
 @app.get("/api/users", response_model=list[schemas.UserOut], tags=["users"])
 def list_users(db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin", "admin"))):
-    return list(db.scalars(select(models.User).order_by(models.User.id.desc())).all())
+    stmt = select(models.User).order_by(models.User.id.desc())
+    if user.role != "super_admin":
+        if not user.school_id:
+            raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
+        stmt = stmt.where(models.User.school_id == user.school_id)
+    return list(db.scalars(stmt).all())
+
 
 @app.post("/api/users", response_model=schemas.UserOut, tags=["users"])
 def create_user(payload: dict, db: Session = Depends(get_db),
                 user: models.User = Depends(require_roles("super_admin"))):
     name, email, password, role = payload.get("name"), payload.get("email"), payload.get("password"), payload.get("role", "admin")
-    allowed = {"super_admin", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "parent"}
-    if not name or not email or not password or len(password) < 12 or role not in allowed:
-        raise HTTPException(status_code=422, detail="Name, email, role and password of at least 12 characters are required")
-    user_obj = models.User(name=name, email=email, password_hash=hash_password(password), role=role)
+    school_id = payload.get("school_id")
+    allowed = {"admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "parent"}
+    if not name or not email or not password or len(password) < 12 or role not in allowed or not school_id:
+        raise HTTPException(status_code=422, detail="Name, email, school, role and password of at least 12 characters are required")
+    if not db.get(models.School, int(school_id)):
+        raise HTTPException(status_code=404, detail="School not found")
+    user_obj = models.User(name=name, email=email, password_hash=hash_password(password),
+                           role=role, school_id=int(school_id))
     db.add(user_obj)
     try:
         db.commit()
