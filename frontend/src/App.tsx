@@ -77,6 +77,9 @@ function App(){
  const [showForm,setShowForm]=useState(false)
  const [form,setForm]=useState<Record<string,any>>({})
  const [notice,setNotice]=useState('')
+ const [studentSearch,setStudentSearch]=useState('')
+ const [studentResults,setStudentResults]=useState<any[]>([])
+ const [selectedStudent,setSelectedStudent]=useState<any|null>(null)
  const selected=modules.find(m=>m.key===active)||modules[0]
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
  useEffect(()=>{if(!token)return;fetch(`${API}/api/auth/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setUser).catch(()=>{localStorage.removeItem('erp_token');setToken('');setUser(null)})},[token,authHeaders])
@@ -85,7 +88,9 @@ function App(){
  function handleLogin(t:string,u:User){localStorage.setItem('erp_token',t);setToken(t);setUser(u)}
  async function load(){if(!user)return;setLoading(true);setError('');try{if(active==='dashboard'){setStats(await request('/api/dashboard'));setRows([])}else if(selected.endpoint){setRows(await request(`${selected.endpoint}?q=${encodeURIComponent(query)}`))}}catch(e:any){setError(e.message)}finally{setLoading(false)}}
  useEffect(()=>{if(user)load()},[active,user,query])
- async function save(e: FormEvent<HTMLFormElement>) {e.preventDefault();try{const payload={...form};for(const f of selected.fields||[]){if(f.type==='number'&&payload[f.key]!==''&&payload[f.key]!=null)payload[f.key]=Number(payload[f.key]);if(f.type==='checkbox')payload[f.key]=Boolean(payload[f.key]);if(payload[f.key]==='')delete payload[f.key]}await request(selected.endpoint!,{method:'POST',body:JSON.stringify(payload)});setShowForm(false);setForm({});setNotice('Record created successfully');await load()}catch(e:any){setError(e.message)}}
+ useEffect(()=>{let cancelled=false;const timer=setTimeout(async()=>{if(!user||studentSearch.trim().length<2){setStudentResults([]);return}try{const found=await request('/api/students?q='+encodeURIComponent(studentSearch.trim()));if(!cancelled)setStudentResults(found)}catch{if(!cancelled)setStudentResults([])}},250);return()=>{cancelled=true;clearTimeout(timer)}},[studentSearch,user,token])
+ function chooseStudent(student:any){setSelectedStudent(student);setStudentSearch('');setStudentResults([]);if(active==='student-fees')setForm(current=>({...current,student_id:student.id}));if(active==='documents')setForm(current=>({...current,owner_type:'student',owner_id:student.id}))}
+ async function save(e: FormEvent<HTMLFormElement>) {e.preventDefault();try{const payload={...form};for(const f of selected.fields||[]){if(f.type==='number'&&payload[f.key]!==''&&payload[f.key]!=null)payload[f.key]=Number(payload[f.key]);if(f.type==='checkbox')payload[f.key]=Boolean(payload[f.key]);if(payload[f.key]==='')delete payload[f.key]}const created=await request(selected.endpoint!,{method:'POST',body:JSON.stringify(payload)});if(active==='students')setSelectedStudent(created);setShowForm(false);setForm({});setNotice('Record created successfully');await load()}catch(e:any){setError(e.message)}}
  if(!token||!user)return <Login onLogin={handleLogin}/>
  const Icon=selected.icon
  return <div className="app-shell">
