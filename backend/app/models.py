@@ -29,7 +29,7 @@ class User(Base):
 
 class Student(Base):
     __tablename__ = "students"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     __table_args__ = (UniqueConstraint("school_id", "admission_no", name="uq_student_school_admission"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     admission_no: Mapped[str] = mapped_column(String(80), index=True)
@@ -48,7 +48,7 @@ class Student(Base):
 
 class Staff(Base):
     __tablename__ = "staff"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     __table_args__ = (UniqueConstraint("school_id", "employee_no", name="uq_staff_school_employee"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     employee_no: Mapped[str] = mapped_column(String(80), index=True)
@@ -63,7 +63,7 @@ class Staff(Base):
 
 class SchoolClass(Base):
     __tablename__ = "classes"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), index=True)
     section: Mapped[str] = mapped_column(String(40), default="A")
@@ -73,7 +73,7 @@ class SchoolClass(Base):
 
 class Vehicle(Base):
     __tablename__ = "vehicles"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     __table_args__ = (UniqueConstraint("school_id", "registration_no", name="uq_vehicle_school_registration"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     registration_no: Mapped[str] = mapped_column(String(80), index=True)
@@ -88,7 +88,7 @@ class Vehicle(Base):
 
 class Hostel(Base):
     __tablename__ = "hostels"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
     building: Mapped[str] = mapped_column(String(120), default="")
@@ -100,7 +100,7 @@ class Hostel(Base):
 
 class Document(Base):
     __tablename__ = "documents"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_type: Mapped[str] = mapped_column(String(40), index=True)
     owner_id: Mapped[int] = mapped_column(Integer, index=True)
@@ -114,7 +114,7 @@ class Document(Base):
 
 class MaintenanceRequest(Base):
     __tablename__ = "maintenance_requests"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
     category: Mapped[str] = mapped_column(String(100), default="General")
@@ -130,7 +130,7 @@ class MaintenanceRequest(Base):
 
 class FeeStructure(Base):
     __tablename__ = "fee_structures"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     __table_args__ = (
         UniqueConstraint(
             "school_id", "name", "academic_year", "term",
@@ -154,7 +154,7 @@ class FeeStructure(Base):
 
 class StudentFee(Base):
     __tablename__ = "student_fees"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     __table_args__ = (
         CheckConstraint("total_amount >= 0", name="ck_student_fee_amount"),
         CheckConstraint("discount >= 0", name="ck_student_fee_discount"),
@@ -182,7 +182,7 @@ class StudentFee(Base):
 
 class FeePayment(Base):
     __tablename__ = "fee_payments"
-    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_fee_payment_amount"),
     )
