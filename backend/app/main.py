@@ -99,6 +99,20 @@ def dashboard(db: Session = Depends(get_db), user: models.User = Depends(current
 
 
 def register_crud(path, model, schema_in, schema_out, roles):
+    def validate_related_records(values, user, db):
+        if model is models.StudentFee:
+            student = db.get(models.Student, values.get("student_id"))
+            if not student or (user.role != "super_admin" and student.school_id != user.school_id):
+                raise HTTPException(status_code=404, detail="Student not found in your school")
+            structure_id = values.get("fee_structure_id")
+            if structure_id:
+                structure = db.get(models.FeeStructure, structure_id)
+                if not structure or (user.role != "super_admin" and structure.school_id != user.school_id):
+                    raise HTTPException(status_code=404, detail="Fee structure not found in your school")
+        if model is models.Document and values.get("owner_type") == "student":
+            student = db.get(models.Student, values.get("owner_id"))
+            if not student or (user.role != "super_admin" and student.school_id != user.school_id):
+                raise HTTPException(status_code=404, detail="Document owner not found in your school")
     def list_items(q: str = Query(default="", max_length=120), limit: int = Query(default=100, ge=1, le=500),
                    offset: int = Query(default=0, ge=0), db: Session = Depends(get_db),
                    user: models.User = Depends(require_roles(*roles))):
@@ -123,6 +137,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
     def create_item(payload: Any, db: Session = Depends(get_db),
                     user: models.User = Depends(require_roles(*roles))):
         values = payload.model_dump()
+        validate_related_records(values, user, db)
         if hasattr(model, "school_id"):
             if user.role != "super_admin":
                 values["school_id"] = user.school_id
@@ -152,7 +167,9 @@ def register_crud(path, model, schema_in, schema_out, roles):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
-        for key, value in payload.model_dump().items():
+        values = payload.model_dump()
+        validate_related_records(values, user, db)
+        for key, value in values.items():
             setattr(obj, key, value)
         try:
             db.commit()
