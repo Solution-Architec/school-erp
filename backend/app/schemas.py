@@ -197,3 +197,9 @@ class PaymentOut(BaseModel):
     payment_date: datetime
     received_by: int
     model_config = ConfigDict(from_attributes=True)
+
+class StudentFeeOut(StudentFeeIn):
+    id: int
+    status: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
