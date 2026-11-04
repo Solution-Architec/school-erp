@@ -391,12 +391,39 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
             "chart": chart, "recent_payments": recent}
 
 
+@app.get("/api/fee-dues", tags=["payments"])
+def fee_dues(db: Session = Depends(get_db),
+             user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
+    stmt = select(models.StudentFee, models.Student).join(
+        models.Student, models.StudentFee.student_id == models.Student.id
+    ).order_by(models.Student.full_name)
+    if user.role != "super_admin":
+        stmt = stmt.where(models.StudentFee.school_id == user.school_id)
+    rows = db.execute(stmt).all()
+    result = []
+    for fee, student in rows:
+        paid = db.scalar(select(func.coalesce(func.sum(models.FeePayment.amount), 0)).where(
+            models.FeePayment.student_fee_id == fee.id
+        )) or 0
+        total = Decimal(str(fee.total_amount)) - Decimal(str(fee.discount))
+        balance = max(total - Decimal(str(paid)), Decimal("0"))
+        if balance > 0:
+            result.append({"fee_id": fee.id, "student_name": student.full_name,
+                           "admission_no": student.admission_no, "total_amount": float(total),
+                           "paid_amount": float(paid), "balance": float(balance)})
+    return result
+
+
 @app.post("/api/student-fees/{fee_id}/payments", response_model=schemas.PaymentOut, tags=["payments"])
 def record_payment(fee_id: int, payload: schemas.PaymentIn, db: Session = Depends(get_db),
                    user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
     fee = db.get(models.StudentFee, fee_id)
     if not fee or (user.role != "super_admin" and fee.school_id != user.school_id):
         raise HTTPException(status_code=404, detail="Student fee not found")
+    already_paid = db.scalar(select(func.coalesce(func.sum(models.FeePayment.amount), 0)).where(models.FeePayment.student_fee_id == fee.id)) or 0
+    balance = Decimal(str(fee.total_amount)) - Decimal(str(fee.discount)) - Decimal(str(already_paid))
+    if payload.amount > balance:
+        raise HTTPException(status_code=422, detail="Payment amount exceeds the outstanding balance")
     payment = models.FeePayment(
         school_id=fee.school_id, student_fee_id=fee.id,
         receipt_no=f"CF-{fee.school_id}-{uuid4().hex[:12].upper()}",
