@@ -139,6 +139,8 @@ def register_crud(path, model, schema_in, schema_out, roles):
     app.add_api_route(f"/api/{path}/{{item_id}}", delete_item, methods=["DELETE"], tags=[path])
 
 
+ADMIN_ROLES = ("super_admin", "admin")
+FINANCE_ROLES = ("super_admin", "admin", "accountant")
 @app.post("/api/students/import", tags=["students"])
 async def import_students(file: UploadFile = File(...), db: Session = Depends(get_db),
                          user: models.User = Depends(require_roles("super_admin", "admin"))):
@@ -206,8 +208,6 @@ async def import_students(file: UploadFile = File(...), db: Session = Depends(ge
             raise HTTPException(status_code=409, detail="Import conflicted with an existing admission number. No rows were imported; please retry.")
     return {"created": len(accepted), "skipped": skipped, "errors": errors[:100]}
 
-ADMIN_ROLES = ("super_admin", "admin")
-FINANCE_ROLES = ("super_admin", "admin", "accountant")
 register_crud("students", models.Student, schemas.StudentIn, schemas.StudentOut,
               ("super_admin", "admin", "teacher", "accountant", "transport_manager", "hostel_warden"))
 register_crud("staff", models.Staff, schemas.StaffIn, schemas.StaffOut, ADMIN_ROLES)
