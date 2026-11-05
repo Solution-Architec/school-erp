@@ -316,3 +316,16 @@
   .staff-record-form .form-actions{position:sticky;bottom:0;z-index:2;background:#fbfefd;padding:13px 0 0}
   .staff-record-form .form-actions button{flex:1}
 }
+
+/* Staff & HR — precise split phone and consistent field hierarchy */
+.staff-record-form .form-grid>label{gap:9px}
+.staff-record-form .form-grid>label>span,
+.staff-record-form .form-grid>label>.staff-phone-label{display:block;color:#385665;font-size:11px;font-weight:800;letter-spacing:.1px}
+.staff-record-form .staff-phone-inputs{display:grid;grid-template-columns:76px minmax(0,1fr) minmax(0,1fr);gap:9px;align-items:center}
+.staff-record-form .staff-phone-inputs input{min-width:0;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:1.5px;font-weight:700}
+.staff-record-form .staff-phone-prefix{height:45px;display:flex;align-items:center;justify-content:center;border:1px solid #cfe2df;border-radius:10px;background:linear-gradient(145deg,#eaf7f4,#f7fbfa);color:#087c72;font-size:13px;font-weight:800;letter-spacing:.4px}
+.staff-record-form .staff-field-help{display:block;margin-top:-2px;color:#80999a;font-size:9px;font-weight:500;line-height:1.5}
+.staff-record-form .form-grid input:focus-visible,
+.staff-record-form .form-grid select:focus-visible{outline:3px solid #21a39122;outline-offset:1px}
+.staff-record-form .form-grid select{cursor:pointer}
+@media(max-width:420px){.staff-record-form .staff-phone-inputs{grid-template-columns:64px minmax(0,1fr) minmax(0,1fr);gap:6px}.staff-record-form .staff-phone-inputs input{padding:0 5px;letter-spacing:1px}}
