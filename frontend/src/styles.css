@@ -49,3 +49,28 @@
 .chat-assistant-answer{align-self:flex-start;background:#f1f5f9;color:#1e293b;padding:12px 14px;border-radius:14px 14px 14px 3px;max-width:90%;line-height:1.55}
 .chat-faq-form{display:flex;gap:10px;margin-top:12px}
 .chat-faq-form input{flex:1;min-width:0}
+
+
+/* Dashboard finance overview */
+.dashboard-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:24px 0 12px}
+.dashboard-section-heading h3{font:700 15px Manrope,sans-serif;color:#203b4b;margin:0}
+.dashboard-section-heading p{font-size:10px;color:#93a0aa;margin:5px 0 0}
+.dashboard-finance-stats{grid-template-columns:repeat(3,minmax(0,1fr));margin:0 0 15px}
+.dashboard-finance-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,1fr);gap:15px;margin-bottom:15px}
+.dashboard-chart-panel,.dashboard-actions-panel,.dashboard-recent-panel,.dashboard-roles-panel,.dashboard-modules-panel{min-width:0}
+.dashboard-chart-panel .fee-chart{min-height:205px}
+.dashboard-chart-panel .fee-chart-column{height:185px}
+.dashboard-actions-panel .quick-grid{grid-template-columns:1fr 1fr}
+.dashboard-alert{display:flex;align-items:flex-start;gap:10px;margin-top:16px;padding:12px;border-radius:9px;background:#fff8e8;color:#9a6a1b}
+.dashboard-alert>svg{flex-shrink:0;margin-top:1px}
+.dashboard-alert strong,.dashboard-alert span{display:block}
+.dashboard-alert strong{font-size:10px}
+.dashboard-alert span{font-size:9px;line-height:1.5;margin-top:4px;color:#a17e43}
+.dashboard-recent-panel{padding:0;overflow:hidden;margin-bottom:15px}
+.dashboard-recent-panel>.panel-heading{padding:18px 20px}
+.dashboard-recent-panel .table-wrap{margin-top:0}
+.compact-empty{padding:24px 12px}
+.dashboard-roles-panel,.dashboard-modules-panel{margin-bottom:15px}
+@media(max-width:1050px){.dashboard-finance-grid{grid-template-columns:1fr}.dashboard-finance-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.dashboard-section-heading{align-items:flex-start;flex-direction:column}.dashboard-finance-stats{grid-template-columns:1fr 1fr}.dashboard-actions-panel .quick-grid{grid-template-columns:1fr 1fr}.dashboard-recent-panel>.panel-heading{padding:15px}.dashboard-finance-grid{gap:10px}}
+@media(max-width:420px){.dashboard-finance-stats{grid-template-columns:1fr}.dashboard-actions-panel .quick-grid{grid-template-columns:1fr}}
