@@ -57,44 +57,43 @@ class StudentOut(StudentIn):
     model_config = ConfigDict(from_attributes=True)
 
 class StaffIn(BaseModel):
-    employee_no: str = Field(min_length=1, max_length=80)
-    full_name: str = Field(min_length=1, max_length=180)
-    designation: str = ""
-    department: str = ""
-    phone: str = ""
-    email: str = ""
-    salary: float = Field(default=0, ge=0)
+    employee_no: str = Field(min_length=3, max_length=8, pattern=r"^[A-Za-z]{2}[0-9]{1,6}$")
+    full_name: str = Field(min_length=2, max_length=100)
+    designation: str = Field(default="", max_length=32)
+    department: str = Field(default="", max_length=32)
+    phone: str = Field(min_length=13, max_length=13, pattern=r"^\\+91[6-9]\\d{9}$")
+    email: str = Field(min_length=11, max_length=40, pattern=r"^[A-Za-z0-9._%+-]+@gmail\\.com$")
+    salary: Decimal = Field(default=Decimal("0"), ge=0, le=Decimal("83333.33"), max_digits=10, decimal_places=2)
+    status: Literal["active", "absent", "suspended", "terminated", "sick", "leave"] = "active"
+    # Developer-only optional login provisioning. The email is also the login username.
+    create_account: bool = False
+    account_role: Literal["admin", "accountant", "teacher", "transport_manager", "hostel_warden"] = "teacher"
+    account_password: str | None = None
+    # Only Super Admin may choose a school; tenant admins are always scoped server-side.
+    school_id: int | None = Field(default=None, gt=0)
 
-    @field_validator("phone")
+    @field_validator("full_name")
     @classmethod
-    def validate_indian_phone(cls, value: str) -> str:
-        phone = re.sub(r"[\s()-]", "", value or "")
-        if not phone:
-            return ""
-        if phone.startswith("+91"):
-            phone = phone[3:]
-        elif phone.startswith("0091"):
-            phone = phone[4:]
-        elif phone.startswith("0") and len(phone) == 11:
-            phone = phone[1:]
-        if not re.fullmatch(r"[6-9]\d{9}", phone):
-            raise ValueError("Enter a valid 10-digit Indian mobile number (optionally with +91)")
-        return phone
+    def validate_full_name(cls, value: str) -> str:
+        cleaned = " ".join((value or "").strip().split())
+        if not re.fullmatch(r"[A-Za-z][A-Za-z .'-]*", cleaned):
+            raise ValueError("Use letters, spaces, apostrophes, periods or hyphens only for the full name")
+        return cleaned
 
     @field_validator("designation", "department")
     @classmethod
-    def normalize_staff_labels(cls, value: str) -> str:
+    def validate_staff_text(cls, value: str) -> str:
         cleaned = " ".join((value or "").strip().split())
-        known_corrections = {
-            "acountent": "Accountant",
-            "accountent": "Accountant",
-            "finace": "Finance",
-            "finanace": "Finance",
-        }
-        return known_corrections.get(cleaned.casefold(), cleaned.title())
-    status: str = "active"
-    # Only Super Admin may choose a school; tenant admins are always scoped server-side.
-    school_id: int | None = Field(default=None, gt=0)
+        if cleaned and not re.fullmatch(r"[A-Za-z ]{1,32}", cleaned):
+            raise ValueError("Use letters and spaces only (maximum 32 characters)")
+        return cleaned.title()
+
+    @field_validator("account_password")
+    @classmethod
+    def validate_account_password(cls, value: str | None) -> str | None:
+        if value is not None and value and len(value) < 12:
+            raise ValueError("Login password must contain at least 12 characters")
+        return value
 
 class StaffOut(BaseModel):
     # Output schema deliberately does not inherit StaffIn: legacy rows may contain
