@@ -72,6 +72,16 @@ class StaffIn(BaseModel):
     # Only Super Admin may choose a school; tenant admins are always scoped server-side.
     school_id: int | None = Field(default=None, gt=0)
 
+    @field_validator("employee_no")
+    @classmethod
+    def normalize_employee_no(cls, value: str) -> str:
+        return value.strip().upper()
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_staff_email(cls, value: str) -> str:
+        return str(value or "").strip().lower()
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, value: str) -> str:
