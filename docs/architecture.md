@@ -41,6 +41,17 @@ The implementation is a **modular monolith**. The diagram's conceptual services 
 
 **Security invariant:** every read, update, delete, import, report, and relation lookup for school-level users must be scoped to their tenant. New endpoints must use the same rule and include cross-tenant negative tests.
 
+## School code login and mandatory privileged-account MFA
+
+- Every sign-in requires a school code, email address, and password.
+- The backend resolves the active school from the normalized school code and matches the user by both email and school_id; the school code is never trusted as a frontend-only filter.
+- Global Developer (super_admin) accounts sign in with the configured PLATFORM_SCHOOL_CODE (default: PLATFORM) and have no school tenant assignment.
+- Admin and Developer accounts always receive a six-digit email MFA challenge after password, email-verification, account-approval, and active-account checks. No access token is issued until /api/auth/verify-mfa consumes the one-time code.
+- MFA challenges expire after five minutes; email codes expire after ten minutes and allow at most five attempts. Existing 60-second resend throttling applies.
+- Teacher, Accountant, Transport Manager, Hostel Warden, and Parent accounts retain the existing password-only sign-in after the same email-verification and Admin-approval checks.
+- School/staff registration, email verification, Admin approval, resend verification, and password recovery endpoints remain unchanged.
+- Configure PLATFORM_SCHOOL_CODE in the backend environment and distribute it only to authorized Developer operators. Never use a school tenant's code for a global Developer account.
+
 ## Parent portal and help assistant
 
 - Parent accounts are linked explicitly to student records through `parent_student_links`.
