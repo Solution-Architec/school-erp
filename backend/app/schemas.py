@@ -96,8 +96,19 @@ class StaffIn(BaseModel):
     # Only Super Admin may choose a school; tenant admins are always scoped server-side.
     school_id: int | None = Field(default=None, gt=0)
 
-class StaffOut(StaffIn):
+class StaffOut(BaseModel):
+    # Output schema deliberately does not inherit StaffIn: legacy rows may contain
+    # historical phone values that should remain readable and editable.
     id: int
+    school_id: int
+    employee_no: str
+    full_name: str
+    designation: str = ""
+    department: str = ""
+    phone: str = ""
+    email: str = ""
+    salary: Decimal = Decimal("0")
+    status: str = "active"
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
