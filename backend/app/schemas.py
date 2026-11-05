@@ -61,8 +61,8 @@ class StaffIn(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     designation: str = Field(default="", max_length=32)
     department: str = Field(default="", max_length=32)
-    phone: str = Field(min_length=13, max_length=13, pattern=r"^\\+91[6-9]\\d{9}$")
-    email: str = Field(min_length=11, max_length=40, pattern=r"^[A-Za-z0-9._%+-]+@gmail\\.com$")
+    phone: str = Field(min_length=13, max_length=13, pattern=r"^\+91[6-9]\d{9}$")
+    email: str = Field(min_length=11, max_length=40, pattern=r"^[A-Za-z0-9._%+-]+@gmail\.com$")
     salary: Decimal = Field(default=Decimal("0"), ge=0, le=Decimal("83333.33"), max_digits=10, decimal_places=2)
     status: Literal["active", "absent", "suspended", "terminated", "sick", "leave"] = "active"
     # Developer-only optional login provisioning. The email is also the login username.
