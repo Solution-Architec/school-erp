@@ -519,10 +519,17 @@ def register_crud(path, model, schema_in, schema_out, roles):
 ADMIN_ROLES = ("super_admin", "admin")
 FINANCE_ROLES = ("super_admin", "admin", "accountant")
 @app.post("/api/students/import", tags=["students"])
-async def import_students(file: UploadFile = File(...), db: Session = Depends(get_db),
-                         user: models.User = Depends(require_roles("admin"))):
-    if not user.school_id:
-        raise HTTPException(status_code=403, detail="Assign this admin account to a school before importing students")
+async def import_students(file: UploadFile = File(...), school_id: int | None = Form(default=None),
+                         db: Session = Depends(get_db),
+                         user: models.User = Depends(require_roles("super_admin", "admin"))):
+    if user.role == "super_admin":
+        target_school_id = school_id
+        if not target_school_id or not db.get(models.School, target_school_id):
+            raise HTTPException(status_code=422, detail="Select a valid school before importing students")
+    else:
+        if not user.school_id:
+            raise HTTPException(status_code=403, detail="Assign this admin account to a school before importing students")
+        target_school_id = user.school_id
     filename = (file.filename or "").lower()
     if not (filename.endswith(".csv") or filename.endswith(".xlsx")):
         raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
@@ -550,9 +557,7 @@ async def import_students(file: UploadFile = File(...), db: Session = Depends(ge
     if len(records) > 5000:
         raise HTTPException(status_code=400, detail="Maximum 5,000 students per upload")
     allowed = set(schemas.StudentIn.model_fields.keys())
-    existing_stmt = select(models.Student.admission_no)
-    if user.role != "super_admin":
-        existing_stmt = existing_stmt.where(models.Student.school_id == user.school_id)
+    existing_stmt = select(models.Student.admission_no).where(models.Student.school_id == target_school_id)
     existing = set(db.scalars(existing_stmt).all())
     seen, accepted, errors = set(), [], []
     skipped = 0
@@ -576,7 +581,7 @@ async def import_students(file: UploadFile = File(...), db: Session = Depends(ge
             data["date_of_birth"] = value.date().isoformat() if isinstance(value, datetime) else value.isoformat()
         try:
             student = schemas.StudentIn.model_validate(data)
-            accepted.append(models.Student(**student.model_dump(), school_id=user.school_id))
+            accepted.append(models.Student(**student.model_dump(), school_id=target_school_id))
             seen.add(admission)
         except Exception as exc:
             errors.append({"row": row_number, "error": str(exc)[:400]})
@@ -588,7 +593,7 @@ async def import_students(file: UploadFile = File(...), db: Session = Depends(ge
         except IntegrityError:
             db.rollback()
             raise HTTPException(status_code=409, detail="Import conflicted with an existing admission number. No rows were imported; please retry.")
-    return {"created": len(accepted), "skipped": skipped, "errors": errors[:100]}
+    return {"school_id": target_school_id, "created": len(accepted), "skipped": skipped, "errors": errors[:100]}
 
 register_crud("students", models.Student, schemas.StudentIn, schemas.StudentOut,
               ("super_admin", "admin", "teacher", "accountant", "transport_manager", "hostel_warden"))
