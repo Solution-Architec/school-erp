@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator, model_validator, Field
 from decimal import Decimal
+import re
 from typing import Literal, Optional
 
 
@@ -63,6 +64,34 @@ class StaffIn(BaseModel):
     phone: str = ""
     email: str = ""
     salary: float = Field(default=0, ge=0)
+
+    @field_validator("phone")
+    @classmethod
+    def validate_indian_phone(cls, value: str) -> str:
+        phone = re.sub(r"[\\s()-]", "", value or "")
+        if not phone:
+            return ""
+        if phone.startswith("+91"):
+            phone = phone[3:]
+        elif phone.startswith("0091"):
+            phone = phone[4:]
+        elif phone.startswith("0") and len(phone) == 11:
+            phone = phone[1:]
+        if not re.fullmatch(r"[6-9]\\d{9}", phone):
+            raise ValueError("Enter a valid 10-digit Indian mobile number (optionally with +91)")
+        return phone
+
+    @field_validator("designation", "department")
+    @classmethod
+    def normalize_staff_labels(cls, value: str) -> str:
+        cleaned = " ".join((value or "").strip().split())
+        known_corrections = {
+            "acountent": "Accountant",
+            "accountent": "Accountant",
+            "finace": "Finance",
+            "finanace": "Finance",
+        }
+        return known_corrections.get(cleaned.casefold(), cleaned.title())
     status: str = "active"
     # Only Super Admin may choose a school; tenant admins are always scoped server-side.
     school_id: int | None = Field(default=None, gt=0)
