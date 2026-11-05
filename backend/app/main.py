@@ -213,7 +213,7 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
     db.add(school)
     try:
         db.flush()
-        account = models.User(name=name, email=email, password_hash=hash_password(password), role="admin",
+        account = models.User(name=name, email=email, password_hash=hash_password(password), role="user",
             school_id=school.id, is_active=False, email_verified=False, approval_status="approved")
         db.add(account)
         db.commit()
@@ -221,7 +221,7 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="School name/code or email already exists")
     _issue_auth_code(db, email, "verify")
-    return {"message": "School registered. Verify the email address to activate the Admin account.", "email": email}
+    return {"message": "School registered. Verify the email address to activate your standard user account.", "email": email}
 
 @app.post("/api/auth/register-staff", tags=["auth"])
 def register_staff(payload: dict, db: Session = Depends(get_db)):
@@ -229,10 +229,11 @@ def register_staff(payload: dict, db: Session = Depends(get_db)):
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
     school_code = str(payload.get("school_code", "")).strip().upper()
-    role = str(payload.get("role", "")).strip().lower()
-    allowed = {"accountant", "teacher", "transport_manager", "hostel_warden", "parent"}
+    role = str(payload.get("role", "user")).strip().lower()
+    allowed = {"user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "parent"}
     if not all((name, email, password, school_code)) or len(password) < 12 or role not in allowed:
-        raise HTTPException(status_code=422, detail="Provide all fields, a valid role and a password of at least 12 characters")
+        raise HTTPException(status_code=422, detail="Provide all fields, a valid account type and a password of at least 12 characters")
+    role = "parent" if role == "parent" else "user"
     school = db.scalar(select(models.School).where(models.School.code == school_code, models.School.is_active.is_(True)))
     if not school:
         raise HTTPException(status_code=404, detail="School code not found")
@@ -243,7 +244,7 @@ def register_staff(payload: dict, db: Session = Depends(get_db)):
     db.add(account)
     db.commit()
     _issue_auth_code(db, email, "verify")
-    return {"message": "Registration received. Verify your email; your school Admin must then approve the account.", "email": email}
+    return {"message": "Registration received. Verify your email; a standard user at your school must approve the account.", "email": email}
 
 @app.post("/api/auth/verify-email", tags=["auth"])
 def verify_email(payload: dict, db: Session = Depends(get_db)):
@@ -257,7 +258,7 @@ def verify_email(payload: dict, db: Session = Depends(get_db)):
     if account.approval_status == "approved":
         account.is_active = True
     db.commit()
-    return {"message": "Email verified. " + ("You can now sign in." if account.is_active else "Your school Admin must approve your account before sign-in.")}
+    return {"message": "Email verified. " + ("You can now sign in." if account.is_active else "Your school must approve your account before sign-in.")}
 
 @app.post("/api/auth/resend-verification", tags=["auth"])
 def resend_verification(payload: dict, db: Session = Depends(get_db)):
@@ -299,7 +300,7 @@ def pending_users(db: Session = Depends(get_db), user: models.User = Depends(req
 def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_roles("admin"))):
     target = db.get(models.User, user_id)
     decision = str(payload.get("decision", "")).lower()
-    if not target or target.school_id != user.school_id or target.role in ("admin", "super_admin"):
+    if not target or target.school_id != user.school_id or target.role == "super_admin":
         raise HTTPException(status_code=404, detail="Pending staff account not found")
     if decision not in ("approve", "reject") or not target.email_verified:
         raise HTTPException(status_code=422, detail="A verified account and approve/reject decision are required")
@@ -337,10 +338,10 @@ def login(payload: schemas.LoginInput, db: Session = Depends(get_db)):
     if not user.email_verified:
         raise HTTPException(status_code=403, detail="Verify your email before signing in")
     if user.approval_status == "pending":
-        raise HTTPException(status_code=403, detail="Your school Admin has not approved your account yet")
+        raise HTTPException(status_code=403, detail="Your school has not approved your account yet")
     if user.approval_status == "rejected" or not user.is_active:
-        raise HTTPException(status_code=403, detail="This account is inactive. Contact your school Admin")
-    if user.role in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="This account is inactive. Contact your school")
+    if user.role != "parent":
         _issue_auth_code(db, email, "login_mfa")
         challenge = jwt.encode({
             "sub": str(user.id), "purpose": "login_mfa",
@@ -365,7 +366,7 @@ def verify_login_mfa(payload: dict, db: Session = Depends(get_db)):
     except (jwt.PyJWTError, KeyError, ValueError, TypeError):
         raise HTTPException(status_code=401, detail="Sign-in challenge expired. Please sign in again.")
     user = db.get(models.User, user_id)
-    if not user or not user.is_active or not user.email_verified or user.role not in ("admin", "super_admin"):
+    if not user or not user.is_active or not user.email_verified or user.role == "parent":
         raise HTTPException(status_code=401, detail="Account is not eligible for this sign-in challenge")
     _consume_auth_code(db, user.email, code, "login_mfa")
     return {"access_token": create_access_token(user), "token_type": "bearer",
@@ -385,6 +386,10 @@ def school_scope(model, user):
 
 @app.get("/api/dashboard")
 def dashboard(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+    if user.role == "parent":
+        return {"students": 0, "staff": 0, "classes": 0, "vehicles": 0,
+                "hostel_rooms": 0, "open_maintenance": 0, "user_role": "parent"}
+
     def count(model, *conditions):
         stmt = select(func.count()).select_from(model)
         scope = school_scope(model, user)
@@ -450,11 +455,13 @@ def register_crud(path, model, schema_in, schema_out, roles):
         account_password = None
         if model is models.Staff:
             create_staff_account = values.pop("create_account", False)
-            account_role = values.pop("account_role", "teacher")
+            account_role = values.pop("account_role", "user")
             account_password = values.pop("account_password", None)
             if create_staff_account:
                 if user.role != "super_admin":
                     raise HTTPException(status_code=403, detail="Only Developer can create staff login accounts")
+                if account_role not in ("user", "parent"):
+                    raise HTTPException(status_code=422, detail="Staff login type must be Standard User or Parent")
                 if not account_password or len(account_password) < 12:
                     raise HTTPException(status_code=422, detail="Set a login password with at least 12 characters")
                 if db.scalar(select(models.User.id).where(models.User.email == values.get("email", "").lower())):
@@ -507,7 +514,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
             values.pop("account_role", None)
         validate_related_records(values, user, db)
         if model is models.Staff:
-            # Tenant admins can never move staff outside their assigned school.
+            # Standard users can never move staff outside their assigned school.
             if user.role != "super_admin":
                 values["school_id"] = user.school_id
             elif not values.get("school_id"):
@@ -545,8 +552,9 @@ def register_crud(path, model, schema_in, schema_out, roles):
     app.add_api_route(f"/api/{path}/{{item_id}}", delete_item, methods=["DELETE"], tags=[path])
 
 
-ADMIN_ROLES = ("super_admin", "admin")
-FINANCE_ROLES = ("super_admin", "admin", "accountant")
+STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student")
+ADMIN_ROLES = ("super_admin",) + STANDARD_ROLES
+FINANCE_ROLES = ADMIN_ROLES
 @app.post("/api/students/import", tags=["students"])
 async def import_students(file: UploadFile = File(...), school_id: int | None = Form(default=None),
                          db: Session = Depends(get_db),
@@ -557,7 +565,7 @@ async def import_students(file: UploadFile = File(...), school_id: int | None = 
             raise HTTPException(status_code=422, detail="Select a valid school before importing students")
     else:
         if not user.school_id:
-            raise HTTPException(status_code=403, detail="Assign this admin account to a school before importing students")
+            raise HTTPException(status_code=403, detail="Assign your account to a school before importing students")
         target_school_id = user.school_id
     filename = (file.filename or "").lower()
     if not (filename.endswith(".csv") or filename.endswith(".xlsx")):
@@ -624,14 +632,13 @@ async def import_students(file: UploadFile = File(...), school_id: int | None = 
             raise HTTPException(status_code=409, detail="Import conflicted with an existing admission number. No rows were imported; please retry.")
     return {"school_id": target_school_id, "created": len(accepted), "skipped": skipped, "errors": errors[:100]}
 
-register_crud("students", models.Student, schemas.StudentIn, schemas.StudentOut,
-              ("super_admin", "admin", "teacher", "accountant", "transport_manager", "hostel_warden"))
+register_crud("students", models.Student, schemas.StudentIn, schemas.StudentOut, ADMIN_ROLES)
 register_crud("staff", models.Staff, schemas.StaffIn, schemas.StaffOut, ADMIN_ROLES)
-register_crud("classes", models.SchoolClass, schemas.ClassIn, schemas.ClassOut, ADMIN_ROLES + ("teacher",))
-register_crud("vehicles", models.Vehicle, schemas.VehicleIn, schemas.VehicleOut, ADMIN_ROLES + ("transport_manager",))
-register_crud("hostels", models.Hostel, schemas.HostelIn, schemas.HostelOut, ADMIN_ROLES + ("hostel_warden",))
-register_crud("documents", models.Document, schemas.DocumentIn, schemas.DocumentOut, ADMIN_ROLES + ("accountant", "teacher", "transport_manager", "hostel_warden"))
-register_crud("maintenance", models.MaintenanceRequest, schemas.MaintenanceIn, schemas.MaintenanceOut, ADMIN_ROLES + ("transport_manager", "hostel_warden"))
+register_crud("classes", models.SchoolClass, schemas.ClassIn, schemas.ClassOut, ADMIN_ROLES)
+register_crud("vehicles", models.Vehicle, schemas.VehicleIn, schemas.VehicleOut, ADMIN_ROLES)
+register_crud("hostels", models.Hostel, schemas.HostelIn, schemas.HostelOut, ADMIN_ROLES)
+register_crud("documents", models.Document, schemas.DocumentIn, schemas.DocumentOut, ADMIN_ROLES)
+register_crud("maintenance", models.MaintenanceRequest, schemas.MaintenanceIn, schemas.MaintenanceOut, ADMIN_ROLES)
 register_crud("fee-structures", models.FeeStructure, schemas.FeeStructureIn, schemas.FeeStructureOut, FINANCE_ROLES)
 register_crud("student-fees", models.StudentFee, schemas.StudentFeeIn, schemas.StudentFeeOut, FINANCE_ROLES)
 
@@ -760,7 +767,7 @@ def create_school(payload: schemas.SchoolIn, db: Session = Depends(get_db),
 
 
 @app.get("/api/users", response_model=list[schemas.UserOut], tags=["users"])
-def list_users(db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin", "admin"))):
+def list_users(db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
     stmt = select(models.User).order_by(models.User.id.desc())
     if user.role != "super_admin":
         if not user.school_id:
@@ -772,9 +779,9 @@ def list_users(db: Session = Depends(get_db), user: models.User = Depends(requir
 @app.post("/api/users", response_model=schemas.UserOut, tags=["users"])
 def create_user(payload: dict, db: Session = Depends(get_db),
                 user: models.User = Depends(require_roles("super_admin"))):
-    name, email, password, role = payload.get("name"), payload.get("email"), payload.get("password"), payload.get("role", "admin")
+    name, email, password, role = payload.get("name"), payload.get("email"), payload.get("password"), payload.get("role", "user")
     school_id = payload.get("school_id")
-    allowed = {"admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "parent"}
+    allowed = {"user", "parent"}
     if not name or not email or not password or len(password) < 12 or role not in allowed or not school_id:
         raise HTTPException(status_code=422, detail="Name, email, school, role and password of at least 12 characters are required")
     if not db.get(models.School, int(school_id)):
