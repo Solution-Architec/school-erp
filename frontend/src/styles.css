@@ -39,3 +39,13 @@
 .payment-entry-panel .table-wrap{margin-top:12px}
 @media(max-width:900px){.payment-entry-form{grid-template-columns:1fr 1fr}.payment-entry-form label:first-child{grid-column:1/-1}}
 @media(max-width:560px){.payment-entry-form{grid-template-columns:1fr}.payment-entry-form label:first-child{grid-column:auto}.payment-entry-form button{width:100%}}
+
+/* SchoolOS family portal and FAQ assistant */
+.parent-child-select{display:flex;gap:12px;align-items:center;max-width:520px;margin:18px 0}
+.parent-child-select select{flex:1;min-width:180px}
+.chat-faq-list{display:flex;flex-direction:column;gap:14px;padding:18px 0;max-height:440px;overflow:auto}
+.chat-faq-item{display:flex;flex-direction:column;gap:8px}
+.chat-user-question{align-self:flex-end;background:#e0f2fe;color:#075985;padding:10px 14px;border-radius:14px 14px 3px 14px;max-width:80%;font-weight:600}
+.chat-assistant-answer{align-self:flex-start;background:#f1f5f9;color:#1e293b;padding:12px 14px;border-radius:14px 14px 14px 3px;max-width:90%;line-height:1.55}
+.chat-faq-form{display:flex;gap:10px;margin-top:12px}
+.chat-faq-form input{flex:1;min-width:0}

@@ -205,3 +205,17 @@ class FeePayment(Base):
         DateTime, default=datetime.utcnow
     )
     received_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+class ParentStudentLink(Base):
+    """Explicit parent-to-student relationship; never infer access from names/phones."""
+    __tablename__ = "parent_student_links"
+    __table_args__ = (
+        UniqueConstraint("school_id", "parent_user_id", "student_id", name="uq_parent_student_school"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    parent_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False, index=True)
+    relationship: Mapped[str] = mapped_column(String(40), default="parent")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

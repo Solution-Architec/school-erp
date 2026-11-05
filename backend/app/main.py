@@ -511,3 +511,98 @@ def assign_user_school(user_id: int, payload: dict, db: Session = Depends(get_db
     db.commit()
     db.refresh(target)
     return target
+
+
+# Parent App / family portal
+@app.post("/api/parent-links", tags=["parent-portal"])
+def create_parent_link(payload: dict, db: Session = Depends(get_db),
+                       user: models.User = Depends(require_roles("super_admin", "admin"))):
+    parent_id = payload.get("parent_user_id")
+    student_id = payload.get("student_id")
+    relationship = str(payload.get("relationship", "parent"))[:40]
+    if not parent_id or not student_id:
+        raise HTTPException(status_code=422, detail="parent_user_id and student_id are required")
+    parent = db.get(models.User, int(parent_id))
+    student = db.get(models.Student, int(student_id))
+    if not parent or parent.role != "parent":
+        raise HTTPException(status_code=404, detail="Parent account not found")
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    if parent.school_id != student.school_id:
+        raise HTTPException(status_code=422, detail="Parent and student must belong to the same school")
+    if user.role != "super_admin" and (user.school_id != parent.school_id or user.school_id != student.school_id):
+        raise HTTPException(status_code=404, detail="Parent or student not found in your school")
+    link = models.ParentStudentLink(school_id=student.school_id, parent_user_id=parent.id,
+                                    student_id=student.id, relationship=relationship)
+    db.add(link)
+    try:
+        db.commit()
+        db.refresh(link)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Parent is already linked to this student")
+    return {"id": link.id, "parent_user_id": parent.id, "student_id": student.id,
+            "school_id": link.school_id, "relationship": link.relationship, "is_active": link.is_active}
+
+
+@app.get("/api/parent/children", tags=["parent-portal"])
+def parent_children(db: Session = Depends(get_db),
+                    user: models.User = Depends(require_roles("parent"))):
+    stmt = select(models.Student, models.ParentStudentLink).join(
+        models.ParentStudentLink, models.ParentStudentLink.student_id == models.Student.id
+    ).where(models.ParentStudentLink.parent_user_id == user.id,
+             models.ParentStudentLink.school_id == user.school_id,
+             models.ParentStudentLink.is_active.is_(True),
+             models.Student.school_id == user.school_id)
+    return [{"id": student.id, "admission_no": student.admission_no, "full_name": student.full_name,
+             "class_name": student.class_name, "section": student.section, "status": student.status,
+             "relationship": link.relationship}
+            for student, link in db.execute(stmt).all()]
+
+
+@app.get("/api/parent/children/{student_id}/fees", tags=["parent-portal"])
+def parent_child_fees(student_id: int, db: Session = Depends(get_db),
+                      user: models.User = Depends(require_roles("parent"))):
+    allowed = db.scalar(select(models.ParentStudentLink.id).where(
+        models.ParentStudentLink.parent_user_id == user.id,
+        models.ParentStudentLink.student_id == student_id,
+        models.ParentStudentLink.school_id == user.school_id,
+        models.ParentStudentLink.is_active.is_(True)))
+    if not allowed:
+        raise HTTPException(status_code=404, detail="Student not found")
+    fees = db.scalars(select(models.StudentFee).where(
+        models.StudentFee.student_id == student_id,
+        models.StudentFee.school_id == user.school_id).order_by(models.StudentFee.id.desc())).all()
+    result = []
+    for fee in fees:
+        paid = db.scalar(select(func.coalesce(func.sum(models.FeePayment.amount), 0)).where(
+            models.FeePayment.student_fee_id == fee.id,
+            models.FeePayment.school_id == user.school_id)) or 0
+        due = max(Decimal(str(fee.total_amount)) - Decimal(str(fee.discount)) - Decimal(str(paid)), Decimal("0"))
+        result.append({"fee_id": fee.id, "category": fee.category, "description": fee.description,
+                       "academic_year": fee.academic_year, "term": fee.term,
+                       "total": float(Decimal(str(fee.total_amount)) - Decimal(str(fee.discount))),
+                       "paid": float(paid), "balance": float(due), "status": fee.status,
+                       "due_date": fee.due_date.isoformat() if fee.due_date else None})
+    return result
+
+
+# Safe FAQ assistant: answers only approved school help topics, no student-specific data.
+@app.post("/api/chatbot/faq", tags=["chatbot"])
+def chatbot_faq(payload: dict, user: models.User = Depends(current_user)):
+    question = str(payload.get("question", "")).strip().lower()
+    if not question or len(question) > 500:
+        raise HTTPException(status_code=422, detail="Question must be between 1 and 500 characters")
+    topics = [
+        (("fee", "payment", "tuition", "receipt"), "For fee balances and receipts, open Finance → Student Fees or Fee Reports. Parents can view linked students’ balances in the Parent Portal. Payment gateway processing is not enabled yet."),
+        (("admission", "enroll", "enrollment"), "Admissions are managed from Students → Add Student. Please contact your school office for required documents and admission dates."),
+        (("transport", "bus", "route"), "Transport routes and vehicle details are maintained in the Transport module. Contact your school transport manager for route allocation."),
+        (("hostel", "room", "boarding"), "Hostel occupancy and room records are maintained in the Hostel module. Contact your school hostel warden for availability."),
+        (("attendance", "absent", "present"), "Attendance tracking is planned but is not yet available in this release. Please contact your class teacher for attendance records."),
+        (("timetable", "schedule", "class time"), "Timetable management is planned for a future release. Please contact the academic office for the current timetable."),
+        (("password", "login", "sign in", "account"), "If you cannot sign in, contact your school administrator to reset or reactivate your account. Never share your password or OTP."),
+    ]
+    for keywords, answer in topics:
+        if any(keyword in question for keyword in keywords):
+            return {"answer": answer, "source": "schoolos-approved-faq", "needs_human_support": False}
+    return {"answer": "I couldn't find an approved answer for that question. Please contact your school office or administrator.", "source": "schoolos-approved-faq", "needs_human_support": True}
