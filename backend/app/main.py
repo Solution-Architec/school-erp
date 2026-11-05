@@ -457,13 +457,16 @@ def register_crud(path, model, schema_in, schema_out, roles):
         account_password = None
         if model is models.Staff:
             create_staff_account = values.pop("create_account", False)
-            account_role = values.pop("account_role", "user")
+            account_role = values.pop("account_role", "principal")
             account_password = values.pop("account_password", None)
             if create_staff_account:
                 if user.role != "super_admin":
                     raise HTTPException(status_code=403, detail="Only Developer can create staff login accounts")
-                if account_role not in ("user", "parent"):
-                    raise HTTPException(status_code=422, detail="Staff login type must be Standard User or Parent")
+                if account_role not in ("principal", "vice_principal", "teacher", "account", "clerk",
+                                        "office_assistant", "librarian", "lab_assistant", "it_administrator",
+                                        "transport_manager", "hostel_warden", "security_guard", "others",
+                                        "user", "admin", "accountant", "parent"):
+                    raise HTTPException(status_code=422, detail="Select a valid school role or Parent")
                 if not account_password or len(account_password) < 12:
                     raise HTTPException(status_code=422, detail="Set a login password with at least 12 characters")
                 if db.scalar(select(models.User.id).where(models.User.email == values.get("email", "").lower())):
