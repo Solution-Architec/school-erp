@@ -8,7 +8,9 @@ from typing import Literal, Optional
 
 
 class LoginInput(BaseModel):
-    school_code: str = Field(min_length=2, max_length=40)
+    # School code is optional only for global Super Admin sign-in.
+    # School-scoped accounts are still resolved only when a valid code is supplied.
+    school_code: str = Field(default="", max_length=40)
     email: EmailStr
     password: str
 
