@@ -310,21 +310,28 @@ def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), use
 
 @app.post("/api/auth/login", tags=["auth"])
 def login(payload: schemas.LoginInput, db: Session = Depends(get_db)):
-    school_code = payload.school_code.strip().upper()
+    school_code = (payload.school_code or "").strip().upper()
     email = str(payload.email).strip().lower()
-    # Developer/super-admin accounts use a separately configured platform code.
+    # A blank school code is accepted only for the global Super Admin account.
+    # Tenant users must provide an active school's code; no tenant lookup is
+    # attempted without it. The configured platform code remains supported.
     platform_code = os.getenv("PLATFORM_SCHOOL_CODE", "PLATFORM").strip().upper()
-    school = db.scalar(select(models.School).where(
-        models.School.code == school_code, models.School.is_active.is_(True)))
-    if school:
-        user = db.scalar(select(models.User).where(
-            models.User.email == email, models.User.school_id == school.id))
-    elif school_code == platform_code:
+    if not school_code:
         user = db.scalar(select(models.User).where(
             models.User.email == email, models.User.role == "super_admin",
             models.User.school_id.is_(None)))
     else:
-        user = None
+        school = db.scalar(select(models.School).where(
+            models.School.code == school_code, models.School.is_active.is_(True)))
+        if school:
+            user = db.scalar(select(models.User).where(
+                models.User.email == email, models.User.school_id == school.id))
+        elif school_code == platform_code:
+            user = db.scalar(select(models.User).where(
+                models.User.email == email, models.User.role == "super_admin",
+                models.User.school_id.is_(None)))
+        else:
+            user = None
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid school code, email or password")
     if not user.email_verified:
