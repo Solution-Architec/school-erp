@@ -70,7 +70,9 @@ Set `VITE_API_URL=http://localhost:8000` in `frontend/.env.local` when running t
 - Tenant / school onboarding and school assignment
 - Tenant-scoped dashboard statistics and API queries
 - Students, staff, classes, transport vehicles, hostels, documents, maintenance requests
-- Fee structures, student fees, payment recording, fee dues and fee reports\n- Parent Portal with explicit parent-to-student association and tenant-scoped fee balances\n- Approved FAQ chatbot endpoint and Help Assistant UI
+- Fee structures, student fees, payment recording, fee dues and fee reports
+- Parent Portal with explicit parent-to-student association and tenant-scoped fee balances
+- Approved FAQ chatbot endpoint and Help Assistant UI
 - Student CSV / XLSX import
 - Searchable admin tables and create forms
 - PostgreSQL deployment and SQLite local development

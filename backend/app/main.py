@@ -421,18 +421,29 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
         outstanding_stmt = outstanding_stmt.where(func.extract("month", models.StudentFee.created_at) == month)
     outstanding = db.scalar(outstanding_stmt) or 0
 
+    chart_year = func.extract("year", models.FeePayment.payment_date)
+    chart_month = func.extract("month", models.FeePayment.payment_date)
+
     chart_stmt = select(
-        func.to_char(func.date_trunc("month", models.FeePayment.payment_date), "YYYY-MM"),
+        chart_year.label("year"),
+        chart_month.label("month"),
         func.sum(models.FeePayment.amount)
-    ).group_by(func.date_trunc("month", models.FeePayment.payment_date)).order_by(
-        func.date_trunc("month", models.FeePayment.payment_date)
+    ).group_by(
+        chart_year, chart_month
+    ).order_by(
+        chart_year, chart_month
     )
     if target_school_id is not None:
         chart_stmt = chart_stmt.where(models.FeePayment.school_id == target_school_id)
     if year:
-        chart_stmt = chart_stmt.where(func.extract("year", models.FeePayment.payment_date) == year)
-    chart = [{"period": period, "amount": float(amount or 0)}
-             for period, amount in db.execute(chart_stmt).all()]
+        chart_stmt = chart_stmt.where(chart_year == year)
+    chart = [
+        {
+            "period": f"{int(payment_year):04d}-{int(payment_month):02d}",
+            "amount": float(amount or 0)
+        }
+        for payment_year, payment_month, amount in db.execute(chart_stmt).all()
+    ]
     recent = [{
         "id": payment.id, "school_name": school.name, "receipt_no": payment.receipt_no,
         "amount": float(payment.amount), "payment_method": payment.payment_method,
