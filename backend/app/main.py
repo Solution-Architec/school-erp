@@ -445,6 +445,20 @@ def register_crud(path, model, schema_in, schema_out, roles):
         if user.role != "super_admin" and not user.school_id:
             raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
         values = payload.model_dump()
+        create_staff_account = False
+        account_role = None
+        account_password = None
+        if model is models.Staff:
+            create_staff_account = values.pop("create_account", False)
+            account_role = values.pop("account_role", "teacher")
+            account_password = values.pop("account_password", None)
+            if create_staff_account:
+                if user.role != "super_admin":
+                    raise HTTPException(status_code=403, detail="Only Developer can create staff login accounts")
+                if not account_password or len(account_password) < 12:
+                    raise HTTPException(status_code=422, detail="Set a login password with at least 12 characters")
+                if db.scalar(select(models.User.id).where(models.User.email == values.get("email", "").lower())):
+                    raise HTTPException(status_code=409, detail="A login account already exists for this email")
         validate_related_records(values, user, db)
         if hasattr(model, "school_id"):
             if user.role != "super_admin":
@@ -456,11 +470,22 @@ def register_crud(path, model, schema_in, schema_out, roles):
         obj = model(**values)
         db.add(obj)
         try:
+            if create_staff_account:
+                db.add(models.User(
+                    name=values["full_name"],
+                    email=values["email"].strip().lower(),
+                    password_hash=hash_password(account_password),
+                    role=account_role,
+                    school_id=values["school_id"],
+                    is_active=True,
+                    email_verified=True,
+                    approval_status="approved",
+                ))
             db.commit()
             db.refresh(obj)
         except IntegrityError:
             db.rollback()
-            raise HTTPException(status_code=409, detail="Duplicate or invalid record")
+            raise HTTPException(status_code=409, detail="Duplicate staff employee number or login email")
         return obj
 
     def get_item(item_id: int, db: Session = Depends(get_db),
@@ -476,6 +501,10 @@ def register_crud(path, model, schema_in, schema_out, roles):
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
         values = payload.model_dump()
+        if model is models.Staff:
+            if values.pop("create_account", False) or values.pop("account_password", None):
+                raise HTTPException(status_code=422, detail="Create login accounts when adding a staff record, not while editing")
+            values.pop("account_role", None)
         validate_related_records(values, user, db)
         if model is models.Staff:
             # Tenant admins can never move staff outside their assigned school.
