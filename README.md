@@ -1,19 +1,26 @@
-# School ERP — Starter Implementation
+# School ERP — Multi-Tenant School Management Platform
 
-A runnable modular-monolith foundation for a School ERP web portal, built with:
-- React + TypeScript + Vite frontend
-- FastAPI backend
-- PostgreSQL database
-- JWT authentication and role-based permissions
-- Docker Compose + Nginx deployment
+A modular-monolith School ERP built around the architecture in the project diagram.
 
-This is a working foundation with implemented authentication, dashboard, student/staff/class/transport/hostel/document/maintenance CRUD APIs and a generic web admin UI. It is **not yet a fully production-complete implementation of all 20 ERP domains**. Payroll, payment gateway settlement, GPS tracking, biometric devices, OCR, and statutory accounting require institution-specific rules and integrations.
+## Technology stack
+
+- **Frontend:** React + TypeScript + Vite
+- **Backend:** Python + FastAPI
+- **Database:** PostgreSQL (SQLite supported for local development)
+- **Authentication:** JWT access tokens + password hashing + role-based permissions
+- **Deployment:** Docker Compose, Nginx, Linux
+- **API documentation:** OpenAPI / Swagger UI
 
 ## Run with Docker
 
 1. Install Docker Engine and Docker Compose plugin.
-2. Copy `.env.example` to `.env` and change `JWT_SECRET_KEY` and database password.
-3. Run:
+2. Copy the environment template and replace all demo secrets:
+
+```bash
+cp .env.example .env
+```
+
+3. Start the stack:
 
 ```bash
 docker compose up --build -d
@@ -22,14 +29,15 @@ docker compose up --build -d
 4. Open:
    - Web portal: http://localhost
    - API docs: http://localhost:8000/docs
+   - API health: http://localhost:8000/api/health
 
-Default bootstrap admin:
+Default bootstrap administrator:
 - Email: `admin@example.com`
 - Password: `ChangeMe123!`
 
-Change these values in `.env` before exposing the app to a network. The bootstrap user is created only if the configured email does not exist.
+**Do not use the bootstrap credentials in production.** Change the password, JWT secret, database password, and CORS origins before exposing the application.
 
-## Run locally without Docker
+## Local development
 
 Backend:
 
@@ -53,23 +61,42 @@ npm install
 npm run dev
 ```
 
-Set `VITE_API_URL=http://localhost:8000` in `frontend/.env.local` if needed.
+Set `VITE_API_URL=http://localhost:8000` in `frontend/.env.local` when running the API separately.
 
-## Current implementation
+## Current implemented modules
 
-- Login, JWT access tokens, password hashing
-- Roles: super_admin, admin, accountant, teacher, transport_manager, hostel_warden, student, parent
-- API permissions on module endpoints
-- Dashboard counts
-- CRUD endpoints for Students, Staff, Classes, Transport Vehicles, Hostels, Documents, Maintenance Requests
-- Searchable module tables and create forms
-- PostgreSQL in Docker; SQLite supported for local development
-- Database tables auto-created on startup for easy development
+- Login, JWT access tokens, password hashing, active-user checks
+- Roles: `super_admin`, `admin`, `accountant`, `teacher`, `transport_manager`, `hostel_warden`, `student`, `parent`
+- Tenant / school onboarding and school assignment
+- Tenant-scoped dashboard statistics and API queries
+- Students, staff, classes, transport vehicles, hostels, documents, maintenance requests
+- Fee structures, student fees, payment recording, fee dues and fee reports
+- Student CSV / XLSX import
+- Searchable admin tables and create forms
+- PostgreSQL deployment and SQLite local development
+
+See [Architecture and implementation notes](docs/architecture.md) for component boundaries, tenant isolation, API domains, and deployment notes.
+
+## Architecture
+
+The app is a **modular monolith**, not a distributed microservice deployment. The React web client communicates with FastAPI over HTTP/JSON. FastAPI owns authentication, authorization, tenant scoping, validation, and persistence. PostgreSQL stores tenant data with a `school_id` discriminator. Nginx serves the frontend and proxies API traffic in Docker deployments.
+
+This approach keeps deployment and operations simple while retaining clear module boundaries for future extraction.
 
 ## Before production
 
-- Configure HTTPS, secure secret storage, restrictive CORS and network policy.
-- Replace bootstrap credentials and set a long random JWT secret.
-- Add automated tests, migrations (Alembic), rate limiting, MFA, audit-event retention, malware scanning, object storage, backup and restore drills.
-- Review applicable child-data privacy, financial, employment, and school regulations.
-- Implement the remaining domain workflows and integrations before representing this as a complete production ERP.
+This repository is a functional ERP foundation; it should not be represented as a fully production-ready school platform yet.
+
+- Add and run automated unit, integration, authorization, and tenant-isolation tests.
+- Replace startup schema creation and ad-hoc schema adjustments with Alembic migrations.
+- Configure HTTPS, strict CORS, secret management, rate limiting, MFA, and session/token revocation.
+- Add audit logs, backup/restore drills, monitoring, alerting, and security review.
+- Complete parent/student self-service flows and record-level access controls.
+- Add payment-provider integration and reconciliation before accepting real payments.
+- Integrate external Aadhaar verification only through an authorized provider and approved compliance workflow; never store Aadhaar numbers unless legally required and secured.
+- Implement attendance, examinations, timetable, payroll, biometric, GPS, OCR, and statutory accounting workflows as institution-specific modules.
+- Review child-data privacy, financial, employment, and school regulations for the deployment jurisdiction.
+
+## License
+
+See repository license if present.
