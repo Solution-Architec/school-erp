@@ -74,3 +74,14 @@
 @media(max-width:1050px){.dashboard-finance-grid{grid-template-columns:1fr}.dashboard-finance-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:720px){.dashboard-section-heading{align-items:flex-start;flex-direction:column}.dashboard-finance-stats{grid-template-columns:1fr 1fr}.dashboard-actions-panel .quick-grid{grid-template-columns:1fr 1fr}.dashboard-recent-panel>.panel-heading{padding:15px}.dashboard-finance-grid{gap:10px}}
 @media(max-width:420px){.dashboard-finance-stats{grid-template-columns:1fr}.dashboard-actions-panel .quick-grid{grid-template-columns:1fr}}
+
+/* Authentication workflow */
+.auth-card{max-width:440px}
+.auth-card select{width:100%;padding:12px;border:1px solid #dfe8ec;border-radius:7px;background:#fff;color:#29414f;font-size:12px}
+.auth-card label small{font-weight:400;color:#84939e}
+.auth-message{padding:10px 12px;margin:0 0 12px;border-radius:8px;font-size:11px;line-height:1.5}
+.auth-links{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:18px}
+.auth-links button{border:0;background:transparent;color:#087d70;font-size:11px;font-weight:700;cursor:pointer;padding:4px}
+.auth-links button:hover{text-decoration:underline}
+
+.approval-actions{display:flex;gap:7px;align-items:center}.approval-actions .primary,.approval-actions .secondary{padding:7px 10px;font-size:10px}
