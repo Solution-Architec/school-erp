@@ -80,14 +80,14 @@ class StaffIn(BaseModel):
     @field_validator("phone", mode="before")
     @classmethod
     def normalize_staff_phone(cls, value: str) -> str:
-        return re.sub(r"\\s+", "", str(value or ""))
+        return re.sub(r"\s+", "", str(value or ""))
 
     @field_validator("salary", mode="before")
     @classmethod
     def validate_staff_salary_format(cls, value: Any) -> Any:
         if isinstance(value, (int, float, Decimal)):
             value = str(value)
-        if not re.fullmatch(r"\\d{1,7}\\.\\d{2}", str(value or "").strip()):
+        if not re.fullmatch(r"\d{1,7}\.\d{2}", str(value or "").strip()):
             raise ValueError("Enter monthly salary as digits with exactly two decimal places, e.g. 25000.00")
         return value
 
