@@ -104,11 +104,11 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
      <h1>{titles[mode]}</h1>
      <p className="auth-intro">{descriptions[mode]}</p>
      {mode==='school'&&<>
-      <div className="auth-section-label"><span>01</span><div><strong>School information</strong><small>Tell us about your institution</small></div></div>
+      <div className="auth-section-label"><span>01</span><div><strong>First Admin account</strong><small>Your primary school administrator</small></div></div>
+      <div className="auth-field"><label htmlFor="admin-name">Admin full name</label><input id="admin-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter the Admin's full name" autoComplete="name" required/></div>
+      <div className="auth-section-label auth-section-admin"><span>02</span><div><strong>School information</strong><small>Tell us about your institution</small></div></div>
       <div className="auth-field"><label htmlFor="school-name">School name</label><input id="school-name" value={values.school_name} onChange={e=>set('school_name',e.target.value)} placeholder="e.g. Green Valley School" autoComplete="organization" required/></div>
       <div className="auth-field"><label htmlFor="school-code">School code</label><input id="school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Create a unique school code" required/><small>This code will identify your school for staff registration.</small></div>
-      <div className="auth-section-label auth-section-admin"><span>02</span><div><strong>First Admin account</strong><small>Your primary school administrator</small></div></div>
-      <div className="auth-field"><label htmlFor="admin-name">Admin full name</label><input id="admin-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter the Admin's full name" autoComplete="name" required/></div>
      </>}
      {mode==='staff'&&<>
       <div className="auth-field"><label htmlFor="staff-name">Full name</label><input id="staff-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter your full name" autoComplete="name" required/></div>
