@@ -509,3 +509,9 @@
     grid-template-columns:minmax(0,1fr);
   }
 }
+
+
+/* Dashboard KPI cards are navigation links. */
+.dashboard-link-card{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.dashboard-link-card:hover,.dashboard-link-card:focus-visible{transform:translateY(-2px);box-shadow:0 8px 22px rgba(15,118,110,.12);border-color:#8bcfc4;outline:none}
+.dashboard-link-card:focus-visible{outline:2px solid #0f766e;outline-offset:2px}
