@@ -63,6 +63,46 @@ npm run dev
 
 Set `VITE_API_URL=http://localhost:8000` in `frontend/.env.local` when running the API separately.
 
+
+## Demo accounts for role-wise testing
+
+The demo seeder creates one login for every workspace role, including Developer and Parent, plus sample school records. It is **manual and opt-in**; it does not run during application startup.
+
+Docker Compose:
+
+```bash
+docker compose exec -e ENABLE_DEMO_SEED=true backend python -m app.seed_demo
+```
+
+Local backend:
+
+```bash
+cd backend
+ENABLE_DEMO_SEED=true python -m app.seed_demo
+```
+
+The command generates one temporary password and prints it once along with the login emails. All school-role accounts use school code `DEMO-SCHOOL`; Developer signs in with the school-code field left blank. The Parent demo is linked to the seeded demo student. Running the command again resets the demo accounts to a newly generated shared password.
+
+Demo login emails:
+
+- `demo.developer@example.test`
+- `demo.principal@example.test`
+- `demo.viceprincipal@example.test`
+- `demo.teacher@example.test`
+- `demo.accounts@example.test`
+- `demo.clerk@example.test`
+- `demo.officeassistant@example.test`
+- `demo.librarian@example.test`
+- `demo.labassistant@example.test`
+- `demo.itadmin@example.test`
+- `demo.transport@example.test`
+- `demo.warden@example.test`
+- `demo.security@example.test`
+- `demo.others@example.test`
+- `demo.parent@example.test`
+
+The seeder refuses to run unless `ENABLE_DEMO_SEED=true`; it also refuses production environments unless `ALLOW_DEMO_SEED_IN_PRODUCTION=true` is explicitly set. Do not enable demo accounts on a public production deployment. Remove the demo users and sample records before using the school for real operations.
+
 ## Current implemented modules
 
 - Login, JWT access tokens, password hashing, active-user checks
