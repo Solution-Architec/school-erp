@@ -21,7 +21,7 @@ from sqlalchemy import select, func, text
 from sqlalchemy.exc import IntegrityError
 from .database import Base, engine, get_db, SessionLocal
 from . import models, schemas
-from .security import hash_password, verify_password, create_access_token, current_user, require_roles
+from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -338,7 +338,7 @@ def login(payload: schemas.LoginInput, db: Session = Depends(get_db)):
         challenge = jwt.encode({
             "sub": str(user.id), "purpose": "login_mfa",
             "exp": datetime.utcnow() + timedelta(minutes=5)
-        }, os.getenv("JWT_SECRET_KEY", "schoolos-development-secret"), algorithm="HS256")
+        }, JWT_SECRET_KEY, algorithm="HS256")
         return {"mfa_required": True, "mfa_token": challenge,
                 "message": "A sign-in verification code has been sent to your email."}
     return {"access_token": create_access_token(user), "token_type": "bearer",
@@ -350,7 +350,7 @@ def verify_login_mfa(payload: dict, db: Session = Depends(get_db)):
     challenge = str(payload.get("mfa_token", ""))
     code = str(payload.get("code", "")).strip()
     try:
-        claims = jwt.decode(challenge, os.getenv("JWT_SECRET_KEY", "schoolos-development-secret"),
+        claims = jwt.decode(challenge, JWT_SECRET_KEY,
                             algorithms=["HS256"])
         if claims.get("purpose") != "login_mfa":
             raise ValueError("Wrong challenge purpose")
