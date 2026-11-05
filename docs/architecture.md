@@ -1,4 +1,4 @@
-# Architecture and implementation notes
+# SchoolOS architecture and implementation notes
 
 ## Logical architecture
 
@@ -41,7 +41,7 @@ The implementation is a **modular monolith**. The diagram's conceptual services 
 
 **Security invariant:** every read, update, delete, import, report, and relation lookup for school-level users must be scoped to their tenant. New endpoints must use the same rule and include cross-tenant negative tests.
 
-## Module/API map
+## Parent portal and help assistant\n\n- Parent accounts are linked explicitly to student records through `parent_student_links`.\n- School admins and Super Admins create links using `POST /api/parent-links`; parent and student must belong to the same school.\n- Parent users can list linked students and retrieve only those students' fee records through `/api/parent/children` and `/api/parent/children/{student_id}/fees`.\n- The FAQ assistant is a deterministic approved-answer endpoint (`POST /api/chatbot/faq`), not a generative AI integration. It avoids retrieving personal student information and returns a handoff suggestion for unknown questions.\n\n## Module/API map
 
 | Domain | Current API routes |
 |---|---|
@@ -57,7 +57,7 @@ The implementation is a **modular monolith**. The diagram's conceptual services 
 | Documents | `/api/documents` |
 | Facilities / maintenance | `/api/maintenance` |
 | Finance | `/api/fee-structures`, `/api/student-fees`, `/api/fee-dues`, `/api/fee-reports` |
-| Fee payments | `/api/student-fees/{fee_id}/payments` |
+| Fee payments | `/api/student-fees/{fee_id}/payments` |\n| Parent app | `/api/parent-links`, `/api/parent/children`, `/api/parent/children/{student_id}/fees` |\n| Chatbot FAQ | `/api/chatbot/faq` |
 
 Most CRUD domains expose list, create, retrieve, update, and delete operations. See Swagger UI at `/docs` for the live OpenAPI contract.
 
