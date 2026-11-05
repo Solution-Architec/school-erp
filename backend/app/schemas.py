@@ -8,6 +8,7 @@ from typing import Literal, Optional
 
 
 class LoginInput(BaseModel):
+    school_code: str = Field(min_length=2, max_length=40)
     email: EmailStr
     password: str
 
