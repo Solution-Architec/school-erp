@@ -68,7 +68,7 @@ class StaffIn(BaseModel):
     @field_validator("phone")
     @classmethod
     def validate_indian_phone(cls, value: str) -> str:
-        phone = re.sub(r"[\\s()-]", "", value or "")
+        phone = re.sub(r"[\s()-]", "", value or "")
         if not phone:
             return ""
         if phone.startswith("+91"):
@@ -77,7 +77,7 @@ class StaffIn(BaseModel):
             phone = phone[4:]
         elif phone.startswith("0") and len(phone) == 11:
             phone = phone[1:]
-        if not re.fullmatch(r"[6-9]\\d{9}", phone):
+        if not re.fullmatch(r"[6-9]\d{9}", phone):
             raise ValueError("Enter a valid 10-digit Indian mobile number (optionally with +91)")
         return phone
 
@@ -96,8 +96,19 @@ class StaffIn(BaseModel):
     # Only Super Admin may choose a school; tenant admins are always scoped server-side.
     school_id: int | None = Field(default=None, gt=0)
 
-class StaffOut(StaffIn):
+class StaffOut(BaseModel):
+    # Output schema deliberately does not inherit StaffIn: legacy rows may contain
+    # historical phone values that should remain readable and editable.
     id: int
+    school_id: int
+    employee_no: str
+    full_name: str
+    designation: str = ""
+    department: str = ""
+    phone: str = ""
+    email: str = ""
+    salary: Decimal = Decimal("0")
+    status: str = "active"
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
