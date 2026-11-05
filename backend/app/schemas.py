@@ -64,6 +64,8 @@ class StaffIn(BaseModel):
     email: str = ""
     salary: float = Field(default=0, ge=0)
     status: str = "active"
+    # Only Super Admin may choose a school; tenant admins are always scoped server-side.
+    school_id: int | None = Field(default=None, gt=0)
 
 class StaffOut(StaffIn):
     id: int
