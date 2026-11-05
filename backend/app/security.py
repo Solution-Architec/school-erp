@@ -38,9 +38,22 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
         raise HTTPException(status_code=401, detail="User is inactive or does not exist")
     return user
 
+STANDARD_USER_ROLES = {"user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student"}
+
+
 def require_roles(*roles: str):
+    """Authorize Developer-only routes strictly and unify all school-user roles.
+
+    Legacy school roles remain valid for existing accounts, but they all receive
+    the same operational permissions. Parent accounts are deliberately excluded
+    from operational access and use only their linked-student endpoints.
+    """
+    allows_standard_users = bool(STANDARD_USER_ROLES.intersection(roles))
+
     def checker(user: User = Depends(current_user)) -> User:
-        if user.role not in roles:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
-        return user
+        if user.role in roles:
+            return user
+        if allows_standard_users and user.role != "parent":
+            return user
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     return checker
