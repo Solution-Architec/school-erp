@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Activity, Bus, Building2, ChevronDown, FileText, GraduationCap, LayoutDashboard, LogOut, Menu, Search, Settings, Users, Wallet, Wrench, BookOpen, Bell, Plus, RefreshCw, X, Upload, Download } from 'lucide-react'
+import { Activity, ArrowLeft, ArrowRight, Bus, Building2, ChevronDown, Eye, EyeOff, FileText, GraduationCap, LayoutDashboard, LockKeyhole, LogOut, Mail, Menu, Search, Settings, ShieldCheck, Users, Wallet, Wrench, BookOpen, Bell, Plus, RefreshCw, X, Upload, Download } from 'lucide-react'
 
 const API = (import.meta as any).env?.VITE_API_URL || ''
 type User = { id:number; name:string; email:string; role:string; school_id?:number|null }
@@ -61,7 +61,7 @@ const money = (n:number) => new Intl.NumberFormat('en-IN',{style:'currency',curr
 function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
  const [mode,setMode]=useState<'signin'|'school'|'staff'|'verify'|'forgot'|'reset'>('signin')
  const [values,setValues]=useState({name:'',email:'',password:'',school_name:'',school_code:'',role:'teacher',code:''})
- const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false)
+ const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[showPassword,setShowPassword]=useState(false)
  const set=(key:string,value:string)=>setValues(old=>({...old,[key]:value}))
  async function call(path:string,body:Record<string,string>){const r=await fetch(`${API}${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.detail||d?.message||`Request failed (${r.status})`);return d}
  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');setNotice('');try{
@@ -73,16 +73,59 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
   else if(mode==='reset'){const d=await call('/api/auth/reset-password',{email:values.email,code:values.code,password:values.password});setNotice(d.message);setMode('signin')}
  }catch(err:any){setError(err.message||'Unable to complete request')}finally{setBusy(false)}}
  const titles={signin:'Welcome back',school:'Register your school',staff:'Join your school',verify:'Verify your email',forgot:'Recover password',reset:'Create a new password'}
- return <div className="login-wrap"><form className="login-card auth-card" onSubmit={submit}><div className="brand-mark"><GraduationCap size={30}/></div><p className="eyebrow">SCHOOL MANAGEMENT PLATFORM</p><h1>{titles[mode]}</h1><p className="muted">{mode==='signin'?'Sign in to your SchoolOS workspace.':mode==='school'?'Create a school and its first Admin account.':mode==='staff'?'Register under an existing school. Admin approval is required.':mode==='verify'?'Enter the six-digit code sent to your email.':mode==='forgot'?'Enter your registered email to request a reset code.':'Verify the code and choose a new password.'}</p>
- {mode==='school'&&<><label>Admin full name<input value={values.name} onChange={e=>set('name',e.target.value)} required/></label><label>School name<input value={values.school_name} onChange={e=>set('school_name',e.target.value)} required/></label><label>School code<input value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} required/></label></>}
- {mode==='staff'&&<><label>Full name<input value={values.name} onChange={e=>set('name',e.target.value)} required/></label><label>School code<input value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} required/></label><label>Account role<select value={values.role} onChange={e=>set('role',e.target.value)}><option value="teacher">Teacher</option><option value="accountant">Accountant</option><option value="transport_manager">Transport Manager</option><option value="hostel_warden">Hostel Warden</option><option value="parent">Parent</option></select></label></>}
- {['signin','school','staff','verify','forgot','reset'].includes(mode)&&<label>Email address<input type="email" value={values.email} onChange={e=>set('email',e.target.value)} required autoComplete="email"/></label>}
- {['signin','school','staff','reset'].includes(mode)&&<label>{mode==='reset'?'New password':'Password'}<input type="password" value={values.password} onChange={e=>set('password',e.target.value)} minLength={12} required autoComplete={mode==='signin'?'current-password':'new-password'}/>{mode!=='signin'&&<small>Use at least 12 characters.</small>}</label>}
- {['verify','reset'].includes(mode)&&<label>Email verification / reset code<input inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={values.code} onChange={e=>set('code',e.target.value.replace(/\D/g,'').slice(0,6))} required/></label>}
- {error&&<div className="error auth-message">{error}</div>}{notice&&<div className="success auth-message">{notice}</div>}
- <button className="primary full" disabled={busy}>{busy?'Please wait…':mode==='signin'?'Sign in':mode==='school'?'Create school account':mode==='staff'?'Request staff account':mode==='verify'?'Verify email':mode==='forgot'?'Send reset code':'Reset password'}</button>
- <div className="auth-links">{mode==='signin'?<><button type="button" onClick={()=>{setMode('school');setError('');setNotice('')}}>Register a school</button><button type="button" onClick={()=>{setMode('staff');setError('');setNotice('')}}>Register as staff</button><button type="button" onClick={()=>{setMode('forgot');setError('');setNotice('')}}>Forgot password?</button></>:<button type="button" onClick={()=>{setMode('signin');setError('');setNotice('')}}>Back to sign in</button>}{mode==='verify'&&<button type="button" onClick={async()=>{try{const d=await call('/api/auth/resend-verification',{email:values.email});setNotice(d.message);setError('')}catch(e:any){setError(e.message)}}}>Resend code</button>}</div>
- </form></div>
+ const descriptions={signin:'Sign in to your SchoolOS workspace.',school:'Create your school and its first Admin account.',staff:'Register under an existing school. Admin approval is required.',verify:'Enter the six-digit code sent to your email.',forgot:'Enter your registered email to request a reset code.',reset:'Verify the code and choose a new password.'}
+ const isPasswordMode=['signin','school','staff','reset'].includes(mode)
+ const passwordLabel=mode==='reset'?'New password':'Password'
+ const submitLabel=mode==='signin'?'Sign in':mode==='school'?'Create school account':mode==='staff'?'Request staff account':mode==='verify'?'Verify email':mode==='forgot'?'Send reset code':'Reset password'
+ return <div className="auth-page">
+  <aside className="auth-showcase">
+   <div className="auth-showcase-inner">
+    <div className="auth-brand"><div className="auth-brand-icon"><GraduationCap size={25}/></div><span>SchoolOS</span></div>
+    <div className="auth-showcase-copy">
+     <span className="auth-kicker">SCHOOL MANAGEMENT PLATFORM</span>
+     <h2>Everything your school needs.<br/><em>All in one place.</em></h2>
+     <p>Bring your school community, daily operations and financial workflows together in one secure workspace.</p>
+    </div>
+    <div className="auth-visual" aria-hidden="true">
+     <div className="auth-orbit orbit-one"/><div className="auth-orbit orbit-two"/>
+     <div className="auth-campus-card"><div className="campus-sun"/><div className="campus-building"><div className="campus-roof"/><div className="campus-columns"><i/><i/><i/><i/></div><div className="campus-door"/></div><div className="campus-ground"/></div>
+     <div className="auth-float-card float-students"><Users size={17}/><span><strong>One school community</strong><small>Students · Staff · Families</small></span></div>
+     <div className="auth-float-card float-secure"><ShieldCheck size={19}/><span><strong>Secure workspace</strong><small>Role-based access</small></span></div>
+    </div>
+    <div className="auth-showcase-foot"><span><ShieldCheck size={14}/> Built for modern school teams</span><span>Learn · Manage · Grow</span></div>
+   </div>
+  </aside>
+  <main className="auth-main">
+   <div className="auth-mobile-brand"><div className="auth-brand-icon"><GraduationCap size={22}/></div><strong>SchoolOS</strong></div>
+   <section className="auth-form-shell">
+    <form className="auth-form-card" onSubmit={submit}>
+     <div className="auth-form-top"><span className="auth-step-icon">{mode==='school'?<Building2 size={20}/>:mode==='staff'?<Users size={20}/>:mode==='verify'?<ShieldCheck size={20}/>:<GraduationCap size={20}/>}</span><span className="auth-form-context">{mode==='school'?'SCHOOL SETUP':mode==='staff'?'STAFF REGISTRATION':mode==='signin'?'YOUR SCHOOL WORKSPACE':'ACCOUNT ACCESS'}</span></div>
+     <p className="eyebrow">SCHOOL MANAGEMENT PLATFORM</p>
+     <h1>{titles[mode]}</h1>
+     <p className="auth-intro">{descriptions[mode]}</p>
+     {mode==='school'&&<>
+      <div className="auth-section-label"><span>01</span><div><strong>First Admin account</strong><small>Your primary school administrator</small></div></div>
+      <div className="auth-field"><label htmlFor="admin-name">Admin full name</label><input id="admin-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter the Admin's full name" autoComplete="name" required/></div>
+      <div className="auth-section-label auth-section-admin"><span>02</span><div><strong>School information</strong><small>Tell us about your institution</small></div></div>
+      <div className="auth-field"><label htmlFor="school-name">School name</label><input id="school-name" value={values.school_name} onChange={e=>set('school_name',e.target.value)} placeholder="e.g. Green Valley School" autoComplete="organization" required/></div>
+      <div className="auth-field"><label htmlFor="school-code">School code</label><input id="school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Create a unique school code" required/><small>This code will identify your school for staff registration.</small></div>
+     </>}
+     {mode==='staff'&&<>
+      <div className="auth-field"><label htmlFor="staff-name">Full name</label><input id="staff-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter your full name" autoComplete="name" required/></div>
+      <div className="auth-field"><label htmlFor="staff-school-code">School code</label><input id="staff-school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Enter your school's code" required/></div>
+      <div className="auth-field"><label htmlFor="staff-role">Account role</label><select id="staff-role" value={values.role} onChange={e=>set('role',e.target.value)}><option value="teacher">Teacher</option><option value="accountant">Accountant</option><option value="transport_manager">Transport Manager</option><option value="hostel_warden">Hostel Warden</option><option value="parent">Parent</option></select></div>
+     </>}
+     {['signin','school','staff','verify','forgot','reset'].includes(mode)&&<div className="auth-field"><label htmlFor="auth-email">Email address</label><div className="auth-input-wrap"><Mail size={17}/><input id="auth-email" type="email" value={values.email} onChange={e=>set('email',e.target.value)} placeholder="you@school.com" required autoComplete="email"/></div></div>}
+     {isPasswordMode&&<div className="auth-field"><label htmlFor="auth-password">{passwordLabel}</label><div className="auth-input-wrap"><LockKeyhole size={17}/><input id="auth-password" type={showPassword?'text':'password'} value={values.password} onChange={e=>set('password',e.target.value)} placeholder={mode==='signin'?'Enter your password':'Create a strong password'} minLength={mode==='signin'?undefined:12} required autoComplete={mode==='signin'?'current-password':'new-password'}/><button className="auth-password-toggle" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>{mode!=='signin'&&<small className="auth-help">Use at least 12 characters.</small>}</div>}
+     {['verify','reset'].includes(mode)&&<div className="auth-field"><label htmlFor="auth-code">Email verification / reset code</label><div className="auth-input-wrap"><ShieldCheck size={17}/><input id="auth-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={values.code} onChange={e=>set('code',e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="6-digit code" required/></div></div>}
+     {error&&<div className="error auth-message" role="alert">{error}</div>}{notice&&<div className="success auth-message" role="status">{notice}</div>}
+     <button className="auth-submit" disabled={busy}>{busy?'Please wait…':<>{submitLabel}<ArrowRight size={17}/></>}</button>
+     <div className="auth-links">{mode==='signin'?<><button type="button" onClick={()=>{setMode('school');setError('');setNotice('')}}>Register a school</button><button type="button" onClick={()=>{setMode('staff');setError('');setNotice('')}}>Register as staff</button><button type="button" onClick={()=>{setMode('forgot');setError('');setNotice('')}}>Forgot password?</button></>:<><button type="button" onClick={()=>{setMode('signin');setError('');setNotice('')}}><ArrowLeft size={14}/> Back to sign in</button>{mode==='verify'&&<button type="button" onClick={async()=>{try{const d=await call('/api/auth/resend-verification',{email:values.email});setNotice(d.message);setError('')}catch(e:any){setError(e.message)}}}>Resend code</button>}</>}</div>
+    </form>
+    <p className="auth-copyright">© {new Date().getFullYear()} SchoolOS · School operations platform</p>
+   </section>
+  </main>
+ </div>
 }
 
 function ParentPortal({request}:{request:(url:string,options?:RequestInit)=>Promise<any>}) {
