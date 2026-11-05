@@ -1,4 +1,10 @@
 import os
+import secrets
+import hashlib
+import hmac
+import smtplib
+from email.message import EmailMessage
+from datetime import timedelta
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import uuid4
@@ -20,6 +26,8 @@ from .security import hash_password, verify_password, create_access_token, curre
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
         tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments")
         all_school_tables = ("users",) + tenant_tables
         for table in all_school_tables:
@@ -85,11 +93,183 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True
 def health():
     return {"status": "ok", "service": "school-erp-api"}
 
+
+# Public account registration and recovery. OTPs are hashed at rest and expire after 10 minutes.
+def _otp_digest(email: str, code: str) -> str:
+    secret = os.getenv("JWT_SECRET_KEY", "schoolos-development-secret")
+    return hashlib.sha256(f"{email.lower()}:{code}:{secret}".encode()).hexdigest()
+
+def _send_auth_code(email: str, code: str, purpose: str) -> None:
+    host = os.getenv("SMTP_HOST")
+    username = os.getenv("SMTP_USERNAME")
+    password = os.getenv("SMTP_PASSWORD")
+    sender = os.getenv("SMTP_FROM_EMAIL") or username
+    if not host or not sender:
+        raise HTTPException(status_code=503, detail="Email delivery is not configured. Contact the platform administrator.")
+    msg = EmailMessage()
+    msg["Subject"] = "SchoolOS email verification" if purpose == "verify" else "SchoolOS password reset"
+    msg["From"] = sender
+    msg["To"] = email
+    action = "verify your SchoolOS account" if purpose == "verify" else "reset your SchoolOS password"
+    msg.set_content(f"Your SchoolOS code to {action} is: {code}\n\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
+    port = int(os.getenv("SMTP_PORT", "587"))
+    with smtplib.SMTP(host, port, timeout=15) as server:
+        if os.getenv("SMTP_USE_TLS", "true").lower() == "true":
+            server.starttls()
+        if username and password:
+            server.login(username, password)
+        server.send_message(msg)
+
+def _issue_auth_code(db: Session, email: str, purpose: str) -> None:
+    now = datetime.utcnow()
+    recent = db.scalar(select(models.AuthCode).where(models.AuthCode.email == email,
+        models.AuthCode.purpose == purpose, models.AuthCode.created_at > now - timedelta(seconds=60),
+        models.AuthCode.used_at.is_(None)).order_by(models.AuthCode.id.desc()))
+    if recent:
+        raise HTTPException(status_code=429, detail="Please wait 60 seconds before requesting another code")
+    code = f"{secrets.randbelow(1000000):06d}"
+    db.add(models.AuthCode(email=email, purpose=purpose, code_hash=_otp_digest(email, code),
+                           expires_at=now + timedelta(minutes=10)))
+    db.commit()
+    try:
+        _send_auth_code(email, code, purpose)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Could not send email. Check SMTP settings and request a new code.")
+
+def _consume_auth_code(db: Session, email: str, code: str, purpose: str):
+    record = db.scalar(select(models.AuthCode).where(models.AuthCode.email == email,
+        models.AuthCode.purpose == purpose, models.AuthCode.used_at.is_(None))
+        .order_by(models.AuthCode.id.desc()))
+    if not record or record.expires_at < datetime.utcnow() or record.attempts >= 5:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    record.attempts += 1
+    if not hmac.compare_digest(record.code_hash, _otp_digest(email, code)):
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    record.used_at = datetime.utcnow()
+    db.commit()
+
+@app.post("/api/auth/register-school", tags=["auth"])
+def register_school(payload: dict, db: Session = Depends(get_db)):
+    name = str(payload.get("name", "")).strip()
+    email = str(payload.get("email", "")).strip().lower()
+    password = str(payload.get("password", ""))
+    school_name = str(payload.get("school_name", "")).strip()
+    school_code = str(payload.get("school_code", "")).strip().upper()
+    if not all((name, email, password, school_name, school_code)) or len(password) < 12:
+        raise HTTPException(status_code=422, detail="All fields are required and password must be at least 12 characters")
+    if db.scalar(select(models.User.id).where(models.User.email == email)):
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    school = models.School(name=school_name, code=school_code)
+    db.add(school)
+    try:
+        db.flush()
+        account = models.User(name=name, email=email, password_hash=hash_password(password), role="admin",
+            school_id=school.id, is_active=False, email_verified=False, approval_status="approved")
+        db.add(account)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="School name/code or email already exists")
+    _issue_auth_code(db, email, "verify")
+    return {"message": "School registered. Verify the email address to activate the Admin account.", "email": email}
+
+@app.post("/api/auth/register-staff", tags=["auth"])
+def register_staff(payload: dict, db: Session = Depends(get_db)):
+    name = str(payload.get("name", "")).strip()
+    email = str(payload.get("email", "")).strip().lower()
+    password = str(payload.get("password", ""))
+    school_code = str(payload.get("school_code", "")).strip().upper()
+    role = str(payload.get("role", "")).strip().lower()
+    allowed = {"accountant", "teacher", "transport_manager", "hostel_warden", "parent"}
+    if not all((name, email, password, school_code)) or len(password) < 12 or role not in allowed:
+        raise HTTPException(status_code=422, detail="Provide all fields, a valid role and a password of at least 12 characters")
+    school = db.scalar(select(models.School).where(models.School.code == school_code, models.School.is_active.is_(True)))
+    if not school:
+        raise HTTPException(status_code=404, detail="School code not found")
+    if db.scalar(select(models.User.id).where(models.User.email == email)):
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    account = models.User(name=name, email=email, password_hash=hash_password(password), role=role,
+        school_id=school.id, is_active=False, email_verified=False, approval_status="pending")
+    db.add(account)
+    db.commit()
+    _issue_auth_code(db, email, "verify")
+    return {"message": "Registration received. Verify your email; your school Admin must then approve the account.", "email": email}
+
+@app.post("/api/auth/verify-email", tags=["auth"])
+def verify_email(payload: dict, db: Session = Depends(get_db)):
+    email = str(payload.get("email", "")).strip().lower()
+    code = str(payload.get("code", "")).strip()
+    account = db.scalar(select(models.User).where(models.User.email == email))
+    if not account:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    _consume_auth_code(db, email, code, "verify")
+    account.email_verified = True
+    if account.approval_status == "approved":
+        account.is_active = True
+    db.commit()
+    return {"message": "Email verified. " + ("You can now sign in." if account.is_active else "Your school Admin must approve your account before sign-in.")}
+
+@app.post("/api/auth/resend-verification", tags=["auth"])
+def resend_verification(payload: dict, db: Session = Depends(get_db)):
+    email = str(payload.get("email", "")).strip().lower()
+    account = db.scalar(select(models.User).where(models.User.email == email))
+    if account and not account.email_verified:
+        _issue_auth_code(db, email, "verify")
+    return {"message": "If verification is pending, a new code has been sent."}
+
+@app.post("/api/auth/forgot-password", tags=["auth"])
+def forgot_password(payload: dict, db: Session = Depends(get_db)):
+    email = str(payload.get("email", "")).strip().lower()
+    account = db.scalar(select(models.User).where(models.User.email == email, models.User.email_verified.is_(True)))
+    if account:
+        _issue_auth_code(db, email, "reset")
+    return {"message": "If a verified account exists for this email, a reset code has been sent."}
+
+@app.post("/api/auth/reset-password", tags=["auth"])
+def reset_password(payload: dict, db: Session = Depends(get_db)):
+    email = str(payload.get("email", "")).strip().lower()
+    code = str(payload.get("code", "")).strip()
+    password = str(payload.get("password", ""))
+    if len(password) < 12:
+        raise HTTPException(status_code=422, detail="Password must be at least 12 characters")
+    account = db.scalar(select(models.User).where(models.User.email == email))
+    if not account:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    _consume_auth_code(db, email, code, "reset")
+    account.password_hash = hash_password(password)
+    db.commit()
+    return {"message": "Password updated. You can now sign in."}
+
+@app.get("/api/auth/pending-users", tags=["auth"])
+def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_roles("admin"))):
+    return list(db.scalars(select(models.User).where(models.User.school_id == user.school_id,
+        models.User.approval_status == "pending", models.User.email_verified.is_(True)).order_by(models.User.created_at)).all())
+
+@app.post("/api/auth/users/{user_id}/approval", tags=["auth"])
+def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_roles("admin"))):
+    target = db.get(models.User, user_id)
+    decision = str(payload.get("decision", "")).lower()
+    if not target or target.school_id != user.school_id or target.role in ("admin", "super_admin"):
+        raise HTTPException(status_code=404, detail="Pending staff account not found")
+    if decision not in ("approve", "reject") or not target.email_verified:
+        raise HTTPException(status_code=422, detail="A verified account and approve/reject decision are required")
+    target.approval_status = "approved" if decision == "approve" else "rejected"
+    target.is_active = decision == "approve"
+    db.commit()
+    return {"message": "Account " + ("approved" if decision == "approve" else "rejected")}
+
 @app.post("/api/auth/login")
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.scalar(select(models.User).where(models.User.email == form.username))
-    if not user or not user.is_active or not verify_password(form.password, user.password_hash):
+    if not user or not verify_password(form.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not user.email_verified:
+        raise HTTPException(status_code=403, detail="Verify your email before signing in")
+    if user.approval_status == "pending":
+        raise HTTPException(status_code=403, detail="Your school Admin has not approved your account yet")
+    if user.approval_status == "rejected" or not user.is_active:
+        raise HTTPException(status_code=403, detail="This account is inactive. Contact your school Admin")
     return {"access_token": create_access_token(user), "token_type": "bearer",
             "user": schemas.UserOut.model_validate(user).model_dump()}
 
