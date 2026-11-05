@@ -2,7 +2,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator, model_validator, Field
 from decimal import Decimal
 import re
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 
 
