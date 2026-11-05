@@ -83,3 +83,5 @@
 .auth-links{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:18px}
 .auth-links button{border:0;background:transparent;color:#087d70;font-size:11px;font-weight:700;cursor:pointer;padding:4px}
 .auth-links button:hover{text-decoration:underline}
+
+.approval-actions{display:flex;gap:7px;align-items:center}.approval-actions .primary,.approval-actions .secondary{padding:7px 10px;font-size:10px}
