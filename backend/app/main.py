@@ -99,10 +99,57 @@ def _otp_digest(email: str, code: str) -> str:
     secret = os.getenv("JWT_SECRET_KEY", "schoolos-development-secret")
     return hashlib.sha256(f"{email.lower()}:{code}:{secret}".encode()).hexdigest()
 
-def _send_auth_code(email: str, code: str, purpose: str) -> None:
+# Support alerts are throttled per event to avoid flooding the support mailbox.
+_support_alert_last_sent: dict[str, datetime] = {}
+
+def _smtp_send_message(msg: EmailMessage) -> None:
     host = os.getenv("SMTP_HOST")
     username = os.getenv("SMTP_USERNAME")
     password = os.getenv("SMTP_PASSWORD")
+    if not host or not msg.get("From"):
+        raise RuntimeError("SMTP host or sender is not configured")
+    port = int(os.getenv("SMTP_PORT", "587"))
+    use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+    use_tls = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    if use_ssl:
+        with smtplib.SMTP_SSL(host, port, timeout=20) as server:
+            if username and password:
+                server.login(username, password)
+            server.send_message(msg)
+    else:
+        with smtplib.SMTP(host, port, timeout=20) as server:
+            server.ehlo()
+            if use_tls:
+                server.starttls()
+                server.ehlo()
+            if username and password:
+                server.login(username, password)
+            server.send_message(msg)
+
+def _notify_support(event: str, details: str, throttle_seconds: int = 900) -> None:
+    support_email = os.getenv("SUPPORT_EMAIL")
+    sender = os.getenv("SMTP_FROM_EMAIL") or os.getenv("SMTP_USERNAME")
+    if not support_email or not sender:
+        return
+    now = datetime.utcnow()
+    previous = _support_alert_last_sent.get(event)
+    if previous and (now - previous).total_seconds() < throttle_seconds:
+        return
+    _support_alert_last_sent[event] = now
+    msg = EmailMessage()
+    msg["Subject"] = f"SchoolOS support alert: {event}"
+    msg["From"] = sender
+    msg["To"] = support_email
+    msg.set_content(f"SchoolOS authentication alert\\n\\nEvent: {event}\\nDetails: {details}\\nTime (UTC): {now.isoformat()}\\n")
+    try:
+        _smtp_send_message(msg)
+    except Exception as exc:
+        # Do not recurse: a broken SMTP connection cannot reliably be reported through itself.
+        print(f"SUPPORT ALERT DELIVERY FAILED: {type(exc).__name__}: {exc}")
+
+def _send_auth_code(email: str, code: str, purpose: str) -> None:
+    host = os.getenv("SMTP_HOST")
+    username = os.getenv("SMTP_USERNAME")
     sender = os.getenv("SMTP_FROM_EMAIL") or username
     if not host or not sender:
         raise HTTPException(status_code=503, detail="Email delivery is not configured. Contact the platform administrator.")
@@ -111,14 +158,8 @@ def _send_auth_code(email: str, code: str, purpose: str) -> None:
     msg["From"] = sender
     msg["To"] = email
     action = "verify your SchoolOS account" if purpose == "verify" else "reset your SchoolOS password"
-    msg.set_content(f"Your SchoolOS code to {action} is: {code}\n\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
-    port = int(os.getenv("SMTP_PORT", "587"))
-    with smtplib.SMTP(host, port, timeout=15) as server:
-        if os.getenv("SMTP_USE_TLS", "true").lower() == "true":
-            server.starttls()
-        if username and password:
-            server.login(username, password)
-        server.send_message(msg)
+    msg.set_content(f"Your SchoolOS code to {action} is: {code}\\n\\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
+    _smtp_send_message(msg)
 
 def _issue_auth_code(db: Session, email: str, purpose: str) -> None:
     now = datetime.utcnow()
@@ -133,7 +174,9 @@ def _issue_auth_code(db: Session, email: str, purpose: str) -> None:
     db.commit()
     try:
         _send_auth_code(email, code, purpose)
-    except Exception:
+    except Exception as exc:
+        db.rollback()
+        _notify_support("OTP email delivery failure", f"Purpose={purpose}; recipient={email}; error={type(exc).__name__}: {exc}")
         raise HTTPException(status_code=503, detail="Could not send email. Check SMTP settings and request a new code.")
 
 def _consume_auth_code(db: Session, email: str, code: str, purpose: str):
@@ -141,10 +184,15 @@ def _consume_auth_code(db: Session, email: str, code: str, purpose: str):
         models.AuthCode.purpose == purpose, models.AuthCode.used_at.is_(None))
         .order_by(models.AuthCode.id.desc()))
     if not record or record.expires_at < datetime.utcnow() or record.attempts >= 5:
+        if record and record.attempts >= 5:
+            _notify_support("OTP attempt limit reached", f"Purpose={purpose}; account email={email}; maximum incorrect attempts reached.")
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     record.attempts += 1
     if not hmac.compare_digest(record.code_hash, _otp_digest(email, code)):
+        attempts = record.attempts
         db.commit()
+        if attempts >= 5:
+            _notify_support("Repeated incorrect OTP", f"Purpose={purpose}; account email={email}; five incorrect codes entered.")
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     record.used_at = datetime.utcnow()
     db.commit()
