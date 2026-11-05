@@ -213,7 +213,7 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
     db.add(school)
     try:
         db.flush()
-        account = models.User(name=name, email=email, password_hash=hash_password(password), role="user",
+        account = models.User(name=name, email=email, password_hash=hash_password(password), role="principal",
             school_id=school.id, is_active=False, email_verified=False, approval_status="approved")
         db.add(account)
         db.commit()
@@ -221,7 +221,7 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="School name/code or email already exists")
     _issue_auth_code(db, email, "verify")
-    return {"message": "School registered. Verify the email address to activate your standard user account.", "email": email}
+    return {"message": "School registered. Verify the email address to activate your Principal account.", "email": email}
 
 @app.post("/api/auth/register-staff", tags=["auth"])
 def register_staff(payload: dict, db: Session = Depends(get_db)):
@@ -229,11 +229,13 @@ def register_staff(payload: dict, db: Session = Depends(get_db)):
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
     school_code = str(payload.get("school_code", "")).strip().upper()
-    role = str(payload.get("role", "user")).strip().lower()
-    allowed = {"user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "parent"}
+    role = str(payload.get("role", "principal")).strip().lower()
+    allowed = {"principal", "vice_principal", "teacher", "account", "clerk", "office_assistant",
+               "librarian", "lab_assistant", "it_administrator", "transport_manager",
+               "hostel_warden", "security_guard", "others", "user", "admin", "accountant", "student", "parent"}
     if not all((name, email, password, school_code)) or len(password) < 12 or role not in allowed:
         raise HTTPException(status_code=422, detail="Provide all fields, a valid account type and a password of at least 12 characters")
-    role = "parent" if role == "parent" else "user"
+    role = "parent" if role == "parent" else role
     school = db.scalar(select(models.School).where(models.School.code == school_code, models.School.is_active.is_(True)))
     if not school:
         raise HTTPException(status_code=404, detail="School code not found")
@@ -244,7 +246,7 @@ def register_staff(payload: dict, db: Session = Depends(get_db)):
     db.add(account)
     db.commit()
     _issue_auth_code(db, email, "verify")
-    return {"message": "Registration received. Verify your email; a standard user at your school must approve the account.", "email": email}
+    return {"message": "Registration received. Verify your email; an authorized school user must approve the account.", "email": email}
 
 @app.post("/api/auth/verify-email", tags=["auth"])
 def verify_email(payload: dict, db: Session = Depends(get_db)):
@@ -455,13 +457,16 @@ def register_crud(path, model, schema_in, schema_out, roles):
         account_password = None
         if model is models.Staff:
             create_staff_account = values.pop("create_account", False)
-            account_role = values.pop("account_role", "user")
+            account_role = values.pop("account_role", "principal")
             account_password = values.pop("account_password", None)
             if create_staff_account:
                 if user.role != "super_admin":
                     raise HTTPException(status_code=403, detail="Only Developer can create staff login accounts")
-                if account_role not in ("user", "parent"):
-                    raise HTTPException(status_code=422, detail="Staff login type must be Standard User or Parent")
+                if account_role not in ("principal", "vice_principal", "teacher", "account", "clerk",
+                                        "office_assistant", "librarian", "lab_assistant", "it_administrator",
+                                        "transport_manager", "hostel_warden", "security_guard", "others",
+                                        "user", "admin", "accountant", "parent"):
+                    raise HTTPException(status_code=422, detail="Select a valid school role or Parent")
                 if not account_password or len(account_password) < 12:
                     raise HTTPException(status_code=422, detail="Set a login password with at least 12 characters")
                 if db.scalar(select(models.User.id).where(models.User.email == values.get("email", "").lower())):

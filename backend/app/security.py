@@ -38,7 +38,11 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
         raise HTTPException(status_code=401, detail="User is inactive or does not exist")
     return user
 
-STANDARD_USER_ROLES = {"user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student"}
+STANDARD_USER_ROLES = {
+    "user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student",
+    "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian",
+    "lab_assistant", "it_administrator", "security_guard", "others"
+}
 
 
 def require_roles(*roles: str):

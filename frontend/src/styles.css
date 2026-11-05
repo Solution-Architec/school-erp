@@ -515,3 +515,13 @@
 .dashboard-link-card{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
 .dashboard-link-card:hover,.dashboard-link-card:focus-visible{transform:translateY(-2px);box-shadow:0 8px 22px rgba(15,118,110,.12);border-color:#8bcfc4;outline:none}
 .dashboard-link-card:focus-visible{outline:2px solid #0f766e;outline-offset:2px}
+
+/* Role-aware workspace identity */
+.role-themed{--role-accent:#0f766e}
+.role-themed .brand-mark{background:var(--role-accent)}
+.role-themed .nav-item:hover,.role-themed .nav-item.selected{color:var(--role-accent);background:color-mix(in srgb,var(--role-accent) 10%,white)}
+.role-themed .welcome-tag{color:var(--role-accent)}
+.role-themed .welcome-icon{color:var(--role-accent);background:color-mix(in srgb,var(--role-accent) 10%,white)}
+.role-themed .role-chip{display:inline-flex;align-items:center;padding:7px 11px;border:1px solid color-mix(in srgb,var(--role-accent) 25%,white);border-radius:999px;background:color-mix(in srgb,var(--role-accent) 8%,white);color:var(--role-accent);font-size:10px;font-weight:800;letter-spacing:.3px}
+.role-themed .nav-item.selected{box-shadow:inset 3px 0 0 var(--role-accent)}
+@media(max-width:640px){.role-themed .role-chip{display:none}}
