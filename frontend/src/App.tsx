@@ -56,11 +56,74 @@ const modules: ModuleDef[] = [
   description: 'View collections, outstanding balances and overdue fees',
  },
 ]
+
+const roleLabels:Record<string,string> = {
+ super_admin:'Developer', user:'Principal', admin:'Principal', principal:'Principal',
+ vice_principal:'Vice Principal', teacher:'Teacher', account:'Accounts', accountant:'Accounts',
+ clerk:'Clerk', office_assistant:'Office Assistant', librarian:'Librarian',
+ lab_assistant:'Lab Assistant', it_administrator:'IT Administrator',
+ transport_manager:'Transport Manager', hostel_warden:'Hostel Warden',
+ security_guard:'Security Guard', others:'Others', parent:'Parent'
+}
+const roleDescriptions:Record<string,string> = {
+ super_admin:'Platform-wide administration, school onboarding and user management.',
+ user:'School leadership workspace for academic and day-to-day operations.',
+ admin:'School leadership workspace for academic and day-to-day operations.',
+ principal:'School leadership workspace for academic and day-to-day operations.',
+ vice_principal:'Academic coordination, student services and staff oversight.',
+ teacher:'Classroom-focused access to students, classes and learning records.',
+ account:'Finance workspace for fee setup, collections and outstanding balances.',
+ accountant:'Finance workspace for fee setup, collections and outstanding balances.',
+ clerk:'Front-office student records, fee desk and document handling.',
+ office_assistant:'Office administration, staff coordination and student records.',
+ librarian:'Student lookup and library-related document support.',
+ lab_assistant:'Laboratory support, maintenance requests and documents.',
+ it_administrator:'IT operations, staff account support and maintenance.',
+ transport_manager:'Transport routes, vehicles and student transport details.',
+ hostel_warden:'Hostel occupancy, resident information and maintenance.',
+ security_guard:'Front-desk student lookup and essential school information.',
+ others:'A focused workspace with school help and shared information.',
+ parent:'Family portal for linked students only.'
+}
+const roleModuleAccess:Record<string,string[]> = {
+ super_admin:modules.map(m=>m.key),
+ user:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports'],
+ admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports'],
+ principal:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports'],
+ vice_principal:['dashboard','chatbot','students','staff','classes','documents','maintenance','fee-reports'],
+ teacher:['dashboard','chatbot','students','classes','documents'],
+ account:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
+ accountant:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
+ clerk:['dashboard','chatbot','students','student-fees','payments','documents'],
+ office_assistant:['dashboard','chatbot','students','staff','documents','approvals'],
+ librarian:['dashboard','chatbot','students','documents'],
+ lab_assistant:['dashboard','chatbot','documents','maintenance'],
+ it_administrator:['dashboard','chatbot','staff','documents','maintenance','approvals'],
+ transport_manager:['dashboard','chatbot','students','vehicles','documents','maintenance'],
+ hostel_warden:['dashboard','chatbot','students','hostels','documents','maintenance'],
+ security_guard:['dashboard','chatbot','students'],
+ others:['dashboard','chatbot'],
+ parent:['parent-portal','chatbot']
+}
+const roleAccent:Record<string,string> = {
+ super_admin:'#6654c7', user:'#0f766e', admin:'#0f766e', principal:'#0f766e',
+ vice_principal:'#2563a6', teacher:'#39845d', account:'#a66a18', accountant:'#a66a18',
+ clerk:'#0d8792', office_assistant:'#4975a8', librarian:'#7354a6',
+ lab_assistant:'#357c8b', it_administrator:'#5968b5',
+ transport_manager:'#b36b24', hostel_warden:'#9a5c86',
+ security_guard:'#64748b', others:'#64748b', parent:'#267d9b'
+}
+const roleCatalog = Object.entries(roleLabels).filter(([key])=>key!=='user'&&key!=='admin'&&key!=='accountant').map(([key,label])=>({
+ role:label, roleKey:key,
+ scope:roleDescriptions[key],
+ level:key==='super_admin'?'Platform access':key==='parent'?'Linked-student access':'Role workspace'
+}))
+
 const money = (n:number) => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n || 0)
 
 function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
  const [mode,setMode]=useState<'signin'|'school'|'staff'|'verify'|'forgot'|'reset'|'mfa'>('signin')
- const [values,setValues]=useState({name:'',email:'',password:'',school_name:'',school_code:'',role:'user',code:''})
+ const [values,setValues]=useState({name:'',email:'',password:'',school_name:'',school_code:'',role:'principal',code:''})
  const [mfaToken,setMfaToken]=useState('')
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[showPassword,setShowPassword]=useState(false)
  const set=(key:string,value:string)=>setValues(old=>({...old,[key]:value}))
@@ -115,7 +178,7 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
      {mode==='staff'&&<>
       <div className="auth-field"><label htmlFor="staff-name">Full name</label><input id="staff-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter your full name" autoComplete="name" required/></div>
       <div className="auth-field"><label htmlFor="staff-school-code">School code</label><input id="staff-school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Enter your school's code" required/></div>
-      <div className="auth-field"><label htmlFor="staff-role">Account type</label><select id="staff-role" value={values.role} onChange={e=>set('role',e.target.value)}><option value="user">Standard User (all school modules)</option><option value="parent">Parent (linked students only)</option></select></div>
+      <div className="auth-field"><label htmlFor="staff-role">Account type</label><select id="staff-role" value={values.role} onChange={e=>set('role',e.target.value)}>{Object.entries(roleLabels).filter(([key])=>key!=='super_admin'&&key!=='parent'&&key!=='user'&&key!=='admin'&&key!=='accountant').map(([key,label])=><option key={key} value={key}>{label}</option>)}<option value="parent">Parent (linked students only)</option></select></div>
      </>}
      {mode==='signin'&&<div className="auth-field"><label htmlFor="login-school-code">School code <span className="muted">(school accounts only)</span></label><input id="login-school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Leave blank for Developer" autoCapitalize="characters"/><small>Leave this blank to sign in as Developer. All school users must enter their school's code.</small></div>}
       {['signin','school','staff','verify','forgot','reset'].includes(mode)&&<div className="auth-field"><label htmlFor="auth-email">Email address</label><div className="auth-input-wrap"><Mail size={17}/><input id="auth-email" type="email" value={values.email} onChange={e=>set('email',e.target.value)} placeholder="you@school.com" required autoComplete="email"/></div></div>}
@@ -173,9 +236,13 @@ function App(){
  const [paymentFeeId,setPaymentFeeId]=useState('')
  const [paymentAmount,setPaymentAmount]=useState('')
  const [paymentMethod,setPaymentMethod]=useState('cash')
+ const allowedModuleKeys=roleModuleAccess[user?.role||'user']||roleModuleAccess.user
+ const availableModules=modules.filter(m=>allowedModuleKeys.includes(m.key))
  const selected=modules.find(m=>m.key===active)||modules[0]
+ const roleLabel=roleLabels[user?.role||'user']||'School User'
+ const hasModule=(key:string)=>allowedModuleKeys.includes(key)
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
- useEffect(()=>{if(user?.role==='parent')setActive('parent-portal')},[user])
+ useEffect(()=>{if(user){const first=roleModuleAccess[user.role]?.[0]||'dashboard';if(!roleModuleAccess[user.role]?.includes(active))setActive(first)}},[user])
  useEffect(()=>{if(!token)return;fetch(`${API}/api/auth/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setUser).catch(()=>{localStorage.removeItem('erp_token');setToken('');setUser(null)})},[token,authHeaders])
  async function request(url:string,options:RequestInit={}){const r=await fetch(`${API}${url}`,{...options,headers:{...authHeaders,...options.headers}});if(r.status===401){logout();throw new Error('Session expired. Please sign in again.')}const raw=await r.text();let data:any={};try{data=raw?JSON.parse(raw):{}}catch{data={}}if(!r.ok){const detail=data.detail||data.message||raw.slice(0,240);throw new Error((detail||'API request failed')+` (HTTP ${r.status}: ${options.method||'GET'} ${url})`)}return data}
  function logout(){localStorage.removeItem('erp_token');setToken('');setUser(null);setRows([])}
@@ -188,7 +255,7 @@ function App(){
  async function importModule(e:any){const file=e.target.files?.[0] as File|undefined;e.target.value='';if(!file)return;if(user?.role==='super_admin'&&!importSchoolId){setError('Select a school before importing records.');return}setImporting(true);setError('');setNotice('');try{const body=new FormData();body.append('file',file);if(user?.role==='super_admin')body.append('school_id',importSchoolId);const response=await fetch(API+'/api/'+active+'/import',{method:'POST',headers:{Authorization:'Bearer '+token},body});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail||'Import failed ('+response.status+')');setNotice('Import complete: '+data.created+' '+selected.label.toLowerCase()+' added, '+data.skipped+' skipped.'+(data.errors?.length?' First issue: row '+data.errors[0].row+' — '+data.errors[0].error:''));await load()}catch(err:any){setError(err.message||'Import failed')}finally{setImporting(false)}}
  async function load(){if(!user)return;setLoading(true);setError('');try{if(active==='dashboard'){
       setStats(await request('/api/dashboard'));setRows([]);
-      if(user.role!=='parent'){
+      if(hasModule('fee-reports')){
        const year=String(new Date().getFullYear());
        const results=await Promise.allSettled([request('/api/fee-reports?year='+year),request('/api/fee-dues')]);
        if(results[0].status==='fulfilled')setReportData(results[0].value);
@@ -205,15 +272,15 @@ function App(){
  async function deleteStaff(row:any){if(!window.confirm('Delete staff record '+row.employee_no+' — '+row.full_name+'? This cannot be undone.'))return;try{await request('/api/staff/'+row.id,{method:'DELETE'});setNotice('Staff record deleted successfully');await load()}catch(e:any){setError(e.message)}}
  if(!token||!user)return <Login onLogin={handleLogin}/>
  const Icon=selected.icon
- return <div className="app-shell">
-  <aside className={`sidebar ${mobileNav?'open':''}`}><div className="brand"><div className="brand-mark"><GraduationCap/></div><div><strong>SchoolOS</strong><span>SCHOOL MANAGEMENT PLATFORM</span></div><button className="icon-button mobile-close" onClick={()=>setMobileNav(false)}><X/></button></div><div className="school-switch"><div className="school-avatar">S</div><div><strong>{schools.find(sc=>sc.id===user.school_id)?.name||"My School"}</strong><span>Academic workspace</span></div><ChevronDown size={16}/></div><p className="nav-label">WORKSPACE</p><nav>{modules.filter(m=>(m.key!=='schools'||user.role==='super_admin')&&(m.key!=='parent-portal'||user.role==='parent'||user.role==='super_admin')&&(user.role!=='parent'||m.key==='parent-portal')).map(m=>{const I=m.icon;return <button key={m.key} className={`nav-item ${active===m.key?'selected':''}`} onClick={()=>{setActive(m.key);setMobileNav(false);setShowForm(false)}}><I size={18}/><span>{m.label}</span></button>})}</nav><div className="sidebar-bottom"><div className="user-mini"><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div><div><strong>{user.name}</strong><span>{user.role==='super_admin'?'Developer':user.role==='parent'?'Parent':'Standard User'}</span></div><button className="icon-button" title="Sign out" onClick={logout}><LogOut size={17}/></button></div></div></aside>
-  <main className="main"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileNav(true)}><Menu/></button><div className="crumb">Workspace <span>/</span> <strong>{selected.label}</strong></div><div className="top-actions">{user.role!=='parent'&&<div className="student-global-search"><Search size={16}/><input aria-label="Find student across modules" placeholder="Find student by name / admission no." value={studentSearch} onChange={e=>setStudentSearch(e.target.value)}/>{studentResults.length>0&&<div className="student-search-results">{studentResults.map(s=><button type="button" key={s.id} onClick={()=>chooseStudent(s)}><strong>{s.full_name}</strong><span>{s.admission_no} · {s.class_name||'Class not set'} {s.section||''}</span></button>)}</div>}</div>}<div className="online-pill"><span/> System online</div><button className="icon-button" title="Notifications"><Bell size={19}/></button><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div></div></header>
+ return <div className={`app-shell role-themed`} style={{'--role-accent':roleAccent[user.role]||'#0f766e'} as React.CSSProperties}>
+  <aside className={`sidebar ${mobileNav?'open':''}`}><div className="brand"><div className="brand-mark"><GraduationCap/></div><div><strong>SchoolOS</strong><span>SCHOOL MANAGEMENT PLATFORM</span></div><button className="icon-button mobile-close" onClick={()=>setMobileNav(false)}><X/></button></div><div className="school-switch"><div className="school-avatar">S</div><div><strong>{schools.find(sc=>sc.id===user.school_id)?.name||"My School"}</strong><span>Academic workspace</span></div><ChevronDown size={16}/></div><p className="nav-label">WORKSPACE</p><nav>{availableModules.map(m=>{const I=m.icon;return <button key={m.key} className={`nav-item ${active===m.key?'selected':''}`} onClick={()=>{setActive(m.key);setMobileNav(false);setShowForm(false)}}><I size={18}/><span>{m.label}</span></button>})}</nav><div className="sidebar-bottom"><div className="user-mini"><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div><div><strong>{user.name}</strong><span>{roleLabel}</span></div><button className="icon-button" title="Sign out" onClick={logout}><LogOut size={17}/></button></div></div></aside>
+  <main className="main"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileNav(true)}><Menu/></button><div className="crumb">Workspace <span>/</span> <strong>{selected.label}</strong></div><span className="role-chip">{roleLabel}</span><div className="top-actions">{user.role!=='parent'&&<div className="student-global-search"><Search size={16}/><input aria-label="Find student across modules" placeholder="Find student by name / admission no." value={studentSearch} onChange={e=>setStudentSearch(e.target.value)}/>{studentResults.length>0&&<div className="student-search-results">{studentResults.map(s=><button type="button" key={s.id} onClick={()=>chooseStudent(s)}><strong>{s.full_name}</strong><span>{s.admission_no} · {s.class_name||'Class not set'} {s.section||''}</span></button>)}</div>}</div>}<div className="online-pill"><span/> System online</div><button className="icon-button" title="Notifications"><Bell size={19}/></button><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div></div></header>
   <div className="content">{selectedStudent&&<div className="selected-student-context"><div><strong>Selected student: {selectedStudent.full_name}</strong><span>{selectedStudent.admission_no} · {selectedStudent.class_name||'Class not set'} {selectedStudent.section||''} · Guardian: {selectedStudent.guardian_name||'—'} · Phone: {selectedStudent.guardian_phone||'—'}</span></div><button type="button" className="secondary" onClick={()=>setSelectedStudent(null)}>Clear student</button></div>}<div className="page-heading"><div><p className="eyebrow">SCHOOL ERP / {selected.key.toUpperCase()}</p><h1>{selected.label}</h1><p className="muted">{selected.description}</p></div><div className="heading-actions"><button className="secondary" onClick={load}><RefreshCw size={16}/> Refresh</button>{active==='students'&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<button className="secondary" onClick={downloadStudentTemplate}><Download size={16}/> Template</button><input id="student-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importStudents}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('student-bulk-file')?.click()}><Upload size={16}/> {importing?'Uploading…':'Bulk upload'}</button></>}{['staff','classes','vehicles','hostels','maintenance','fee-structures'].includes(active)&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<input id="module-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importModule}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('module-bulk-file')?.click()}><Upload size={16}/> {importing?'Importing…':'Import CSV / Excel'}</button></>}{selected.endpoint&&(user.role!=='super_admin'||active==='schools'||active==='staff')&&<button className="primary" onClick={()=>{setEditingRecordId(null);setForm(active==='student-fees'&&selectedStudent?{student_id:selectedStudent.id,term:'annual',discount:0}:{});setShowForm(true)}}><Plus size={17}/> Add record</button>}</div></div>
   {error&&<div className="error banner"><span>{error}</span><button onClick={()=>setError('')}><X size={16}/></button></div>}{notice&&<div className="success banner">{notice}<button onClick={()=>setNotice('')}><X size={16}/></button></div>}
   {active==='parent-portal'?<ParentPortal request={request}/>:active==='chatbot'?<HelpAssistant request={request}/>:active==='dashboard'?<>
-    <div className="welcome-panel"><div><span className="welcome-tag">OVERVIEW</span><h2>Good to see you, {user.name.split(' ')[0]}</h2><p>Your school operations at a glance. Use the shortcuts below to manage daily work.</p></div><div className="welcome-icon"><GraduationCap size={44}/></div></div>
-    <div className="stat-grid">{[{label:'Total students',key:'students',target:'students',icon:GraduationCap,tone:'teal'},{label:'Staff members',key:'staff',target:'staff',icon:Users,tone:'blue'},{label:'Classes & sections',key:'classes',target:'classes',icon:BookOpen,tone:'purple'},{label:'Transport vehicles',key:'vehicles',target:'vehicles',icon:Bus,tone:'orange'},{label:'Hostel rooms',key:'hostel_rooms',target:'hostels',icon:Building2,tone:'pink'},{label:'Open maintenance',key:'open_maintenance',target:'maintenance',icon:Wrench,tone:'red'}].map(s=>{const I=s.icon;return <div className="stat-card dashboard-link-card" key={s.key} role="link" tabIndex={0} onClick={()=>setActive(s.target)} onKeyDown={e=>{if(e.key==='Enter'){setActive(s.target)}}}><div className={`stat-icon ${s.tone}`}><I size={20}/></div><p>{s.label}</p><strong>{stats[s.key]??'—'}</strong><span className="stat-foot">Current records · Click to open</span></div>})}</div>
-    {user.role!=='parent'&&<>
+    <div className="welcome-panel"><div><span className="welcome-tag">{roleLabel.toUpperCase()} WORKSPACE</span><h2>Good to see you, {user.name.split(' ')[0]}</h2><p>{roleDescriptions[user.role]||'Your school workspace and assigned daily tasks.'} Use the options on the left to get started.</p></div><div className="welcome-icon"><GraduationCap size={44}/></div></div>
+    <div className="stat-grid">{[{label:'Total students',key:'students',target:'students',icon:GraduationCap,tone:'teal'},{label:'Staff members',key:'staff',target:'staff',icon:Users,tone:'blue'},{label:'Classes & sections',key:'classes',target:'classes',icon:BookOpen,tone:'purple'},{label:'Transport vehicles',key:'vehicles',target:'vehicles',icon:Bus,tone:'orange'},{label:'Hostel rooms',key:'hostel_rooms',target:'hostels',icon:Building2,tone:'pink'},{label:'Open maintenance',key:'open_maintenance',target:'maintenance',icon:Wrench,tone:'red'}].filter(s=>hasModule(s.target)).map(s=>{const I=s.icon;return <div className="stat-card dashboard-link-card" key={s.key} role="link" tabIndex={0} onClick={()=>setActive(s.target)} onKeyDown={e=>{if(e.key==='Enter'){setActive(s.target)}}}><div className={`stat-icon ${s.tone}`}><I size={20}/></div><p>{s.label}</p><strong>{stats[s.key]??'—'}</strong><span className="stat-foot">Current records · Click to open</span></div>})}</div>
+    {hasModule('fee-reports')&&<>
      <div className="dashboard-section-heading"><div><h3>Finance overview</h3><p>Collections and outstanding balances · {new Date().getFullYear()}</p></div><button className="secondary" onClick={()=>setActive('fee-reports')}>Full fee reports <FileText size={15}/></button></div>
      <div className="fee-report-stats dashboard-finance-stats">
       <div className="stat-card dashboard-link-card" role="link" tabIndex={0} onClick={()=>setActive("fee-reports")}><div className="stat-icon teal"><Wallet size={19}/></div><p>Collected this year</p><strong>{money(reportData.collected||0)}</strong><span className="stat-foot">Payments received in {new Date().getFullYear()}</span></div>
@@ -226,10 +293,10 @@ function App(){
       </div>
       <div className="panel dashboard-actions-panel"><div className="panel-heading"><div><h3>Quick actions</h3><p>Jump to common school workflows</p></div><Plus size={19}/></div>
        <div className="quick-grid">
-        <button className="quick-item" onClick={()=>setActive('students')}><GraduationCap size={17}/> Add / find student <span className="quick-arrow">→</span></button>
-        <button className="quick-item" onClick={()=>setActive('payments')}><Wallet size={17}/> Record fee payment <span className="quick-arrow">→</span></button>
-        <button className="quick-item" onClick={()=>setActive('staff')}><Users size={17}/> Manage staff <span className="quick-arrow">→</span></button>
-        <button className="quick-item" onClick={()=>setActive('fee-reports')}><FileText size={17}/> View fee reports <span className="quick-arrow">→</span></button>
+        {hasModule('students')&&<button className="quick-item" onClick={()=>setActive('students')}><GraduationCap size={17}/> Add / find student <span className="quick-arrow">→</span></button>}
+        {hasModule('payments')&&<button className="quick-item" onClick={()=>setActive('payments')}><Wallet size={17}/> Record fee payment <span className="quick-arrow">→</span></button>}
+        {hasModule('staff')&&<button className="quick-item" onClick={()=>setActive('staff')}><Users size={17}/> Manage staff <span className="quick-arrow">→</span></button>}
+        {hasModule('fee-reports')&&<button className="quick-item" onClick={()=>setActive('fee-reports')}><FileText size={17}/> View fee reports <span className="quick-arrow">→</span></button>}
        </div>
        <div className="dashboard-alert"><Bell size={17}/><div><strong>{feeDues.length?feeDues.length+' fee records have outstanding balances':'No outstanding fee records'}</strong><span>{feeDues.length?'Review open balances and follow up with families.':'There are no unpaid fee balances in the current fee register.'}</span></div></div>
       </div>
@@ -238,8 +305,8 @@ function App(){
       <div className="table-wrap"><table><thead><tr><th>Date</th><th>Receipt</th><th>Student</th><th>Admission no.</th><th>Method</th><th>Amount</th></tr></thead><tbody>{(reportData.recent_payments||[]).slice(0,6).map((p:any)=><tr key={p.id}><td>{new Date(p.payment_date).toLocaleDateString('en-IN')}</td><td>{p.receipt_no}</td><td>{p.student_name}</td><td>{p.admission_no}</td><td>{p.payment_method}</td><td><strong>{money(p.amount)}</strong></td></tr>)}{!reportData.recent_payments?.length&&<tr><td colSpan={6}><div className="empty-state compact-empty"><strong>No recent payments</strong><p>Recorded student fee payments will appear here.</p></div></td></tr>}</tbody></table></div>
      </div>
     </>}
-    <div className="panel dashboard-roles-panel"><div className="panel-heading"><div><h3>Roles &amp; Authentication</h3><p>Application roles and their authenticated access scope</p></div><Users size={19}/></div><div className="table-wrap"><table><thead><tr><th>Role</th><th>Authentication / access scope</th><th>Access level</th><th>Current user</th></tr></thead><tbody>{[{role:'Developer',roleKey:'super_admin',scope:'Full platform access, user and role administration, all modules and all schools',level:'Full access'},{role:'Standard User',roleKey:'user',scope:'All operational ERP modules within the assigned school',level:'Operational access'},{role:'Parent',roleKey:'parent',scope:'Parent Portal and information for explicitly linked students only',level:'Linked-student access'}].map(r=><tr key={r.role}><td><strong>{r.role}</strong></td><td>{r.scope}</td><td><span className="status-badge active">{r.level}</span></td><td>{(r.roleKey==='user'?user.role!=='super_admin'&&user.role!=='parent':user.role===r.roleKey)?<span className="status-badge active">Signed in</span>:'—'}</td></tr>)}</tbody></table></div><div className="status-note">Access is enforced by backend API authorization. All non-parent school users share the same operational permissions within their school. Parent accounts use explicit guardian-to-student links and can access linked students only.</div></div>
-    <div className="panel dashboard-modules-panel"><div className="panel-heading"><div><h3>Entire School ERP Project</h3><p>Complete list of modules available in this application</p></div><GraduationCap size={19}/></div><div className="table-wrap"><table><thead><tr><th>Module</th><th>Project area</th><th>Description</th><th>Action</th></tr></thead><tbody>{modules.map(m=><tr key={m.key}><td><strong>{m.label}</strong></td><td>{m.key==='dashboard'?'Overview':m.key.startsWith('fee')||m.key==='payments'||m.key==='student-fees'?'Finance':m.key==='students'||m.key==='classes'?'Academics':m.key==='staff'?'HR':m.key==='vehicles'?'Transport':m.key==='hostels'?'Accommodation':m.key==='documents'?'Administration':'Operations'}</td><td>{m.description}</td><td><button className="secondary" onClick={()=>setActive(m.key)}>Open</button></td></tr>)}</tbody></table></div><div className="table-footer">Total modules: {modules.length}<span>SchoolOS · Project overview</span></div></div>
+    <div className="panel dashboard-roles-panel"><div className="panel-heading"><div><h3>Roles &amp; Authentication</h3><p>Application roles and their authenticated access scope</p></div><Users size={19}/></div><div className="table-wrap"><table><thead><tr><th>Role</th><th>Authentication / access scope</th><th>Access level</th><th>Current user</th></tr></thead><tbody>{roleCatalog.map(r=><tr key={r.roleKey}><td><strong>{r.role}</strong></td><td>{r.scope}</td><td><span className="status-badge active">{r.level}</span></td><td>{user.role===r.roleKey?<span className="status-badge active">Signed in</span>:'—'}</td></tr>)}</tbody></table></div><div className="status-note">Each school role receives a focused workspace and matching navigation. Developer has platform-wide access. Parent accounts use explicit guardian-to-student links and can access linked students only. API-level permissions should be enforced separately for production.</div></div>
+    <div className="panel dashboard-modules-panel"><div className="panel-heading"><div><h3>Entire School ERP Project</h3><p>Complete list of modules available in this application</p></div><GraduationCap size={19}/></div><div className="table-wrap"><table><thead><tr><th>Module</th><th>Project area</th><th>Description</th><th>Action</th></tr></thead><tbody>{availableModules.map(m=><tr key={m.key}><td><strong>{m.label}</strong></td><td>{m.key==='dashboard'?'Overview':m.key.startsWith('fee')||m.key==='payments'||m.key==='student-fees'?'Finance':m.key==='students'||m.key==='classes'?'Academics':m.key==='staff'?'HR':m.key==='vehicles'?'Transport':m.key==='hostels'?'Accommodation':m.key==='documents'?'Administration':'Operations'}</td><td>{m.description}</td><td><button className="secondary" onClick={()=>setActive(m.key)}>Open</button></td></tr>)}</tbody></table></div><div className="table-footer">Available modules: {availableModules.length}<span>SchoolOS · Project overview</span></div></div>
     </>:active==='approvals'?<div className="panel data-panel"><div className="panel-heading"><div><h3>Verified staff requests</h3><p>Approve only people who should access this school's workspace.</p></div><span className="record-count">{rows.length} pending</span></div><div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Requested</th><th>Decision</th></tr></thead><tbody>{rows.map((r:any)=><tr key={r.id}><td><strong>{r.name}</strong></td><td>{r.email}</td><td>{r.role.replaceAll('_',' ')}</td><td>{new Date(r.created_at).toLocaleDateString('en-IN')}</td><td><div className="approval-actions"><button className="primary" onClick={async()=>{try{await request('/api/auth/users/'+r.id+'/approval',{method:'POST',body:JSON.stringify({decision:'approve'})});setNotice('Staff account approved');await load()}catch(e:any){setError(e.message)}}}>Approve</button><button className="secondary" onClick={async()=>{try{await request('/api/auth/users/'+r.id+'/approval',{method:'POST',body:JSON.stringify({decision:'reject'})});setNotice('Staff account rejected');await load()}catch(e:any){setError(e.message)}}}>Reject</button></div></td></tr>)}{!rows.length&&<tr><td colSpan={5}><div className="empty-state"><strong>No pending staff requests</strong><p>Verified staff registrations will appear here for review.</p></div></td></tr>}</tbody></table></div></div>:active==='payments'?<div className="panel payment-entry-panel">
    <div className="panel-heading"><div><h3>Record student fee payment</h3><p>Select a fee with an outstanding balance and record the amount received.</p></div><Wallet size={20}/></div>
    <div className="payment-entry-form">
