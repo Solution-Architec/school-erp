@@ -2,6 +2,7 @@ import os
 import secrets
 import hashlib
 import hmac
+import jwt
 import smtplib
 from email.message import EmailMessage
 from datetime import timedelta
@@ -154,10 +155,10 @@ def _send_auth_code(email: str, code: str, purpose: str) -> None:
     if not host or not sender:
         raise HTTPException(status_code=503, detail="Email delivery is not configured. Contact the platform administrator.")
     msg = EmailMessage()
-    msg["Subject"] = "SchoolOS email verification" if purpose == "verify" else "SchoolOS password reset"
+    msg["Subject"] = {"verify": "SchoolOS email verification", "reset": "SchoolOS password reset", "login_mfa": "Your SchoolOS sign-in verification code"}.get(purpose, "SchoolOS security code")
     msg["From"] = sender
     msg["To"] = email
-    action = "verify your SchoolOS account" if purpose == "verify" else "reset your SchoolOS password"
+    action = {"verify": "verify your SchoolOS account", "reset": "reset your SchoolOS password", "login_mfa": "complete your SchoolOS sign-in"}.get(purpose, "verify your SchoolOS identity")
     msg.set_content(f"Your SchoolOS code to {action} is: {code}\\n\\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
     _smtp_send_message(msg)
 
@@ -307,17 +308,59 @@ def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), use
     db.commit()
     return {"message": "Account " + ("approved" if decision == "approve" else "rejected")}
 
-@app.post("/api/auth/login")
-def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.scalar(select(models.User).where(models.User.email == form.username))
-    if not user or not verify_password(form.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
+@app.post("/api/auth/login", tags=["auth"])
+def login(payload: schemas.LoginInput, db: Session = Depends(get_db)):
+    school_code = payload.school_code.strip().upper()
+    email = str(payload.email).strip().lower()
+    # Developer/super-admin accounts use a separately configured platform code.
+    platform_code = os.getenv("PLATFORM_SCHOOL_CODE", "PLATFORM").strip().upper()
+    school = db.scalar(select(models.School).where(
+        models.School.code == school_code, models.School.is_active.is_(True)))
+    if school:
+        user = db.scalar(select(models.User).where(
+            models.User.email == email, models.User.school_id == school.id))
+    elif school_code == platform_code:
+        user = db.scalar(select(models.User).where(
+            models.User.email == email, models.User.role == "super_admin",
+            models.User.school_id.is_(None)))
+    else:
+        user = None
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid school code, email or password")
     if not user.email_verified:
         raise HTTPException(status_code=403, detail="Verify your email before signing in")
     if user.approval_status == "pending":
         raise HTTPException(status_code=403, detail="Your school Admin has not approved your account yet")
     if user.approval_status == "rejected" or not user.is_active:
         raise HTTPException(status_code=403, detail="This account is inactive. Contact your school Admin")
+    if user.role in ("admin", "super_admin"):
+        _issue_auth_code(db, email, "login_mfa")
+        challenge = jwt.encode({
+            "sub": str(user.id), "purpose": "login_mfa",
+            "exp": datetime.utcnow() + timedelta(minutes=5)
+        }, os.getenv("JWT_SECRET_KEY", "schoolos-development-secret"), algorithm="HS256")
+        return {"mfa_required": True, "mfa_token": challenge,
+                "message": "A sign-in verification code has been sent to your email."}
+    return {"access_token": create_access_token(user), "token_type": "bearer",
+            "user": schemas.UserOut.model_validate(user).model_dump()}
+
+
+@app.post("/api/auth/verify-mfa", tags=["auth"])
+def verify_login_mfa(payload: dict, db: Session = Depends(get_db)):
+    challenge = str(payload.get("mfa_token", ""))
+    code = str(payload.get("code", "")).strip()
+    try:
+        claims = jwt.decode(challenge, os.getenv("JWT_SECRET_KEY", "schoolos-development-secret"),
+                            algorithms=["HS256"])
+        if claims.get("purpose") != "login_mfa":
+            raise ValueError("Wrong challenge purpose")
+        user_id = int(claims["sub"])
+    except (jwt.PyJWTError, KeyError, ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Sign-in challenge expired. Please sign in again.")
+    user = db.get(models.User, user_id)
+    if not user or not user.is_active or not user.email_verified or user.role not in ("admin", "super_admin"):
+        raise HTTPException(status_code=401, detail="Account is not eligible for this sign-in challenge")
+    _consume_auth_code(db, user.email, code, "login_mfa")
     return {"access_token": create_access_token(user), "token_type": "bearer",
             "user": schemas.UserOut.model_validate(user).model_dump()}
 
