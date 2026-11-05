@@ -13,7 +13,7 @@ from uuid import uuid4
 from sqlalchemy import and_, or_
 from contextlib import asynccontextmanager
 from typing import Any
-from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -600,6 +600,104 @@ register_crud("documents", models.Document, schemas.DocumentIn, schemas.Document
 register_crud("maintenance", models.MaintenanceRequest, schemas.MaintenanceIn, schemas.MaintenanceOut, ADMIN_ROLES + ("transport_manager", "hostel_warden"))
 register_crud("fee-structures", models.FeeStructure, schemas.FeeStructureIn, schemas.FeeStructureOut, FINANCE_ROLES)
 register_crud("student-fees", models.StudentFee, schemas.StudentFeeIn, schemas.StudentFeeOut, FINANCE_ROLES)
+
+
+# Shared CSV/XLSX import for operational modules. Financial payments and private
+# document files remain dedicated workflows to preserve receipt and storage integrity.
+@app.post("/api/{resource}/import", tags=["data-import"])
+async def import_module_records(
+    resource: str,
+    file: UploadFile = File(...),
+    school_id: int | None = Form(default=None),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("super_admin", "admin")),
+):
+    import csv
+    import io
+
+    importable = {
+        "staff": (models.Staff, schemas.StaffIn, ("employee_no",)),
+        "classes": (models.SchoolClass, schemas.ClassIn, ("name", "section", "academic_year")),
+        "vehicles": (models.Vehicle, schemas.VehicleIn, ("registration_no",)),
+        "hostels": (models.Hostel, schemas.HostelIn, ("name", "room_no")),
+        "maintenance": (models.MaintenanceRequest, schemas.MaintenanceIn, ()),
+        "fee-structures": (models.FeeStructure, schemas.FeeStructureIn, ("name", "academic_year", "term")),
+    }
+    if resource not in importable:
+        raise HTTPException(status_code=404, detail="Bulk import is not enabled for this module")
+    if user.role == "super_admin":
+        target_school_id = school_id
+        if not target_school_id or not db.get(models.School, target_school_id):
+            raise HTTPException(status_code=422, detail="Select a valid school before importing")
+    else:
+        if not user.school_id:
+            raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
+        target_school_id = user.school_id
+
+    filename = (file.filename or "").lower()
+    if not (filename.endswith(".csv") or filename.endswith(".xlsx")):
+        raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
+    raw = await file.read()
+    if len(raw) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File is larger than 10 MB")
+    try:
+        if filename.endswith(".csv"):
+            records = list(csv.DictReader(io.StringIO(raw.decode("utf-8-sig"))))
+        else:
+            from openpyxl import load_workbook
+            workbook = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+            sheet = workbook.active
+            iterator = sheet.iter_rows(values_only=True)
+            headers = [str(value).strip() if value is not None else "" for value in next(iterator, ())]
+            records = [dict(zip(headers, row)) for row in iterator if any(value is not None for value in row)]
+            workbook.close()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read import file: {exc}")
+    if not records:
+        raise HTTPException(status_code=400, detail="The import file contains no data rows")
+    if len(records) > 5000:
+        raise HTTPException(status_code=400, detail="Maximum 5,000 rows per import")
+
+    model, schema, identity_fields = importable[resource]
+    allowed = set(schema.model_fields.keys()) - {"school_id"}
+    existing = set()
+    if identity_fields:
+        stmt = select(model).where(model.school_id == target_school_id)
+        for item in db.scalars(stmt).all():
+            existing.add(tuple(str(getattr(item, field) or "").strip().casefold() for field in identity_fields))
+
+    accepted, errors, seen = [], [], set()
+    skipped = 0
+    for row_number, source in enumerate(records, start=2):
+        normalized = {str(key).strip().lower(): value for key, value in source.items() if key is not None}
+        values = {key: value for key, value in normalized.items() if key in allowed and value is not None and value != ""}
+        try:
+            parsed = schema.model_validate(values)
+            payload = parsed.model_dump()
+            payload["school_id"] = target_school_id
+            if identity_fields:
+                identity = tuple(str(payload.get(field) or "").strip().casefold() for field in identity_fields)
+                if any(not value for value in identity):
+                    raise ValueError("Required duplicate-check fields are missing: " + ", ".join(identity_fields))
+                if identity in existing or identity in seen:
+                    skipped += 1
+                    errors.append({"row": row_number, "error": "Duplicate record skipped"})
+                    continue
+                seen.add(identity)
+            accepted.append(model(**payload))
+        except Exception as exc:
+            skipped += 1
+            errors.append({"row": row_number, "error": str(exc)[:400]})
+
+    if accepted:
+        db.add_all(accepted)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Import conflicted with existing records; no rows were imported. Review duplicates and retry.")
+    return {"resource": resource, "school_id": target_school_id, "created": len(accepted),
+            "skipped": skipped, "errors": errors[:100]}
 
 @app.get("/api/schools", response_model=list[schemas.SchoolOut], tags=["schools"])
 def list_schools(q: str = Query(default="", max_length=120), db: Session = Depends(get_db), user: models.User = Depends(current_user)):
