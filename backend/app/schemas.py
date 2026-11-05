@@ -67,7 +67,7 @@ class StaffIn(BaseModel):
     status: Literal["active", "absent", "suspended", "terminated", "sick", "leave"] = "active"
     # Developer-only optional login provisioning. The email is also the login username.
     create_account: bool = False
-    account_role: Literal["admin", "accountant", "teacher", "transport_manager", "hostel_warden"] = "teacher"
+    account_role: Literal["principal", "vice_principal", "teacher", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "transport_manager", "hostel_warden", "security_guard", "others", "admin", "accountant"] = "principal"
     account_password: str | None = None
     # Only Super Admin may choose a school; tenant admins are always scoped server-side.
     school_id: int | None = Field(default=None, gt=0)
