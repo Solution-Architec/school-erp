@@ -153,3 +153,179 @@
 @media(max-width:1000px){.auth-page{grid-template-columns:minmax(300px,.8fr) minmax(440px,1.2fr)}.auth-showcase{padding:34px 28px}.auth-main{padding:32px 25px}.auth-visual{transform:scale(.88);transform-origin:center}}
 @media(max-width:760px){.auth-page{display:block;min-height:100vh}.auth-showcase{display:none}.auth-main{min-height:100vh;padding:22px 16px 28px;display:flex;flex-direction:column;justify-content:center}.auth-mobile-brand{display:flex;justify-content:center;margin:4px 0 22px;color:#173347;font-size:19px}.auth-mobile-brand .auth-brand-icon{height:37px;width:37px}.auth-form-shell{max-width:480px}.auth-form-card{padding:25px 22px;border-radius:18px}.auth-form-top{margin-bottom:21px}}
 @media(max-width:420px){.auth-main{padding:18px 12px 22px}.auth-form-card{padding:22px 17px}.auth-form-card h1{font-size:25px}.auth-links{gap:8px 12px}.auth-links button{font-size:9px}}
+
+
+/* Staff & HR — refined personnel workspace */
+.staff-record-form{
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  margin:18px 0 22px;
+  padding:clamp(20px,3vw,30px);
+  border:1px solid #dcebe9;
+  border-radius:18px;
+  background:linear-gradient(145deg,#ffffff 0%,#fbfefd 58%,#f3faf8 100%);
+  box-shadow:0 16px 42px #174b4510,0 2px 7px #173c4a08;
+}
+.staff-record-form:before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  width:230px;height:230px;
+  top:-150px;right:-75px;
+  border-radius:50%;
+  background:radial-gradient(circle,#bcebe1a8 0%,#dff6f000 70%);
+  pointer-events:none;
+}
+.staff-record-form .form-heading{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:0 0 19px;
+  margin:0 0 22px;
+  border-bottom:1px solid #e8f0ee;
+}
+.staff-record-form .form-heading h3{
+  margin:0;
+  color:#173b49;
+  font:800 clamp(17px,2vw,21px)/1.25 Manrope,sans-serif;
+  letter-spacing:-.55px;
+}
+.staff-record-form .form-heading:before{
+  content:"STAFF PROFILE";
+  display:block;
+  position:absolute;
+  top:-13px;
+  color:#159487;
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:1.65px;
+}
+.staff-record-form .form-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:17px 20px;
+}
+.staff-record-form .form-grid>label{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-width:0;
+  color:#405b66;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.12px;
+}
+.staff-record-form .form-grid input,
+.staff-record-form .form-grid select{
+  width:100%;
+  min-width:0;
+  height:45px;
+  padding:0 13px;
+  border:1px solid #dce7e7;
+  border-radius:10px;
+  outline:none;
+  background:#fff;
+  color:#213f4b;
+  font:500 12px 'DM Sans',sans-serif;
+  box-shadow:0 1px 2px #173c4a06;
+  transition:border-color .18s,box-shadow .18s,background .18s,transform .18s;
+}
+.staff-record-form .form-grid input::placeholder{color:#aab9bc}
+.staff-record-form .form-grid input:hover,
+.staff-record-form .form-grid select:hover{border-color:#a9cbc5}
+.staff-record-form .form-grid input:focus,
+.staff-record-form .form-grid select:focus{
+  border-color:#31a899;
+  background:#fff;
+  box-shadow:0 0 0 4px #21a39118,0 3px 10px #0d766e0b;
+}
+.staff-record-form .form-grid input:invalid:not(:placeholder-shown){
+  border-color:#e6a5a0;
+}
+.staff-record-form .form-grid label:has(small){
+  gap:7px;
+}
+.staff-record-form .form-grid label small{
+  color:#849a9b;
+  font-size:9px;
+  font-weight:500;
+}
+.staff-record-form .staff-account-options{
+  margin-top:22px;
+  padding:17px 18px;
+  border:1px solid #dceee9;
+  border-radius:13px;
+  background:linear-gradient(110deg,#f0faf7,#f8fcfb);
+}
+.staff-record-form .staff-account-options .checkbox-field{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:#22685f;
+  font-size:11px;
+  font-weight:800;
+}
+.staff-record-form .staff-account-options .checkbox-field input{
+  width:17px;height:17px;
+  accent-color:#138b7e;
+}
+.staff-record-form .staff-account-options .form-grid{margin-top:16px}
+.staff-record-form .staff-account-options .muted{
+  grid-column:1/-1;
+  margin:0;
+  padding:11px 13px;
+  border-radius:9px;
+  background:#ffffffb8;
+  color:#66817e;
+  font-size:10px;
+  line-height:1.65;
+}
+.staff-record-form .form-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:9px;
+  margin-top:25px;
+  padding-top:18px;
+  border-top:1px solid #e8f0ee;
+}
+.staff-record-form .form-actions .primary{
+  min-height:42px;
+  padding:0 19px;
+  border:1px solid #087c72;
+  border-radius:10px;
+  background:linear-gradient(110deg,#087c72,#13a18f);
+  box-shadow:0 7px 16px #0e897b24;
+  font-size:11px;
+  transition:transform .18s,box-shadow .18s;
+}
+.staff-record-form .form-actions .primary:hover{
+  transform:translateY(-1px);
+  box-shadow:0 10px 20px #0e897b30;
+}
+.staff-record-form .form-actions .secondary{
+  min-height:42px;
+  border-radius:10px;
+  font-size:11px;
+}
+@media(max-width:640px){
+  .staff-record-form{padding:20px 15px;border-radius:14px}
+  .staff-record-form .form-grid{grid-template-columns:minmax(0,1fr);gap:14px}
+  .staff-record-form .form-actions{position:sticky;bottom:0;z-index:2;background:#fbfefd;padding:13px 0 0}
+  .staff-record-form .form-actions button{flex:1}
+}
+
+/* Staff & HR — precise split phone and consistent field hierarchy */
+.staff-record-form .form-grid>label{gap:9px}
+.staff-record-form .form-grid>label>span,
+.staff-record-form .form-grid>label>.staff-phone-label{display:block;color:#385665;font-size:11px;font-weight:800;letter-spacing:.1px}
+.staff-record-form .staff-phone-inputs{display:grid;grid-template-columns:76px minmax(0,1fr) minmax(0,1fr);gap:9px;align-items:center}
+.staff-record-form .staff-phone-inputs input{min-width:0;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:1.5px;font-weight:700}
+.staff-record-form .staff-phone-prefix{height:45px;display:flex;align-items:center;justify-content:center;border:1px solid #cfe2df;border-radius:10px;background:linear-gradient(145deg,#eaf7f4,#f7fbfa);color:#087c72;font-size:13px;font-weight:800;letter-spacing:.4px}
+.staff-record-form .staff-field-help{display:block;margin-top:-2px;color:#80999a;font-size:9px;font-weight:500;line-height:1.5}
+.staff-record-form .form-grid input:focus-visible,
+.staff-record-form .form-grid select:focus-visible{outline:3px solid #21a39122;outline-offset:1px}
+.staff-record-form .form-grid select{cursor:pointer}
+@media(max-width:420px){.staff-record-form .staff-phone-inputs{grid-template-columns:64px minmax(0,1fr) minmax(0,1fr);gap:6px}.staff-record-form .staff-phone-inputs input{padding:0 5px;letter-spacing:1px}}

@@ -2,7 +2,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator, model_validator, Field
 from decimal import Decimal
 import re
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 
 
@@ -57,13 +57,13 @@ class StudentOut(StudentIn):
     model_config = ConfigDict(from_attributes=True)
 
 class StaffIn(BaseModel):
-    employee_no: str = Field(min_length=3, max_length=8, pattern=r"^[A-Za-z]{2}[0-9]{1,6}$")
+    employee_no: str = Field(min_length=8, max_length=8, pattern=r"^[A-Za-z]{4}[0-9]{4}$")
     full_name: str = Field(min_length=2, max_length=100)
-    designation: str = Field(default="", max_length=32)
+    designation: Literal["Principal", "Vice Principal", "Teacher", "Accountant", "Clerk", "Office Assistant", "Librarian", "Lab Assistant", "IT Administrator", "Transport Manager", "Hostel Warden", "Security Guard", "Other"] = "Teacher"
     department: str = Field(default="", max_length=32)
     phone: str = Field(min_length=13, max_length=13, pattern=r"^\+91[6-9]\d{9}$")
     email: str = Field(min_length=11, max_length=40, pattern=r"^[A-Za-z0-9._%+-]+@gmail\.com$")
-    salary: Decimal = Field(default=Decimal("0"), ge=0, le=Decimal("83333.33"), max_digits=10, decimal_places=2)
+    salary: Decimal = Field(default=Decimal("0.00"), ge=0, le=Decimal("83333.33"), max_digits=10, decimal_places=2)
     status: Literal["active", "absent", "suspended", "terminated", "sick", "leave"] = "active"
     # Developer-only optional login provisioning. The email is also the login username.
     create_account: bool = False
@@ -76,6 +76,20 @@ class StaffIn(BaseModel):
     @classmethod
     def normalize_employee_no(cls, value: str) -> str:
         return value.strip().upper()
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_staff_phone(cls, value: str) -> str:
+        return re.sub(r"\s+", "", str(value or ""))
+
+    @field_validator("salary", mode="before")
+    @classmethod
+    def validate_staff_salary_format(cls, value: Any) -> Any:
+        if isinstance(value, (int, float, Decimal)):
+            value = str(value)
+        if not re.fullmatch(r"\d{1,7}\.\d{2}", str(value or "").strip()):
+            raise ValueError("Enter monthly salary as digits with exactly two decimal places, e.g. 25000.00")
+        return value
 
     @field_validator("email", mode="before")
     @classmethod
@@ -90,9 +104,9 @@ class StaffIn(BaseModel):
             raise ValueError("Use letters, spaces, apostrophes, periods or hyphens only for the full name")
         return cleaned
 
-    @field_validator("designation", "department")
+    @field_validator("department")
     @classmethod
-    def validate_staff_text(cls, value: str) -> str:
+    def validate_staff_department(cls, value: str) -> str:
         cleaned = " ".join((value or "").strip().split())
         if cleaned and not re.fullmatch(r"[A-Za-z ]{1,32}", cleaned):
             raise ValueError("Use letters and spaces only (maximum 32 characters)")
