@@ -329,3 +329,65 @@
 .staff-record-form .form-grid select:focus-visible{outline:3px solid #21a39122;outline-offset:1px}
 .staff-record-form .form-grid select{cursor:pointer}
 @media(max-width:420px){.staff-record-form .staff-phone-inputs{grid-template-columns:64px minmax(0,1fr) minmax(0,1fr);gap:6px}.staff-record-form .staff-phone-inputs input{padding:0 5px;letter-spacing:1px}}
+
+
+/* Staff & HR — polished segmented phone and salary controls */
+.staff-record-form .staff-phone-inputs{
+  display:grid;
+  grid-template-columns:82px minmax(0,1fr) minmax(0,1fr);
+  gap:10px;
+  width:100%;
+  align-items:stretch;
+}
+.staff-record-form .staff-phone-prefix{
+  min-width:0;
+  height:48px;
+  border:1px solid #cfe3df;
+  border-radius:12px;
+  background:linear-gradient(145deg,#e8f6f2,#f7fbfa);
+  color:#087d72;
+  font-size:14px;
+  font-weight:850;
+  letter-spacing:.4px;
+  box-shadow:inset 0 1px 0 #ffffff;
+}
+.staff-record-form .staff-phone-inputs input.staff-phone-part{
+  height:48px;
+  min-width:0;
+  padding:0 8px;
+  border-radius:12px;
+  text-align:center;
+  font-size:14px;
+  font-weight:750;
+  letter-spacing:1.8px;
+  font-variant-numeric:tabular-nums;
+}
+.staff-record-form .staff-phone-inputs input.staff-phone-part::placeholder{
+  color:#b5c4c3;
+  letter-spacing:1px;
+}
+.staff-record-form .form-grid input.staff-salary-input{
+  font-size:14px;
+  font-weight:750;
+  letter-spacing:.35px;
+  font-variant-numeric:tabular-nums;
+}
+.staff-record-form .form-grid input.staff-salary-input:invalid:not(:placeholder-shown){
+  border-color:#d97770;
+  box-shadow:0 0 0 3px #d9777010;
+}
+.staff-record-form .form-grid input:focus,
+.staff-record-form .form-grid select:focus{
+  transform:translateY(-1px);
+}
+@media(max-width:420px){
+  .staff-record-form .staff-phone-inputs{
+    grid-template-columns:68px minmax(0,1fr) minmax(0,1fr);
+    gap:7px;
+  }
+  .staff-record-form .staff-phone-inputs input.staff-phone-part{
+    padding:0 4px;
+    font-size:12px;
+    letter-spacing:1px;
+  }
+}
