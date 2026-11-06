@@ -701,3 +701,26 @@
 .nav-item:hover{transform:translateX(2px)}
 .nav-item.selected{box-shadow:inset 3px 0 0 var(--role-accent,#0f766e);background:color-mix(in srgb,var(--role-accent,#0f766e) 9%,white);color:var(--role-accent,#0f766e)}
 @media(max-width:720px){.school-switch{margin-top:13px;margin-bottom:19px}.workspace-nav-heading{margin-inline:19px}}
+
+
+/* Hierarchical role workflow chart: role -> functional domains -> permitted modules */
+.workspace-flow-domain-grid{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;width:100%;padding-top:26px}
+.workspace-flow-domain-grid:before{content:"";position:absolute;top:0;left:12.5%;right:12.5%;height:1px;background:color-mix(in srgb,var(--role-accent) 48%,#cbd5e1)}
+.workspace-flow-domain{position:relative;display:flex;flex-direction:column;align-items:stretch;min-width:0;padding:0 11px 13px;border:1px solid #dce6ed;border-radius:15px;background:rgba(255,255,255,.68);box-shadow:0 5px 18px rgba(25,57,75,.045)}
+.workspace-flow-domain:before{content:"";position:absolute;top:-27px;left:50%;height:26px;width:1px;background:color-mix(in srgb,var(--role-accent) 48%,#cbd5e1)}
+.workspace-flow-domain-heading{position:relative;display:flex;align-items:center;gap:9px;min-height:66px;padding:11px 3px;border-bottom:1px solid #e8eef2}
+.workspace-flow-domain-dot{width:10px;height:10px;flex:0 0 10px;border:3px solid color-mix(in srgb,var(--role-accent) 20%,white);border-radius:50%;background:var(--role-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--role-accent) 8%,white)}
+.workspace-flow-domain-heading>div{display:flex;flex:1;flex-direction:column;gap:3px;min-width:0}
+.workspace-flow-domain-heading strong{color:#1c3d50;font-size:12px;line-height:1.3}
+.workspace-flow-domain-heading small{color:#7b8c98;font-size:9px;line-height:1.4}
+.workspace-flow-domain-heading b{display:grid;place-items:center;min-width:23px;height:22px;padding:0 6px;border-radius:7px;background:color-mix(in srgb,var(--role-accent) 9%,white);color:var(--role-accent);font-size:10px}
+.workspace-flow-domain-trunk{width:1px;height:15px;margin:0 auto;background:color-mix(in srgb,var(--role-accent) 45%,#cbd5e1)}
+.workspace-flow-domain-modules{display:flex;flex-direction:column;gap:9px}
+.workspace-flow-domain-modules .workspace-flow-card{min-height:150px;padding:13px;gap:8px}
+.workspace-flow-domain-modules .workspace-flow-card:before{top:-10px;left:50%;height:9px;width:1px;background:color-mix(in srgb,var(--role-accent) 38%,#cbd5e1)}
+.workspace-flow-domain-modules .workspace-flow-card>strong{font-size:12px}
+.workspace-flow-domain-modules .workspace-flow-card>span:not(.workspace-flow-card-icon){font-size:9px;line-height:1.45}
+.workspace-flow-domain-modules .workspace-flow-card small{font-size:9px}
+@media(max-width:1100px){.workspace-flow-domain-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace-flow-domain-grid:before{display:none}.workspace-flow-domain:before{display:none}}
+@media(max-width:620px){.workspace-flow-domain-grid{grid-template-columns:minmax(0,1fr);gap:13px;padding-top:0}.workspace-flow-domain{padding:0 10px 11px}.workspace-flow-domain-modules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.workspace-flow-domain-modules .workspace-flow-card{min-height:160px;padding:11px}.workspace-flow-domain-heading{min-height:58px}.workspace-flow-domain-trunk{height:10px}}
+@media(max-width:390px){.workspace-flow-domain-modules{grid-template-columns:minmax(0,1fr)}.workspace-flow-domain-modules .workspace-flow-card{min-height:130px}}

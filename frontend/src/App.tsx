@@ -312,7 +312,22 @@ function App(){
  return showWorkspaceFlow ? <div className="workspace-flow-screen" style={{'--role-accent':roleAccent[user.role]||'#0f766e'} as any}>
   <header className="workspace-flow-topbar"><div className="workspace-flow-brand"><span className="school-avatar">S</span><div><strong>{schools.find(sc=>sc.id===user.school_id)?.name||"My School"}</strong><span>Complete role-based workflow</span></div></div><div className="workspace-flow-user"><span>{user.name}</span><strong>{roleLabel}</strong><button type="button" className="workspace-flow-close" onClick={()=>setShowWorkspaceFlow(false)}><X size={17}/> Back to workspace</button></div></header>
   <main className="workspace-flow-main"><div className="workspace-flow-intro"><span className="welcome-tag">{roleLabel.toUpperCase()} WORKFLOW</span><h1>{roleLabel} — complete workspace graph</h1><p>{roleDescriptions[user.role]||'Your role-based school workspace.'}</p><span className="workspace-flow-count">{availableModules.length} accessible areas · Only modules permitted for this role are shown</span></div>
-   <section className="workspace-flow-graph" aria-label={roleLabel+' role workflow graph'}><div className="workspace-flow-root"><GraduationCap size={22}/><div><strong>SchoolOS</strong><span>{roleLabel} workspace</span></div></div><div className="workspace-flow-trunk"/><div className="workspace-flow-grid">{availableModules.map(m=>{const FlowIcon=m.icon;return <button type="button" key={m.key} className={'workspace-flow-card '+(active===m.key?'current':'')} onClick={()=>{setActive(m.key);setShowForm(false);setShowWorkspaceFlow(false);setMobileNav(false)}}><span className="workspace-flow-card-icon"><FlowIcon size={20}/></span><strong>{m.label}</strong><span>{m.description}</span><small>Open {m.label} <ArrowRight size={12}/></small></button>})}</div></section>
+   <section className="workspace-flow-graph" aria-label={roleLabel+' role workflow chart'}>
+    <div className="workspace-flow-root"><GraduationCap size={22}/><div><strong>SchoolOS</strong><span>{roleLabel} workspace · {availableModules.length} permitted areas</span></div></div>
+    <div className="workspace-flow-trunk"/>
+    <div className="workspace-flow-domain-grid">
+     {[
+      {key:'platform',title:'Platform & support',subtitle:'Entry point, guidance and school administration',keys:['dashboard','chatbot','approvals','schools','parent-portal']},
+      {key:'people',title:'People & academics',subtitle:'Student, staff and classroom management',keys:['students','staff','classes']},
+      {key:'campus',title:'Campus & services',subtitle:'Facilities, transport and operational records',keys:['vehicles','hostels','documents','maintenance']},
+      {key:'finance',title:'Finance',subtitle:'Fee configuration, collection and reporting',keys:['fee-structures','student-fees','payments','fee-reports']}
+     ].map(group=>{const groupModules=availableModules.filter(m=>group.keys.includes(m.key));if(!groupModules.length)return null;return <section className="workspace-flow-domain" key={group.key}>
+      <div className="workspace-flow-domain-heading"><span className="workspace-flow-domain-dot"/><div><strong>{group.title}</strong><small>{group.subtitle}</small></div><b>{groupModules.length}</b></div>
+      <div className="workspace-flow-domain-trunk"/>
+      <div className="workspace-flow-domain-modules">{groupModules.map(m=>{const FlowIcon=m.icon;return <button type="button" key={m.key} className={'workspace-flow-card '+(active===m.key?'current':'')} onClick={()=>{setActive(m.key);setShowForm(false);setShowWorkspaceFlow(false);setMobileNav(false)}}><span className="workspace-flow-card-icon"><FlowIcon size={20}/></span><strong>{m.label}</strong><span>{m.description}</span><small>Open {m.label} <ArrowRight size={12}/></small></button>})}</div>
+     </section>})}
+    </div>
+   </section>
    <p className="workspace-flow-footnote">Select any node to open that area. The graph updates automatically when you sign in with a different role.</p>
   </main>
  </div> : <div className="app-shell role-themed" style={{'--role-accent':roleAccent[user.role]||'#0f766e'} as any}>
