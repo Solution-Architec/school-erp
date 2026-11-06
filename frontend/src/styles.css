@@ -613,3 +613,16 @@
 @media(prefers-reduced-motion:reduce){
  .sidebar,.dashboard-link-card,.staff-record-form .form-grid input,.staff-record-form .form-grid select{transition:none!important}
 }
+
+/* Developer module permission checklist */
+.developer-permissions-panel{margin-top:22px;min-width:0}
+.permission-toolbar{display:flex;align-items:end;gap:16px;flex-wrap:wrap;padding:16px 0}
+.permission-toolbar .auth-field{min-width:min(260px,100%);flex:1}
+.permission-summary{display:flex;flex-direction:column;gap:3px;padding:9px 14px;border:1px solid var(--border,#e5e7eb);border-radius:10px}
+.permission-summary strong{font-size:20px}.permission-summary span,.permission-table td small{color:var(--muted,#64748b);font-size:12px}
+.permission-bulk-actions{display:flex;gap:8px;flex-wrap:wrap}
+.permission-table{min-width:760px}.permission-table th:not(:first-child),.permission-table td:not(:first-child){text-align:center;width:82px}
+.permission-table td:first-child{min-width:210px}.permission-table td small{display:block;margin-top:4px;max-width:360px}
+.permission-table input[type=checkbox]{width:17px;height:17px;accent-color:var(--role-accent,#6654c7);cursor:pointer}
+.permission-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0}
+@media(max-width:720px){.permission-toolbar{align-items:stretch}.permission-toolbar .auth-field{min-width:100%}.permission-bulk-actions{width:100%}.permission-bulk-actions button{flex:1}.permission-footer{align-items:flex-start;flex-direction:column}}
