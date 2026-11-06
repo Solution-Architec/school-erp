@@ -376,6 +376,50 @@ def login(payload: schemas.LoginInput, db: Session = Depends(get_db)):
             "user": schemas.UserOut.model_validate(user).model_dump()}
 
 
+DEMO_PREVIEW_USERS = {
+    "principal": ("demo.principal@jovoo.in", "principal"),
+    "vice_principal": ("demo.viceprincipal@jovoo.in", "vice_principal"),
+    "teacher": ("demo.teacher@jovoo.in", "teacher"),
+    "account": ("demo.accounts@jovoo.in", "account"),
+    "clerk": ("demo.clerk@jovoo.in", "clerk"),
+    "office_assistant": ("demo.officeassistant@jovoo.in", "office_assistant"),
+    "librarian": ("demo.librarian@jovoo.in", "librarian"),
+    "lab_assistant": ("demo.labassistant@jovoo.in", "lab_assistant"),
+    "it_administrator": ("demo.itadmin@jovoo.in", "it_administrator"),
+    "transport_manager": ("demo.transport@jovoo.in", "transport_manager"),
+    "hostel_warden": ("demo.warden@jovoo.in", "hostel_warden"),
+    "security_guard": ("demo.security@jovoo.in", "security_guard"),
+    "others": ("demo.others@jovoo.in", "others"),
+    "parent": ("demo.parent@jovoo.in", "parent"),
+}
+
+
+@app.post("/api/dev/demo-role-preview/{role}", tags=["developer-tools"])
+def preview_demo_role(
+    role: str,
+    db: Session = Depends(get_db),
+    developer: models.User = Depends(require_roles("super_admin")),
+):
+    """Issue a real demo-account token only to a Developer when demo login is enabled."""
+    if os.getenv("ENABLE_DEMO_LOGIN", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Demo role preview is disabled")
+    if role not in DEMO_PREVIEW_USERS:
+        raise HTTPException(status_code=404, detail="Demo role not found")
+    email, expected_role = DEMO_PREVIEW_USERS[role]
+    target = db.scalar(select(models.User).where(models.User.email == email))
+    if (not target or target.role != expected_role or not target.is_active
+            or not target.email_verified or target.approval_status != "approved"):
+        raise HTTPException(status_code=404, detail="Active seeded demo account not found")
+    if not target.school_id or not db.scalar(select(models.School.id).where(
+            models.School.id == target.school_id, models.School.is_active.is_(True))):
+        raise HTTPException(status_code=404, detail="Demo school is unavailable")
+    return {
+        "access_token": create_access_token(target),
+        "token_type": "bearer",
+        "user": schemas.UserOut.model_validate(target).model_dump(),
+    }
+
+
 @app.post("/api/auth/verify-mfa", tags=["auth"])
 def verify_login_mfa(payload: dict, db: Session = Depends(get_db)):
     challenge = str(payload.get("mfa_token", ""))
