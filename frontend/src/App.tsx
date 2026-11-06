@@ -227,6 +227,7 @@ function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Pro
 function App(){
  const [token,setToken]=useState(localStorage.getItem('erp_token')||'')
  const [user,setUser]=useState<User|null>(null)
+ const [rbacPermissions,setRbacPermissions]=useState<{role:string;configured:boolean;permissions:Record<string,boolean>}|null>(null)
  const [demoTestingActive,setDemoTestingActive]=useState(sessionStorage.getItem('demo_testing_active')==='true')
  const [demoTargetEmail,setDemoTargetEmail]=useState('')
  const [demoSwitchPassword,setDemoSwitchPassword]=useState('')
@@ -261,16 +262,18 @@ function App(){
  const [paymentFeeId,setPaymentFeeId]=useState('')
  const [paymentAmount,setPaymentAmount]=useState('')
  const [paymentMethod,setPaymentMethod]=useState('cash')
- const allowedModuleKeys=roleModuleAccess[user?.role||'user']||roleModuleAccess.user
+ const defaultModuleKeys=roleModuleAccess[user?.role||'user']||roleModuleAccess.user
+ const allowedModuleKeys=user?.role!=='super_admin'&&rbacPermissions?.role===user?.role&&rbacPermissions.configured?modules.filter(m=>rbacPermissions.permissions[m.key+':View']).map(m=>m.key):defaultModuleKeys
  const availableModules=modules.filter(m=>allowedModuleKeys.includes(m.key))
  const selected=modules.find(m=>m.key===active)||modules[0]
  const roleLabel=roleLabels[user?.role||'user']||'School User'
  const hasModule=(key:string)=>allowedModuleKeys.includes(key)
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
- useEffect(()=>{if(user){const first=roleModuleAccess[user.role]?.[0]||'dashboard';if(!roleModuleAccess[user.role]?.includes(active))setActive(first)}},[user])
+ useEffect(()=>{if(user){const first=allowedModuleKeys[0]||'dashboard';if(!allowedModuleKeys.includes(active))setActive(first)}},[user,rbacPermissions])
+ useEffect(()=>{if(!token){setRbacPermissions(null);return}fetch(`${API}/api/rbac/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setRbacPermissions).catch(()=>setRbacPermissions(null))},[token,authHeaders])
  useEffect(()=>{if(!token)return;fetch(`${API}/api/auth/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setUser).catch(()=>{localStorage.removeItem('erp_token');setToken('');setUser(null)})},[token,authHeaders])
  async function request(url:string,options:RequestInit={}){const r=await fetch(`${API}${url}`,{...options,headers:{...authHeaders,...options.headers}});if(r.status===401){logout();throw new Error('Session expired. Please sign in again.')}const raw=await r.text();let data:any={};try{data=raw?JSON.parse(raw):{}}catch{data={}}if(!r.ok){const detail=data.detail||data.message||raw.slice(0,240);throw new Error((detail||'API request failed')+` (HTTP ${r.status}: ${options.method||'GET'} ${url})`)}return data}
- function logout(){localStorage.removeItem('erp_token');setToken('');setUser(null);setRows([]);setDemoTestingActive(false);setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('');sessionStorage.removeItem('demo_testing_active')}
+ function logout(){localStorage.removeItem('erp_token');setToken('');setUser(null);setRbacPermissions(null);setRows([]);setDemoTestingActive(false);setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('');sessionStorage.removeItem('demo_testing_active')}
  function handleLogin(t:string,u:User){localStorage.setItem('erp_token',t);setToken(t);setUser(u);const canTest=DEMO_MODE&&u.role==='super_admin'&&u.email==='demo.developer@jovoo.in';setDemoTestingActive(canTest);if(canTest)sessionStorage.setItem('demo_testing_active','true');else sessionStorage.removeItem('demo_testing_active');setActive('dashboard')}
  async function switchDemoAccount(email:string,passwordOverride?:string){
   const demo=DEMO_USERS.find(item=>item.email===email)
