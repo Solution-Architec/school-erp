@@ -18,21 +18,21 @@ from .security import hash_password
 SCHOOL_CODE = "DEMO-SCHOOL"
 SCHOOL_NAME = "SchoolOS Demo Academy"
 DEMO_USERS = [
-    ("Developer Demo", "demo.developer@example.test", "super_admin", None),
-    ("Principal Demo", "demo.principal@example.test", "principal", "principal"),
-    ("Vice Principal Demo", "demo.viceprincipal@example.test", "vice_principal", "vice_principal"),
-    ("Teacher Demo", "demo.teacher@example.test", "teacher", "teacher"),
-    ("Accounts Demo", "demo.accounts@example.test", "account", "account"),
-    ("Clerk Demo", "demo.clerk@example.test", "clerk", "clerk"),
-    ("Office Assistant Demo", "demo.officeassistant@example.test", "office_assistant", "office_assistant"),
-    ("Librarian Demo", "demo.librarian@example.test", "librarian", "librarian"),
-    ("Lab Assistant Demo", "demo.labassistant@example.test", "lab_assistant", "lab_assistant"),
-    ("IT Administrator Demo", "demo.itadmin@example.test", "it_administrator", "it_administrator"),
-    ("Transport Manager Demo", "demo.transport@example.test", "transport_manager", "transport_manager"),
-    ("Hostel Warden Demo", "demo.warden@example.test", "hostel_warden", "hostel_warden"),
-    ("Security Guard Demo", "demo.security@example.test", "security_guard", "security_guard"),
-    ("Others Demo", "demo.others@example.test", "others", "others"),
-    ("Parent Demo", "demo.parent@example.test", "parent", "parent"),
+    ("Developer Demo", "demo.developer@jovoo.in", "super_admin", None),
+    ("Principal Demo", "demo.principal@jovoo.in", "principal", "principal"),
+    ("Vice Principal Demo", "demo.viceprincipal@jovoo.in", "vice_principal", "vice_principal"),
+    ("Teacher Demo", "demo.teacher@jovoo.in", "teacher", "teacher"),
+    ("Accounts Demo", "demo.accounts@jovoo.in", "account", "account"),
+    ("Clerk Demo", "demo.clerk@jovoo.in", "clerk", "clerk"),
+    ("Office Assistant Demo", "demo.officeassistant@jovoo.in", "office_assistant", "office_assistant"),
+    ("Librarian Demo", "demo.librarian@jovoo.in", "librarian", "librarian"),
+    ("Lab Assistant Demo", "demo.labassistant@jovoo.in", "lab_assistant", "lab_assistant"),
+    ("IT Administrator Demo", "demo.itadmin@jovoo.in", "it_administrator", "it_administrator"),
+    ("Transport Manager Demo", "demo.transport@jovoo.in", "transport_manager", "transport_manager"),
+    ("Hostel Warden Demo", "demo.warden@jovoo.in", "hostel_warden", "hostel_warden"),
+    ("Security Guard Demo", "demo.security@jovoo.in", "security_guard", "security_guard"),
+    ("Others Demo", "demo.others@jovoo.in", "others", "others"),
+    ("Parent Demo", "demo.parent@jovoo.in", "parent", "parent"),
 ]
 
 
@@ -77,7 +77,7 @@ def main() -> None:
                 school_id=school.id, admission_no="DEMO-0001",
                 full_name="Aarav Demo Student", class_name="Class 5", section="A",
                 guardian_name="Parent Demo", guardian_phone="9999999999",
-                email="demo.parent@example.test", address="Demo campus",
+                email="demo.parent@jovoo.in", address="Demo campus",
                 date_of_birth=date(2015, 6, 15), transport_required=True,
                 hostel_required=True, status="active")
             db.add(student)
@@ -99,7 +99,7 @@ def main() -> None:
                 school_id=school.id, employee_no="DEMO0001",
                 full_name="Teacher Demo", designation="Teacher",
                 department="Academics", phone="+919999999999",
-                email="demo.teacher@example.test", salary=Decimal("25000.00"),
+                email="demo.teacher@jovoo.in", salary=Decimal("25000.00"),
                 status="active"))
 
         school_class = db.scalar(select(models.SchoolClass).where(
