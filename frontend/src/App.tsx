@@ -396,16 +396,17 @@ function DeveloperModulePermissionPanel({moduleList,roles,request}:{moduleList:M
  const [role,setRole]=useState('teacher');
  const [permissions,setPermissions]=useState<Record<string,boolean>>({});
  const [audit,setAudit]=useState<any[]>([]);
+ const [configured,setConfigured]=useState(false);
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState('');
  const [error,setError]=useState('');
  const actions=['View','Create','Edit','Delete','Approve','Export'];
  const enabledCount=moduleList.filter(m=>permissions[m.key+':View']).length;
- useEffect(()=>{let active=true;setBusy(true);setError('');request('/api/rbac/roles/'+encodeURIComponent(role)+'/permissions').then(result=>{if(active)setPermissions(result.permissions||{})}).catch((err:any)=>{if(active)setError(err.message||'Could not load saved permissions')}).finally(()=>{if(active)setBusy(false)});return()=>{active=false}},[role]);
+ useEffect(()=>{let active=true;setBusy(true);setError('');request('/api/rbac/roles/'+encodeURIComponent(role)+'/permissions').then(result=>{if(active){setPermissions(result.permissions||{});setConfigured(Boolean(result.configured))}}).catch((err:any)=>{if(active)setError(err.message||'Could not load saved permissions')}).finally(()=>{if(active)setBusy(false)});return()=>{active=false}},[role]);
  useEffect(()=>{let active=true;request('/api/rbac/audit-logs?limit=8').then(result=>{if(active)setAudit(result||[])}).catch(()=>{if(active)setAudit([])});return()=>{active=false}},[]);
  function toggle(key:string,action:string,value:boolean){setPermissions(old=>({...old,[key+':'+action]:value}))}
  function setAll(value:boolean){setPermissions(Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,value]))))}
- async function save(){setBusy(true);setError('');setMessage('');try{const complete=Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,Boolean(permissions[m.key+':'+a])])));const result=await request('/api/rbac/roles/'+encodeURIComponent(role)+'/permissions',{method:'PUT',body:JSON.stringify({permissions:complete})});setPermissions(complete);setMessage(result.message||'Permissions saved successfully');setAudit(await request('/api/rbac/audit-logs?limit=8'))}catch(err:any){setError(err.message||'Could not save permissions')}finally{setBusy(false)}}
+ async function save(){setBusy(true);setError('');setMessage('');try{const complete=Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,Boolean(permissions[m.key+':'+a])])));const result=await request('/api/rbac/roles/'+encodeURIComponent(role)+'/permissions',{method:'PUT',body:JSON.stringify({permissions:complete})});setPermissions(complete);setConfigured(true);setMessage(result.message||'Permissions saved successfully');setAudit(await request('/api/rbac/audit-logs?limit=8'))}catch(err:any){setError(err.message||'Could not save permissions')}finally{setBusy(false)}}
  return <div className="panel developer-permissions-panel">
   <div className="panel-heading"><div><h3>Role permissions</h3><p>Saved permissions are checked by the API for supported modules and actions.</p></div><ShieldCheck size={20}/></div>
   <div className="permission-toolbar">
@@ -413,7 +414,7 @@ function DeveloperModulePermissionPanel({moduleList,roles,request}:{moduleList:M
    <div className="permission-summary"><strong>{enabledCount} / {moduleList.length}</strong><span>modules with View enabled</span></div>
    <div className="permission-bulk-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>setAll(true)}>Select all</button><button type="button" className="secondary" disabled={busy} onClick={()=>setAll(false)}>Clear all</button></div>
   </div>
-  {error&&<div className="error auth-message" role="alert">{error}</div>}{message&&<div className="success auth-message" role="status">{message}</div>}
+  {!configured&&<p className="status-note">Showing the existing default access for this role. These defaults are not yet saved as a custom permission matrix.</p>}{error&&<div className="error auth-message" role="alert">{error}</div>}{message&&<div className="success auth-message" role="status">{message}</div>}
   <div className="table-wrap permission-table-wrap"><table className="permission-table"><thead><tr><th>Module</th>{actions.map(a=><th key={a}>{a}</th>)}</tr></thead><tbody>{moduleList.map(m=><tr key={m.key}><td><strong>{m.label}</strong><small>{m.description}</small></td>{actions.map(a=><td key={a}><input aria-label={m.label+' '+a+' permission'} type="checkbox" disabled={busy} checked={Boolean(permissions[m.key+':'+a])} onChange={e=>toggle(m.key,a,e.target.checked)}/></td>)}</tr>)}</tbody></table></div>
   <div className="permission-footer"><span>{role.replaceAll('_',' ')} · {Object.values(permissions).filter(Boolean).length} permissions selected</span><button type="button" className="primary" disabled={busy} onClick={save}>{busy?'Saving…':'Save permissions'}</button></div>
   <p className="status-note">Changes are stored in the database and enforced by protected API routes. Developer access is always platform-wide. Parent access remains restricted to linked-student endpoints.</p>
