@@ -154,6 +154,17 @@ def save_role_permissions(role: str, payload: dict, db: Session = Depends(get_db
     return {"message": "Role permissions saved", "role": role, "saved": len(expected)}
 
 
+
+@app.get("/api/rbac/me", tags=["rbac"])
+def my_module_permissions(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+    if user.role == "super_admin":
+        return {"role": user.role, "configured": True, "permissions": {"*": True}}
+    grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == user.role)).all()
+    if not grants:
+        return {"role": user.role, "configured": False, "permissions": {}}
+    return {"role": user.role, "configured": True,
+            "permissions": {f"{g.module_key}:{g.action}": g.enabled for g in grants}}
+
 @app.get("/api/rbac/audit-logs", tags=["rbac"])
 def get_rbac_audit_logs(limit: int = Query(default=50, ge=1, le=200), db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
     records = db.scalars(select(models.AuditLog).order_by(models.AuditLog.created_at.desc()).limit(limit)).all()
@@ -665,7 +676,7 @@ FINANCE_ROLES = ADMIN_ROLES
 @app.post("/api/students/import", tags=["students"])
 async def import_students(file: UploadFile = File(...), school_id: int | None = Form(default=None),
                          db: Session = Depends(get_db),
-                         user: models.User = Depends(require_roles("super_admin", "admin"))):
+                         user: models.User = Depends(require_module_permission("students", "Create", "super_admin", "admin"))):
     if user.role == "super_admin":
         target_school_id = school_id
         if not target_school_id or not db.get(models.School, target_school_id):
@@ -1130,7 +1141,7 @@ def parent_child_fees(student_id: int, db: Session = Depends(get_db),
 
 # Safe FAQ assistant: answers only approved school help topics, no student-specific data.
 @app.post("/api/chatbot/faq", tags=["chatbot"])
-def chatbot_faq(payload: dict, user: models.User = Depends(current_user)):
+def chatbot_faq(payload: dict, user: models.User = Depends(require_module_permission("chatbot", "View"))):
     question = str(payload.get("question", "")).strip().lower()
     if not question or len(question) > 500:
         raise HTTPException(status_code=422, detail="Question must be between 1 and 500 characters")
