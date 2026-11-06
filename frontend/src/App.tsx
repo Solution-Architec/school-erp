@@ -313,7 +313,7 @@ function App(){
   <header className="workspace-flow-topbar"><div className="workspace-flow-brand"><span className="school-avatar">S</span><div><strong>{schools.find(sc=>sc.id===user.school_id)?.name||"My School"}</strong><span>Complete role-based workflow</span></div></div><div className="workspace-flow-user"><span>{user.name}</span><strong>{roleLabel}</strong><button type="button" className="workspace-flow-close" onClick={()=>setShowWorkspaceFlow(false)}><X size={17}/> Back to workspace</button></div></header>
   <main className="workspace-flow-main"><div className="workspace-flow-intro"><span className="welcome-tag">{roleLabel.toUpperCase()} WORKFLOW</span><h1>{roleLabel} — complete workspace graph</h1><p>{roleDescriptions[user.role]||'Your role-based school workspace.'}</p><span className="workspace-flow-count">{availableModules.length} accessible areas · Only modules permitted for this role are shown</span></div>
    <section className="workspace-flow-graph" aria-label={roleLabel+' role workflow chart'}>
-    <div className="workspace-flow-root"><ShieldCheck size={22}/><div><strong>{roleLabel}</strong><span>Role access · {availableModules.length} permitted areas</span></div></div>
+    <div className="workspace-flow-root"><GraduationCap size={22}/><div><strong>SchoolOS</strong><span>{roleLabel} workspace · {availableModules.length} permitted areas</span></div></div>
     <div className="workspace-flow-trunk"/>
     <div className="workspace-flow-domain-grid">
      {[
