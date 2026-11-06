@@ -281,7 +281,7 @@ function App(){
    const data=await response.json().catch(()=>null)
    if(!response.ok||!data?.access_token||!data?.user)throw new Error(data?.detail||'Unable to open that demo role.')
    localStorage.setItem('erp_token',data.access_token);setToken(data.access_token);setUser(data.user);setActive('dashboard');setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('')
-  }catch(err){setDemoSwitchError(err.message||'Unable to switch demo role.')}finally{setDemoSwitchBusy(false)}
+  }catch(err:any){setDemoSwitchError(err.message||'Unable to switch demo role.')}finally{setDemoSwitchBusy(false)}
  }
  async function recordFeePayment(){if(!paymentFeeId||!paymentAmount)return;try{await request('/api/student-fees/'+paymentFeeId+'/payments',{method:'POST',body:JSON.stringify({amount:Number(paymentAmount),payment_method:paymentMethod})});setNotice('Fee payment recorded successfully');setPaymentAmount('');await load()}catch(e:any){setError(e.message)}}
  async function assignSchoolOwner(){if(!ownerUserId||!ownerSchoolId)return;try{await request('/api/users/'+ownerUserId+'/school',{method:'PATCH',body:JSON.stringify({school_id:Number(ownerSchoolId)})});setNotice('School owner assigned successfully');setOwnerUsers(await request('/api/users'))}catch(e:any){setError(e.message)}}
