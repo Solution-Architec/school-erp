@@ -530,7 +530,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
                 raise HTTPException(status_code=404, detail="Document owner not found in your school")
     def list_items(q: str = Query(default="", max_length=120), limit: int = Query(default=100, ge=1, le=500),
                    offset: int = Query(default=0, ge=0), db: Session = Depends(get_db),
-                   user: models.User = Depends(require_module_permission(path.replace('-', '_'), "View", *roles))):
+                   user: models.User = Depends(require_module_permission(path, "View", *roles))):
         stmt = select(model)
         scope = school_scope(model, user)
         if scope is not None:
@@ -550,7 +550,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
         return list(db.scalars(stmt).all())
 
     def create_item(payload: Any, db: Session = Depends(get_db),
-                    user: models.User = Depends(require_module_permission(path.replace('-', '_'), "Create", *roles))):
+                    user: models.User = Depends(require_module_permission(path, "Create", *roles))):
         if user.role != "super_admin" and not user.school_id:
             raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
         values = payload.model_dump()
@@ -603,14 +603,14 @@ def register_crud(path, model, schema_in, schema_out, roles):
         return obj
 
     def get_item(item_id: int, db: Session = Depends(get_db),
-                 user: models.User = Depends(require_module_permission(path.replace('-', '_'), "View", *roles))):
+                 user: models.User = Depends(require_module_permission(path, "View", *roles))):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
         return obj
 
     def update_item(item_id: int, payload: Any, db: Session = Depends(get_db),
-                    user: models.User = Depends(require_module_permission(path.replace('-', '_'), "Edit", *roles))):
+                    user: models.User = Depends(require_module_permission(path, "Edit", *roles))):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
@@ -637,7 +637,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
         return obj
 
     def delete_item(item_id: int, db: Session = Depends(get_db),
-                    user: models.User = Depends(require_module_permission(path.replace('-', '_'), "Delete", "super_admin", "admin"))):
+                    user: models.User = Depends(require_module_permission(path, "Delete", "super_admin", "admin"))):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
@@ -645,11 +645,11 @@ def register_crud(path, model, schema_in, schema_out, roles):
         db.commit()
         return {"deleted": True}
 
-    list_items.__name__ = f"list_{path.replace('-', '_')}"
-    create_item.__name__ = f"create_{path.replace('-', '_')}"
-    get_item.__name__ = f"get_{path.replace('-', '_')}"
-    update_item.__name__ = f"update_{path.replace('-', '_')}"
-    delete_item.__name__ = f"delete_{path.replace('-', '_')}"
+    list_items.__name__ = f"list_{path}"
+    create_item.__name__ = f"create_{path}"
+    get_item.__name__ = f"get_{path}"
+    update_item.__name__ = f"update_{path}"
+    delete_item.__name__ = f"delete_{path}"
     create_item.__annotations__["payload"] = schema_in
     update_item.__annotations__["payload"] = schema_in
     app.add_api_route(f"/api/{path}", list_items, methods=["GET"], response_model=list[schema_out], tags=[path])
