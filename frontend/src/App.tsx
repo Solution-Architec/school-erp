@@ -120,21 +120,21 @@ const roleCatalog = Object.entries(roleLabels).filter(([key])=>key!=='user'&&key
 }))
 
 const DEMO_USERS = [
- {label:'Developer',email:'demo.developer@example.test',schoolCode:''},
- {label:'Principal',email:'demo.principal@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Vice Principal',email:'demo.viceprincipal@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Teacher',email:'demo.teacher@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Accounts',email:'demo.accounts@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Clerk',email:'demo.clerk@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Office Assistant',email:'demo.officeassistant@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Librarian',email:'demo.librarian@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Lab Assistant',email:'demo.labassistant@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'IT Administrator',email:'demo.itadmin@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Transport Manager',email:'demo.transport@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Hostel Warden',email:'demo.warden@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Security Guard',email:'demo.security@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Others',email:'demo.others@example.test',schoolCode:'DEMO-SCHOOL'},
- {label:'Parent',email:'demo.parent@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Developer',email:'demo.developer@jovoo.in',schoolCode:''},
+ {label:'Principal',email:'demo.principal@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Vice Principal',email:'demo.viceprincipal@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Teacher',email:'demo.teacher@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Accounts',email:'demo.accounts@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Clerk',email:'demo.clerk@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Office Assistant',email:'demo.officeassistant@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Librarian',email:'demo.librarian@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Lab Assistant',email:'demo.labassistant@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'IT Administrator',email:'demo.itadmin@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Transport Manager',email:'demo.transport@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Hostel Warden',email:'demo.warden@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Security Guard',email:'demo.security@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Others',email:'demo.others@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Parent',email:'demo.parent@jovoo.in',schoolCode:'DEMO-SCHOOL'},
 ]
 const DEMO_MODE = (import.meta as any).env?.VITE_ENABLE_DEMO_MODE === 'true'
 
