@@ -343,6 +343,7 @@ function App(){
      </div>
     </>}
     <div className="panel dashboard-roles-panel"><div className="panel-heading"><div><h3>Roles &amp; Authentication</h3><p>Application roles and their authenticated access scope</p></div><Users size={19}/></div><div className="table-wrap"><table><thead><tr><th>Role</th><th>Authentication / access scope</th><th>Access level</th><th>Current user</th></tr></thead><tbody>{roleCatalog.map(r=><tr key={r.roleKey}><td><strong>{r.role}</strong></td><td>{r.scope}</td><td><span className="status-badge active">{r.level}</span></td><td>{user.role===r.roleKey?<span className="status-badge active">Signed in</span>:'—'}</td></tr>)}</tbody></table></div><div className="status-note">Each school role receives a focused workspace and matching navigation. Developer has platform-wide access. Parent accounts use explicit guardian-to-student links and can access linked students only. API-level permissions should be enforced separately for production.</div></div>
+    {user.role==='super_admin'&&<DeveloperModulePermissionPanel moduleList={modules} roles={roleCatalog}/>}
     <div className="panel dashboard-modules-panel"><div className="panel-heading"><div><h3>Entire School ERP Project</h3><p>Complete list of modules available in this application</p></div><GraduationCap size={19}/></div><div className="table-wrap"><table><thead><tr><th>Module</th><th>Project area</th><th>Description</th><th>Action</th></tr></thead><tbody>{availableModules.map(m=><tr key={m.key}><td><strong>{m.label}</strong></td><td>{m.key==='dashboard'?'Overview':m.key.startsWith('fee')||m.key==='payments'||m.key==='student-fees'?'Finance':m.key==='students'||m.key==='classes'?'Academics':m.key==='staff'?'HR':m.key==='vehicles'?'Transport':m.key==='hostels'?'Accommodation':m.key==='documents'?'Administration':'Operations'}</td><td>{m.description}</td><td><button className="secondary" onClick={()=>setActive(m.key)}>Open</button></td></tr>)}</tbody></table></div><div className="table-footer">Available modules: {availableModules.length}<span>SchoolOS · Project overview</span></div></div>
     </>:active==='approvals'?<div className="panel data-panel"><div className="panel-heading"><div><h3>Verified staff requests</h3><p>Approve only people who should access this school's workspace.</p></div><span className="record-count">{rows.length} pending</span></div><div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Requested</th><th>Decision</th></tr></thead><tbody>{rows.map((r:any)=><tr key={r.id}><td><strong>{r.name}</strong></td><td>{r.email}</td><td>{r.role.replaceAll('_',' ')}</td><td>{new Date(r.created_at).toLocaleDateString('en-IN')}</td><td><div className="approval-actions"><button className="primary" onClick={async()=>{try{await request('/api/auth/users/'+r.id+'/approval',{method:'POST',body:JSON.stringify({decision:'approve'})});setNotice('Staff account approved');await load()}catch(e:any){setError(e.message)}}}>Approve</button><button className="secondary" onClick={async()=>{try{await request('/api/auth/users/'+r.id+'/approval',{method:'POST',body:JSON.stringify({decision:'reject'})});setNotice('Staff account rejected');await load()}catch(e:any){setError(e.message)}}}>Reject</button></div></td></tr>)}{!rows.length&&<tr><td colSpan={5}><div className="empty-state"><strong>No pending staff requests</strong><p>Verified staff registrations will appear here for review.</p></div></td></tr>}</tbody></table></div></div>:active==='payments'?<div className="panel payment-entry-panel">
    <div className="panel-heading"><div><h3>Record student fee payment</h3><p>Select a fee with an outstanding balance and record the amount received.</p></div><Wallet size={20}/></div>
@@ -374,4 +375,27 @@ function App(){
   <footer className="footer"><span>© {new Date().getFullYear()} SchoolOS</span><span>School operations platform</span></footer></div></main>
  </div>
  }
+
+function DeveloperModulePermissionPanel({moduleList,roles}:{moduleList:ModuleDef[];roles:{role:string;roleKey:string;scope:string;level:string}[]}) {
+ const [role,setRole]=useState('teacher');
+ const [permissions,setPermissions]=useState<Record<string,Record<string,boolean>>>({});
+ const actions=['View','Create','Edit','Delete','Approve','Export'];
+ const current=permissions[role]||{};
+ const enabledCount=moduleList.filter(m=>current[m.key+':View']).length;
+ function toggle(key:string,action:string,value:boolean){setPermissions(old=>({...old,[role]:{...(old[role]||{}),[key+':'+action]:value}}))}
+ function setAll(value:boolean){setPermissions(old=>({...old,[role]:Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,value])))}))}
+ function copyDraft(){const value=JSON.stringify({role,permissions:current},null,2);if(typeof navigator!=='undefined'&&navigator.clipboard?.writeText)void navigator.clipboard.writeText(value)}
+ return <div className="panel developer-permissions-panel">
+  <div className="panel-heading"><div><h3>Module permissions</h3><p>Select a role and configure permissions module by module.</p></div><ShieldCheck size={20}/></div>
+  <div className="permission-toolbar">
+   <label className="auth-field">Select role<select value={role} onChange={e=>setRole(e.target.value)}>{roles.filter(r=>r.roleKey!=='super_admin').map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></label>
+   <div className="permission-summary"><strong>{enabledCount} / {moduleList.length}</strong><span>modules with View enabled</span></div>
+   <div className="permission-bulk-actions"><button type="button" className="secondary" onClick={()=>setAll(true)}>Select all</button><button type="button" className="secondary" onClick={()=>setAll(false)}>Clear all</button></div>
+  </div>
+  <div className="table-wrap permission-table-wrap"><table className="permission-table"><thead><tr><th>Module</th>{actions.map(a=><th key={a}>{a}</th>)}</tr></thead><tbody>{moduleList.map(m=><tr key={m.key}><td><strong>{m.label}</strong><small>{m.description}</small></td>{actions.map(a=><td key={a}><input aria-label={m.label+' '+a+' permission'} type="checkbox" checked={Boolean(current[m.key+':'+a])} onChange={e=>toggle(m.key,a,e.target.checked)}/></td>)}</tr>)}</tbody></table></div>
+  <div className="permission-footer"><span>{role.replaceAll('_',' ')} · {Object.values(current).filter(Boolean).length} permissions selected</span><button type="button" className="secondary" onClick={copyDraft}>Copy permission draft</button></div>
+  <p className="status-note">Draft only: selections are local to this page and are not saved to the server or enforced by APIs. Backend authorization is required before these settings can control real access.</p>
+ </div>
+}
+
 export default App
