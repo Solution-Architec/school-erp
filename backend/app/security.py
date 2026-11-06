@@ -4,9 +4,9 @@ import jwt
 from pwdlib import PasswordHash
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session\nfrom sqlalchemy import select
 from .database import get_db
-from .models import User
+from .models import User, RolePermission
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "unsafe-development-secret-change-me")
 JWT_ALGORITHM = "HS256"
@@ -58,6 +58,27 @@ def require_roles(*roles: str):
         if user.role in roles:
             return user
         if allows_standard_users and user.role != "parent":
+            return user
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    return checker
+
+
+def require_module_permission(module_key: str, action: str, *fallback_roles: str):
+    """Use saved role grants when configured; otherwise preserve legacy route policy."""
+    def checker(user: User = Depends(current_user), db: Session = Depends(get_db)) -> User:
+        if user.role == "super_admin":
+            return user
+        grant = db.scalar(select(RolePermission).where(
+            RolePermission.role == user.role,
+            RolePermission.module_key == module_key,
+            RolePermission.action == action,
+        ))
+        if grant is not None:
+            if grant.enabled:
+                return user
+            raise HTTPException(status_code=403, detail=f"Permission denied: {module_key} / {action}")
+        allows_standard_users = bool(STANDARD_USER_ROLES.intersection(fallback_roles))
+        if user.role in fallback_roles or (allows_standard_users and user.role not in ("parent", "super_admin")):
             return user
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return checker
