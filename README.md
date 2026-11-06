@@ -103,6 +103,25 @@ Demo login emails:
 
 The seeder refuses to run unless `ENABLE_DEMO_SEED=true`; it also refuses production environments unless `ALLOW_DEMO_SEED_IN_PRODUCTION=true` is explicitly set. Do not enable demo accounts on a public production deployment. Remove the demo users and sample records before using the school for real operations.
 
+### Direct demo login (testing only)
+
+For a local/staging role-visibility review, enable these flags in your local `.env`:
+
+```env
+ENABLE_DEMO_LOGIN=true
+VITE_ENABLE_DEMO_MODE=true
+```
+
+Then rebuild/restart the stack:
+
+```bash
+docker compose up -d --build
+```
+
+The login page shows a **Demo workspace** role selector. Selecting a role fills its demo email and school code. Enter the shared password printed by the demo seeder. When `ENABLE_DEMO_LOGIN=true`, the exact seeded demo emails bypass email-verification and email-MFA challenges; normal accounts continue to use the regular verification/MFA flow. The backend flag defaults to `false` and is restricted to the known demo-account email list.
+
+**Never enable either demo flag on a public or production deployment.** This testing shortcut intentionally weakens sign-in protections for demo accounts.
+
 ## Current implemented modules
 
 - Login, JWT access tokens, password hashing, active-user checks

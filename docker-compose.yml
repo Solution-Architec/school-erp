@@ -23,6 +23,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      ENABLE_DEMO_LOGIN: ${ENABLE_DEMO_LOGIN:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -32,7 +33,10 @@ services:
       - internal
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_ENABLE_DEMO_MODE: ${VITE_ENABLE_DEMO_MODE:-false}
     restart: unless-stopped
     ports:
       - "8081:80"

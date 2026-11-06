@@ -119,6 +119,25 @@ const roleCatalog = Object.entries(roleLabels).filter(([key])=>key!=='user'&&key
  level:key==='super_admin'?'Platform access':key==='parent'?'Linked-student access':'Role workspace'
 }))
 
+const DEMO_USERS = [
+ {label:'Developer',email:'demo.developer@example.test',schoolCode:''},
+ {label:'Principal',email:'demo.principal@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Vice Principal',email:'demo.viceprincipal@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Teacher',email:'demo.teacher@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Accounts',email:'demo.accounts@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Clerk',email:'demo.clerk@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Office Assistant',email:'demo.officeassistant@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Librarian',email:'demo.librarian@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Lab Assistant',email:'demo.labassistant@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'IT Administrator',email:'demo.itadmin@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Transport Manager',email:'demo.transport@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Hostel Warden',email:'demo.warden@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Security Guard',email:'demo.security@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Others',email:'demo.others@example.test',schoolCode:'DEMO-SCHOOL'},
+ {label:'Parent',email:'demo.parent@example.test',schoolCode:'DEMO-SCHOOL'},
+]
+const DEMO_MODE = (import.meta as any).env?.VITE_ENABLE_DEMO_MODE === 'true'
+
 const money = (n:number) => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n || 0)
 
 function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
@@ -181,6 +200,7 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
       <div className="auth-field"><label htmlFor="staff-role">Account type</label><select id="staff-role" value={values.role} onChange={e=>set('role',e.target.value)}>{Object.entries(roleLabels).filter(([key])=>key!=='super_admin'&&key!=='parent'&&key!=='user'&&key!=='admin'&&key!=='accountant').map(([key,label])=><option key={key} value={key}>{label}</option>)}<option value="parent">Parent (linked students only)</option></select></div>
      </>}
      {mode==='signin'&&<div className="auth-field"><label htmlFor="login-school-code">School code <span className="muted">(school accounts only)</span></label><input id="login-school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Leave blank for Developer" autoCapitalize="characters"/><small>Leave this blank to sign in as Developer. All school users must enter their school's code.</small></div>}
+     {mode==='signin'&&DEMO_MODE&&<div className="auth-field"><label htmlFor="demo-role-select">Demo workspace (testing only)</label><select id="demo-role-select" defaultValue="" onChange={e=>{const demo=DEMO_USERS.find(item=>item.email===e.target.value);if(demo){set('email',demo.email);set('school_code',demo.schoolCode)}}}><option value="">Choose a role to test…</option>{DEMO_USERS.map(demo=><option key={demo.email} value={demo.email}>{demo.label}</option>)}</select><small>Prefills the demo email and school code. Use the shared password printed by the demo seeder.</small></div>}
       {['signin','school','staff','verify','forgot','reset'].includes(mode)&&<div className="auth-field"><label htmlFor="auth-email">Email address</label><div className="auth-input-wrap"><Mail size={17}/><input id="auth-email" type="email" value={values.email} onChange={e=>set('email',e.target.value)} placeholder="you@school.com" required autoComplete="email"/></div></div>}
      {isPasswordMode&&<div className="auth-field"><label htmlFor="auth-password">{passwordLabel}</label><div className="auth-input-wrap"><LockKeyhole size={17}/><input id="auth-password" type={showPassword?'text':'password'} value={values.password} onChange={e=>set('password',e.target.value)} placeholder={mode==='signin'?'Enter your password':'Create a strong password'} minLength={mode==='signin'?undefined:12} required autoComplete={mode==='signin'?'current-password':'new-password'}/><button className="auth-password-toggle" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>{mode!=='signin'&&<small className="auth-help">Use at least 12 characters.</small>}</div>}
      {['verify','reset','mfa'].includes(mode)&&<div className="auth-field"><label htmlFor="auth-code">{mode==='mfa'?'Sign-in security code':'Email verification / reset code'}</label><div className="auth-input-wrap"><ShieldCheck size={17}/><input id="auth-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={values.code} onChange={e=>set('code',e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="6-digit code" required/></div></div>}
