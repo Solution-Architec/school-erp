@@ -311,6 +311,22 @@ def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), use
     db.commit()
     return {"message": "Account " + ("approved" if decision == "approve" else "rejected")}
 
+DEMO_LOGIN_EMAILS = {
+    "demo.developer@example.test", "demo.principal@example.test",
+    "demo.viceprincipal@example.test", "demo.teacher@example.test",
+    "demo.accounts@example.test", "demo.clerk@example.test",
+    "demo.officeassistant@example.test", "demo.librarian@example.test",
+    "demo.labassistant@example.test", "demo.itadmin@example.test",
+    "demo.transport@example.test", "demo.warden@example.test",
+    "demo.security@example.test", "demo.others@example.test",
+    "demo.parent@example.test",
+}
+
+
+def _demo_login_enabled(email: str) -> bool:
+    return os.getenv("ENABLE_DEMO_LOGIN", "false").lower() == "true" and email.lower() in DEMO_LOGIN_EMAILS
+
+
 @app.post("/api/auth/login", tags=["auth"])
 def login(payload: schemas.LoginInput, db: Session = Depends(get_db)):
     school_code = (payload.school_code or "").strip().upper()
@@ -337,13 +353,18 @@ def login(payload: schemas.LoginInput, db: Session = Depends(get_db)):
             user = None
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid school code, email or password")
-    if not user.email_verified:
+    demo_login = _demo_login_enabled(user.email)
+    if not user.email_verified and not demo_login:
         raise HTTPException(status_code=403, detail="Verify your email before signing in")
+    # Demo-only accounts may skip email verification when the explicit testing flag is enabled.
+    if demo_login and not user.email_verified:
+        user.email_verified = True
+        db.commit()
     if user.approval_status == "pending":
         raise HTTPException(status_code=403, detail="Your school has not approved your account yet")
     if user.approval_status == "rejected" or not user.is_active:
         raise HTTPException(status_code=403, detail="This account is inactive. Contact your school")
-    if user.role != "parent":
+    if user.role != "parent" and not demo_login:
         _issue_auth_code(db, email, "login_mfa")
         challenge = jwt.encode({
             "sub": str(user.id), "purpose": "login_mfa",
