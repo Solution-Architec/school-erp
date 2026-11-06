@@ -860,7 +860,7 @@ async def import_module_records(
             "skipped": skipped, "errors": errors[:100]}
 
 @app.get("/api/schools", response_model=list[schemas.SchoolOut], tags=["schools"])
-def list_schools(q: str = Query(default="", max_length=120), db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+def list_schools(q: str = Query(default="", max_length=120), db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("schools", "View", "teacher", "parent"))):
     stmt = select(models.School).order_by(models.School.name)
     if user.role != "super_admin":
         if not user.school_id:
