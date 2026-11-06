@@ -492,7 +492,7 @@ def school_scope(model, user):
 
 
 @app.get("/api/dashboard")
-def dashboard(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("dashboard", "View"))):
+def dashboard(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("dashboard", "View", "teacher", "parent"))):
     if user.role == "parent":
         return {"students": 0, "staff": 0, "classes": 0, "vehicles": 0,
                 "hostel_rooms": 0, "open_maintenance": 0, "user_role": "parent"}
@@ -784,6 +784,7 @@ async def import_module_records(
     }
     if resource not in importable:
         raise HTTPException(status_code=404, detail="Bulk import is not enabled for this module")
+    require_module_permission(resource, "Create", "admin")(user=user, db=db)
     if user.role == "super_admin":
         target_school_id = school_id
         if not target_school_id or not db.get(models.School, target_school_id):
@@ -1141,7 +1142,7 @@ def parent_child_fees(student_id: int, db: Session = Depends(get_db),
 
 # Safe FAQ assistant: answers only approved school help topics, no student-specific data.
 @app.post("/api/chatbot/faq", tags=["chatbot"])
-def chatbot_faq(payload: dict, user: models.User = Depends(require_module_permission("chatbot", "View"))):
+def chatbot_faq(payload: dict, user: models.User = Depends(require_module_permission("chatbot", "View", "teacher", "parent"))):
     question = str(payload.get("question", "")).strip().lower()
     if not question or len(question) > 500:
         raise HTTPException(status_code=422, detail="Question must be between 1 and 500 characters")
