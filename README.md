@@ -85,21 +85,21 @@ The command generates one temporary password and prints it once along with the l
 
 Demo login emails:
 
-- `demo.developer@example.test`
-- `demo.principal@example.test`
-- `demo.viceprincipal@example.test`
-- `demo.teacher@example.test`
-- `demo.accounts@example.test`
-- `demo.clerk@example.test`
-- `demo.officeassistant@example.test`
-- `demo.librarian@example.test`
-- `demo.labassistant@example.test`
-- `demo.itadmin@example.test`
-- `demo.transport@example.test`
-- `demo.warden@example.test`
-- `demo.security@example.test`
-- `demo.others@example.test`
-- `demo.parent@example.test`
+- `demo.developer@jovoo.in`
+- `demo.principal@jovoo.in`
+- `demo.viceprincipal@jovoo.in`
+- `demo.teacher@jovoo.in`
+- `demo.accounts@jovoo.in`
+- `demo.clerk@jovoo.in`
+- `demo.officeassistant@jovoo.in`
+- `demo.librarian@jovoo.in`
+- `demo.labassistant@jovoo.in`
+- `demo.itadmin@jovoo.in`
+- `demo.transport@jovoo.in`
+- `demo.warden@jovoo.in`
+- `demo.security@jovoo.in`
+- `demo.others@jovoo.in`
+- `demo.parent@jovoo.in`
 
 The seeder refuses to run unless `ENABLE_DEMO_SEED=true`; it also refuses production environments unless `ALLOW_DEMO_SEED_IN_PRODUCTION=true` is explicitly set. Do not enable demo accounts on a public production deployment. Remove the demo users and sample records before using the school for real operations.
 
