@@ -626,3 +626,24 @@
 .permission-table input[type=checkbox]{width:17px;height:17px;accent-color:var(--role-accent,#6654c7);cursor:pointer}
 .permission-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0}
 @media(max-width:720px){.permission-toolbar{align-items:stretch}.permission-toolbar .auth-field{min-width:100%}.permission-bulk-actions{width:100%}.permission-bulk-actions button{flex:1}.permission-footer{align-items:flex-start;flex-direction:column}}
+
+
+/* Role-based workspace flowchart */
+.school-switch{width:100%;border:0;text-align:left;cursor:pointer;font:inherit;position:relative}
+.school-switch:hover,.school-switch.flow-open{background:rgba(15,118,110,.08)}
+.school-switch>svg{transition:transform .18s ease}
+.school-switch.flow-open>svg{transform:rotate(180deg)}
+.workspace-flow-panel{margin:8px 14px 16px;padding:13px;border:1px solid var(--border,#e2e8f0);border-radius:13px;background:var(--surface,#fff);box-shadow:0 10px 28px rgba(15,23,42,.10);max-height:min(62vh,560px);overflow:auto;position:relative;z-index:20}
+.workspace-flow-heading{display:flex;flex-direction:column;gap:3px;margin-bottom:11px}
+.workspace-flow-heading strong{font-size:13px;text-transform:capitalize}
+.workspace-flow-heading span,.workspace-flow-note{font-size:11px;color:var(--muted,#64748b)}
+.workspace-flow-node{display:flex;align-items:center;gap:8px;width:100%;min-height:35px;padding:8px 10px;border:1px solid var(--border,#e2e8f0);border-radius:8px;background:var(--surface,#fff);color:var(--text,#1e293b);font-size:12px;text-align:left;cursor:pointer}
+.workspace-flow-node:hover,.workspace-flow-node.current{border-color:var(--role-accent,#0f766e);background:color-mix(in srgb,var(--role-accent,#0f766e) 9%,white)}
+.workspace-flow-node.flow-root{font-weight:700}
+.workspace-flow-connector{height:13px;width:1px;background:var(--role-accent,#0f766e);margin:0 0 0 22px}
+.workspace-flow-branches{display:grid;grid-template-columns:1fr;gap:6px;padding-left:13px;border-left:1px solid var(--role-accent,#0f766e);margin-left:22px}
+.workspace-flow-branches .workspace-flow-node{position:relative}
+.workspace-flow-branches .workspace-flow-node:before{content:"";position:absolute;left:-14px;width:13px;height:1px;background:var(--role-accent,#0f766e)}
+.flow-current-dot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--role-accent,#0f766e)}
+.workspace-flow-note{margin:10px 0 0;line-height:1.45}
+@media(max-width:720px){.workspace-flow-panel{max-height:48vh;margin-left:10px;margin-right:10px}.workspace-flow-branches{grid-template-columns:1fr}}
