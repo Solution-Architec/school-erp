@@ -227,7 +227,7 @@ function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Pro
 function App(){
  const [token,setToken]=useState(localStorage.getItem('erp_token')||'')
  const [user,setUser]=useState<User|null>(null)
- const [demoTestingActive,setDemoTestingActive]=useState(false)
+ const [demoTestingActive,setDemoTestingActive]=useState(sessionStorage.getItem('demo_testing_active')==='true')
  const [demoTargetEmail,setDemoTargetEmail]=useState('')
  const [demoSwitchPassword,setDemoSwitchPassword]=useState('')
  const [demoSwitchBusy,setDemoSwitchBusy]=useState(false)
@@ -269,8 +269,8 @@ function App(){
  useEffect(()=>{if(user){const first=roleModuleAccess[user.role]?.[0]||'dashboard';if(!roleModuleAccess[user.role]?.includes(active))setActive(first)}},[user])
  useEffect(()=>{if(!token)return;fetch(`${API}/api/auth/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setUser).catch(()=>{localStorage.removeItem('erp_token');setToken('');setUser(null)})},[token,authHeaders])
  async function request(url:string,options:RequestInit={}){const r=await fetch(`${API}${url}`,{...options,headers:{...authHeaders,...options.headers}});if(r.status===401){logout();throw new Error('Session expired. Please sign in again.')}const raw=await r.text();let data:any={};try{data=raw?JSON.parse(raw):{}}catch{data={}}if(!r.ok){const detail=data.detail||data.message||raw.slice(0,240);throw new Error((detail||'API request failed')+` (HTTP ${r.status}: ${options.method||'GET'} ${url})`)}return data}
- function logout(){localStorage.removeItem('erp_token');setToken('');setUser(null);setRows([]);setDemoTestingActive(false);setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('')}
- function handleLogin(t:string,u:User){localStorage.setItem('erp_token',t);setToken(t);setUser(u);setDemoTestingActive(DEMO_MODE&&u.role==='super_admin'&&u.email==='demo.developer@jovoo.in');setActive('dashboard')}
+ function logout(){localStorage.removeItem('erp_token');setToken('');setUser(null);setRows([]);setDemoTestingActive(false);setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('');sessionStorage.removeItem('demo_testing_active')}
+ function handleLogin(t:string,u:User){localStorage.setItem('erp_token',t);setToken(t);setUser(u);const canTest=DEMO_MODE&&u.role==='super_admin'&&u.email==='demo.developer@jovoo.in';setDemoTestingActive(canTest);if(canTest)sessionStorage.setItem('demo_testing_active','true');else sessionStorage.removeItem('demo_testing_active');setActive('dashboard')}
  async function switchDemoAccount(email:string,passwordOverride?:string){
   const demo=DEMO_USERS.find(item=>item.email===email)
   const password=passwordOverride||demoSwitchPassword
