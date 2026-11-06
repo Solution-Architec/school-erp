@@ -4,7 +4,8 @@ import jwt
 from pwdlib import PasswordHash
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session\nfrom sqlalchemy import select
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 from .database import get_db
 from .models import User, RolePermission
 
