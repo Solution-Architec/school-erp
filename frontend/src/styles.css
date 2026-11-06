@@ -647,3 +647,36 @@
 .flow-current-dot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--role-accent,#0f766e)}
 .workspace-flow-note{margin:10px 0 0;line-height:1.45}
 @media(max-width:720px){.workspace-flow-panel{max-height:48vh;margin-left:10px;margin-right:10px}.workspace-flow-branches{grid-template-columns:1fr}}
+
+
+/* Full-screen role-specific workspace graph */
+.workspace-flow-screen{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;overflow:auto;background:radial-gradient(ellipse at 50% 0%,color-mix(in srgb,var(--role-accent) 10%,#fff) 0%,#f5f8fc 55%);color:#183347}
+.workspace-flow-topbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px clamp(16px,4vw,48px);border-bottom:1px solid #dce6ed;background:#ffffffed;backdrop-filter:blur(12px)}
+.workspace-flow-brand,.workspace-flow-user{display:flex;align-items:center;gap:12px;min-width:0}
+.workspace-flow-brand>div,.workspace-flow-user{display:flex;flex-direction:column;gap:3px}
+.workspace-flow-brand strong{font-size:14px}.workspace-flow-brand span:not(.school-avatar),.workspace-flow-user>span{font-size:11px;color:#718497}
+.workspace-flow-user{align-items:flex-end;font-size:11px}.workspace-flow-user strong{color:var(--role-accent)}
+.workspace-flow-close{display:flex;align-items:center;gap:7px;padding:9px 13px;border:1px solid #d7e2e9;border-radius:9px;background:#fff;color:#29485a;font-size:11px;font-weight:750;cursor:pointer}
+.workspace-flow-close:hover{border-color:var(--role-accent);color:var(--role-accent)}
+.workspace-flow-main{width:min(1440px,100%);margin:0 auto;padding:clamp(24px,5vw,58px) clamp(14px,4vw,48px) 42px}
+.workspace-flow-intro{text-align:center;max-width:760px;margin:0 auto 35px}
+.workspace-flow-intro .welcome-tag{display:inline-block;margin-bottom:10px;color:var(--role-accent);font-size:10px;font-weight:850;letter-spacing:1.3px}
+.workspace-flow-intro h1{margin:0;color:#17384a;font-size:clamp(24px,4vw,38px);letter-spacing:-1.1px}
+.workspace-flow-intro p{margin:10px 0;color:#657b89;font-size:13px;line-height:1.65}
+.workspace-flow-count{display:inline-block;padding:7px 11px;border:1px solid color-mix(in srgb,var(--role-accent) 24%,white);border-radius:999px;background:color-mix(in srgb,var(--role-accent) 7%,white);color:var(--role-accent);font-size:10px;font-weight:750}
+.workspace-flow-graph{display:flex;flex-direction:column;align-items:center}
+.workspace-flow-root{display:flex;align-items:center;gap:12px;padding:16px 24px;border:1px solid color-mix(in srgb,var(--role-accent) 35%,white);border-radius:15px;background:var(--role-accent);color:#fff;box-shadow:0 12px 28px color-mix(in srgb,var(--role-accent) 20%,transparent)}
+.workspace-flow-root>div{display:flex;flex-direction:column;gap:3px;text-align:left}.workspace-flow-root strong{font-size:15px}.workspace-flow-root span{font-size:11px;opacity:.82}
+.workspace-flow-trunk{width:2px;height:30px;background:var(--role-accent);opacity:.55}
+.workspace-flow-grid{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:17px;width:100%;padding-top:22px}
+.workspace-flow-grid:before{content:"";position:absolute;top:0;left:12.5%;right:12.5%;height:1px;background:color-mix(in srgb,var(--role-accent) 50%,#cbd5e1)}
+.workspace-flow-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:9px;min-width:0;min-height:174px;padding:17px;border:1px solid #dce6ed;border-radius:13px;background:#fff;text-align:left;box-shadow:0 5px 16px #19394b0a;cursor:pointer;transition:transform .16s,border-color .16s,box-shadow .16s}
+.workspace-flow-card:before{content:"";position:absolute;top:-23px;left:50%;width:1px;height:22px;background:color-mix(in srgb,var(--role-accent) 50%,#cbd5e1)}
+.workspace-flow-card:hover,.workspace-flow-card:focus-visible,.workspace-flow-card.current{transform:translateY(-3px);border-color:var(--role-accent);box-shadow:0 10px 24px color-mix(in srgb,var(--role-accent) 13%,transparent);outline:none}
+.workspace-flow-card-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:color-mix(in srgb,var(--role-accent) 10%,white);color:var(--role-accent)}
+.workspace-flow-card>strong{color:#1c3d50;font-size:13px}.workspace-flow-card>span:not(.workspace-flow-card-icon){color:#718493;font-size:10px;line-height:1.5}
+.workspace-flow-card small{display:flex;align-items:center;gap:5px;margin-top:auto;color:var(--role-accent);font-size:10px;font-weight:800}
+.workspace-flow-footnote{margin:25px 0 0;text-align:center;color:#718493;font-size:11px}
+@media(max-width:1000px){.workspace-flow-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.workspace-flow-grid:before{display:none}.workspace-flow-card:before{display:none}}
+@media(max-width:700px){.workspace-flow-topbar{align-items:flex-start;padding:12px}.workspace-flow-user{gap:5px}.workspace-flow-user>span{display:none}.workspace-flow-close{padding:8px 9px;font-size:10px}.workspace-flow-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.workspace-flow-card{min-height:158px;padding:13px}.workspace-flow-intro{margin-bottom:25px}}
+@media(max-width:420px){.workspace-flow-grid{grid-template-columns:minmax(0,1fr)}.workspace-flow-card{min-height:130px}.workspace-flow-user strong{font-size:10px}}
