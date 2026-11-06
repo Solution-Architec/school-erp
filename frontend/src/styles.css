@@ -525,3 +525,91 @@
 .role-themed .role-chip{display:inline-flex;align-items:center;padding:7px 11px;border:1px solid color-mix(in srgb,var(--role-accent) 25%,white);border-radius:999px;background:color-mix(in srgb,var(--role-accent) 8%,white);color:var(--role-accent);font-size:10px;font-weight:800;letter-spacing:.3px}
 .role-themed .nav-item.selected{box-shadow:inset 3px 0 0 var(--role-accent)}
 @media(max-width:640px){.role-themed .role-chip{display:none}}
+
+
+/* Responsive workspace polish — desktop, tablet and mobile */
+.app-shell,.main,.content,.panel,.page-heading,.heading-actions,.topbar,.top-actions{min-width:0}
+.content{width:100%}
+.page-heading>div:first-child{min-width:0}
+.page-heading .muted,.welcome-panel p,.panel-heading p{overflow-wrap:anywhere}
+.heading-actions{flex-wrap:wrap;align-items:center}
+.heading-actions select{min-width:0;max-width:100%;border:1px solid #dfe8ed;border-radius:8px;padding:10px;background:#fff;color:#516775;font-size:11px}
+.demo-role-testing-panel{border-color:#d8e9e5;background:linear-gradient(135deg,#fff 0%,#f7fcfb 100%)}
+.demo-role-testing-panel .quick-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:end}
+.demo-role-testing-panel .quick-grid>div{min-width:0}
+.demo-role-testing-panel .quick-grid .primary{min-height:42px;white-space:normal}
+.role-chip{flex-shrink:0}
+.topbar .secondary{max-width:100%;white-space:normal}
+.stat-grid>*{min-width:0}
+.stat-card,.panel{overflow-wrap:anywhere}
+.table-wrap{max-width:100%;overscroll-behavior-x:contain}
+.table-wrap table{min-width:max-content}
+.form-grid>label,.payment-entry-form label,.fee-report-filters label{min-width:0}
+.form-grid input,.form-grid select,.payment-entry-form input,.payment-entry-form select{max-width:100%;min-width:0}
+.footer{gap:12px;flex-wrap:wrap}
+@media(max-width:1100px){
+ .topbar{gap:12px}
+ .top-actions{min-width:0}
+ .student-global-search{min-width:180px}
+ .student-global-search input{width:150px}
+ .content{padding-inline:clamp(16px,2.4vw,24px)}
+ .dashboard-finance-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:720px){
+ .topbar{display:flex;flex-wrap:wrap;height:auto;min-height:60px;padding:10px 12px;row-gap:8px}
+ .mobile-menu{flex:0 0 auto}
+ .crumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .role-chip{display:none!important}
+ .topbar>.secondary{font-size:10px;padding:7px 9px;flex:0 1 auto}
+ .top-actions{margin-left:auto;gap:7px}
+ .top-actions .avatar{display:none}
+ .student-global-search{min-width:0;max-width:42vw;padding:0 7px;gap:5px}
+ .student-global-search input{width:100%;min-width:0;font-size:10px}
+ .content{padding:18px 12px 16px}
+ .page-heading{gap:12px}
+ .page-heading h1{font-size:clamp(22px,6vw,27px);overflow-wrap:anywhere}
+ .heading-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .heading-actions>*{width:100%;min-width:0}
+ .heading-actions button{flex:initial;white-space:normal}
+ .welcome-panel{gap:12px;padding:18px 16px}
+ .welcome-panel h2{overflow-wrap:anywhere}
+ .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .demo-role-testing-panel .panel-heading{align-items:flex-start}
+ .demo-role-testing-panel .quick-grid{grid-template-columns:minmax(0,1fr)}
+ .demo-role-testing-panel .quick-grid .primary{width:100%}
+ .panel-heading{min-width:0}
+ .panel-heading h3{overflow-wrap:anywhere}
+ .dashboard-finance-grid,.dashboard-finance-stats,.fee-report-stats{grid-template-columns:minmax(0,1fr)}
+ .dashboard-actions-panel .quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .parent-child-select{align-items:stretch;flex-direction:column}
+ .parent-child-select select{min-width:0;width:100%}
+ .chat-faq-form{align-items:stretch}
+ .chat-faq-form button{flex-shrink:0}
+ .selected-student-context{overflow-wrap:anywhere}
+ .table-footer{gap:8px;flex-wrap:wrap}
+}
+@media(max-width:480px){
+ .topbar{padding:9px 10px}
+ .crumb{font-size:9px}
+ .topbar>.secondary{font-size:9px;padding:6px 8px}
+ .top-actions .student-global-search{max-width:48vw}
+ .content{padding-inline:10px}
+ .heading-actions{grid-template-columns:minmax(0,1fr)}
+ .heading-actions button,.heading-actions select{min-height:40px}
+ .stat-grid{gap:8px}
+ .stat-card{padding:12px}
+ .stat-card strong{font-size:20px;overflow-wrap:anywhere}
+ .welcome-panel{padding:16px 13px}
+ .welcome-panel h2{font-size:17px}
+ .panel{padding:12px}
+ .data-panel{padding:0}
+ .dashboard-actions-panel .quick-grid{grid-template-columns:minmax(0,1fr)}
+ .form-actions{flex-wrap:wrap}
+ .form-actions button{flex:1}
+ .chat-faq-form{flex-direction:column}
+ .chat-faq-form button{width:100%}
+ .footer{font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+ .sidebar,.dashboard-link-card,.staff-record-form .form-grid input,.staff-record-form .form-grid select{transition:none!important}
+}
