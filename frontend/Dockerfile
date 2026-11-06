@@ -1,4 +1,6 @@
 FROM node:22-alpine AS build
+ARG VITE_ENABLE_DEMO_MODE=false
+ENV VITE_ENABLE_DEMO_MODE=$VITE_ENABLE_DEMO_MODE
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
