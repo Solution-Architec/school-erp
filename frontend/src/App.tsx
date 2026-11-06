@@ -402,7 +402,7 @@ function DeveloperModulePermissionPanel({moduleList,roles,request}:{moduleList:M
  const [error,setError]=useState('');
  const actions=['View','Create','Edit','Delete','Approve','Export'];
  const enabledCount=moduleList.filter(m=>permissions[m.key+':View']).length;
- useEffect(()=>{let active=true;setBusy(true);setError('');request('/api/rbac/roles/'+encodeURIComponent(role)+'/permissions').then(result=>{if(active){setPermissions(result.permissions||{});setConfigured(Boolean(result.configured))}}).catch((err:any)=>{if(active)setError(err.message||'Could not load saved permissions')}).finally(()=>{if(active)setBusy(false)});return()=>{active=false}},[role]);
+ useEffect(()=>{let active=true;setBusy(true);setError('');setConfigured(false);request('/api/rbac/roles/'+encodeURIComponent(role)+'/permissions').then(result=>{if(active){setPermissions(result.permissions||{});setConfigured(Boolean(result.configured))}}).catch((err:any)=>{if(active)setError(err.message||'Could not load saved permissions')}).finally(()=>{if(active)setBusy(false)});return()=>{active=false}},[role]);
  useEffect(()=>{let active=true;request('/api/rbac/audit-logs?limit=8').then(result=>{if(active)setAudit(result||[])}).catch(()=>{if(active)setAudit([])});return()=>{active=false}},[]);
  function toggle(key:string,action:string,value:boolean){setPermissions(old=>({...old,[key+':'+action]:value}))}
  function setAll(value:boolean){setPermissions(Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,value]))))}
