@@ -421,7 +421,7 @@ def dashboard(db: Session = Depends(get_db), user: models.User = Depends(current
         if conditions:
             stmt = stmt.where(*conditions)
         return db.scalar(stmt) or 0
-    return {
+    result = {
         "students": count(models.Student),
         "staff": count(models.Staff),
         "classes": count(models.SchoolClass),
@@ -430,6 +430,14 @@ def dashboard(db: Session = Depends(get_db), user: models.User = Depends(current
         "open_maintenance": count(models.MaintenanceRequest, models.MaintenanceRequest.status == "open"),
         "user_role": user.role
     }
+    if user.role == "super_admin":
+        result.update({
+            "schools": db.scalar(select(func.count()).select_from(models.School)) or 0,
+            "active_schools": count(models.School, models.School.is_active.is_(True)),
+            "inactive_schools": count(models.School, models.School.is_active.is_(False)),
+            "active_users": count(models.User, models.User.is_active.is_(True)),
+        })
+    return result
 
 
 def register_crud(path, model, schema_in, schema_out, roles):
