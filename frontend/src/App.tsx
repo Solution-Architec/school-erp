@@ -227,6 +227,7 @@ function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Pro
 function App(){
  const [token,setToken]=useState(localStorage.getItem('erp_token')||'')
  const [user,setUser]=useState<User|null>(null)
+ const [rbacPermissions,setRbacPermissions]=useState<{role:string;configured:boolean;permissions:Record<string,boolean>}|null>(null)
  const [demoTestingActive,setDemoTestingActive]=useState(sessionStorage.getItem('demo_testing_active')==='true')
  const [demoTargetEmail,setDemoTargetEmail]=useState('')
  const [demoSwitchPassword,setDemoSwitchPassword]=useState('')
@@ -261,16 +262,18 @@ function App(){
  const [paymentFeeId,setPaymentFeeId]=useState('')
  const [paymentAmount,setPaymentAmount]=useState('')
  const [paymentMethod,setPaymentMethod]=useState('cash')
- const allowedModuleKeys=roleModuleAccess[user?.role||'user']||roleModuleAccess.user
+ const defaultModuleKeys=roleModuleAccess[user?.role||'user']||roleModuleAccess.user
+ const allowedModuleKeys=user?.role!=='super_admin'&&rbacPermissions?.role===user?.role&&rbacPermissions.configured?modules.filter(m=>rbacPermissions.permissions[m.key+':View']).map(m=>m.key):defaultModuleKeys
  const availableModules=modules.filter(m=>allowedModuleKeys.includes(m.key))
  const selected=modules.find(m=>m.key===active)||modules[0]
  const roleLabel=roleLabels[user?.role||'user']||'School User'
  const hasModule=(key:string)=>allowedModuleKeys.includes(key)
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
- useEffect(()=>{if(user){const first=roleModuleAccess[user.role]?.[0]||'dashboard';if(!roleModuleAccess[user.role]?.includes(active))setActive(first)}},[user])
+ useEffect(()=>{if(user){const first=allowedModuleKeys[0]||'dashboard';if(!allowedModuleKeys.includes(active))setActive(first)}},[user,rbacPermissions])
+ useEffect(()=>{if(!token){setRbacPermissions(null);return}fetch(`${API}/api/rbac/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setRbacPermissions).catch(()=>setRbacPermissions(null))},[token,authHeaders])
  useEffect(()=>{if(!token)return;fetch(`${API}/api/auth/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setUser).catch(()=>{localStorage.removeItem('erp_token');setToken('');setUser(null)})},[token,authHeaders])
  async function request(url:string,options:RequestInit={}){const r=await fetch(`${API}${url}`,{...options,headers:{...authHeaders,...options.headers}});if(r.status===401){logout();throw new Error('Session expired. Please sign in again.')}const raw=await r.text();let data:any={};try{data=raw?JSON.parse(raw):{}}catch{data={}}if(!r.ok){const detail=data.detail||data.message||raw.slice(0,240);throw new Error((detail||'API request failed')+` (HTTP ${r.status}: ${options.method||'GET'} ${url})`)}return data}
- function logout(){localStorage.removeItem('erp_token');setToken('');setUser(null);setRows([]);setDemoTestingActive(false);setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('');sessionStorage.removeItem('demo_testing_active')}
+ function logout(){localStorage.removeItem('erp_token');setToken('');setUser(null);setRbacPermissions(null);setRows([]);setDemoTestingActive(false);setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('');sessionStorage.removeItem('demo_testing_active')}
  function handleLogin(t:string,u:User){localStorage.setItem('erp_token',t);setToken(t);setUser(u);const canTest=DEMO_MODE&&u.role==='super_admin'&&u.email==='demo.developer@jovoo.in';setDemoTestingActive(canTest);if(canTest)sessionStorage.setItem('demo_testing_active','true');else sessionStorage.removeItem('demo_testing_active');setActive('dashboard')}
  async function switchDemoAccount(email:string,passwordOverride?:string){
   const demo=DEMO_USERS.find(item=>item.email===email)
@@ -351,9 +354,9 @@ function App(){
      </div>
     </>}
     {user.role==='super_admin'&&<>
-    <div className="panel dashboard-roles-panel"><div className="panel-heading"><div><h3>Roles &amp; Authentication</h3><p>Application roles and their authenticated access scope</p></div><Users size={19}/></div><div className="table-wrap"><table><thead><tr><th>Role</th><th>Authentication / access scope</th><th>Access level</th><th>Current user</th></tr></thead><tbody>{roleCatalog.map(r=><tr key={r.roleKey}><td><strong>{r.role}</strong></td><td>{r.scope}</td><td><span className="status-badge active">{r.level}</span></td><td>{user.role===r.roleKey?<span className="status-badge active">Signed in</span>:'—'}</td></tr>)}</tbody></table></div><div className="status-note">Each school role receives a focused workspace and matching navigation. Developer has platform-wide access. Parent accounts use explicit guardian-to-student links and can access linked students only. API-level permissions should be enforced separately for production.</div></div>
+    <div className="panel dashboard-roles-panel"><div className="panel-heading"><div><h3>Roles &amp; Authentication</h3><p>Application roles and their authenticated access scope</p></div><Users size={19}/></div><div className="table-wrap"><table><thead><tr><th>Role</th><th>Authentication / access scope</th><th>Access level</th><th>Current user</th></tr></thead><tbody>{roleCatalog.map(r=><tr key={r.roleKey}><td><strong>{r.role}</strong></td><td>{r.scope}</td><td><span className="status-badge active">{r.level}</span></td><td>{user.role===r.roleKey?<span className="status-badge active">Signed in</span>:'—'}</td></tr>)}</tbody></table></div><div className="status-note">Each school role receives a focused workspace and matching navigation. Developer has platform-wide access. Parent accounts use explicit guardian-to-student links and can access linked students only. Saved module permissions are enforced by supported API routes and changes are audited.</div></div>
     </>}
-    {user.role==='super_admin'&&<DeveloperModulePermissionPanel moduleList={modules} roles={roleCatalog}/>}
+    {user.role==='super_admin'&&<DeveloperModulePermissionPanel moduleList={modules} roles={roleCatalog} request={request}/>}
     {user.role==='super_admin'&&<>
     <div className="panel dashboard-modules-panel"><div className="panel-heading"><div><h3>Entire School ERP Project</h3><p>Complete list of modules available in this application</p></div><GraduationCap size={19}/></div><div className="table-wrap"><table><thead><tr><th>Module</th><th>Project area</th><th>Description</th><th>Action</th></tr></thead><tbody>{availableModules.map(m=><tr key={m.key}><td><strong>{m.label}</strong></td><td>{m.key==='dashboard'?'Overview':m.key.startsWith('fee')||m.key==='payments'||m.key==='student-fees'?'Finance':m.key==='students'||m.key==='classes'?'Academics':m.key==='staff'?'HR':m.key==='vehicles'?'Transport':m.key==='hostels'?'Accommodation':m.key==='documents'?'Administration':'Operations'}</td><td>{m.description}</td><td><button className="secondary" onClick={()=>setActive(m.key)}>Open</button></td></tr>)}</tbody></table></div><div className="table-footer">Available modules: {availableModules.length}<span>SchoolOS · Project overview</span></div></div>
     </>}
@@ -389,25 +392,33 @@ function App(){
  </div>
  }
 
-function DeveloperModulePermissionPanel({moduleList,roles}:{moduleList:ModuleDef[];roles:{role:string;roleKey:string;scope:string;level:string}[]}) {
+function DeveloperModulePermissionPanel({moduleList,roles,request}:{moduleList:ModuleDef[];roles:{role:string;roleKey:string;scope:string;level:string}[];request:(url:string,options?:RequestInit)=>Promise<any>}) {
  const [role,setRole]=useState('teacher');
- const [permissions,setPermissions]=useState<Record<string,Record<string,boolean>>>({});
+ const [permissions,setPermissions]=useState<Record<string,boolean>>({});
+ const [audit,setAudit]=useState<any[]>([]);
+ const [configured,setConfigured]=useState(false);
+ const [busy,setBusy]=useState(false);
+ const [message,setMessage]=useState('');
+ const [error,setError]=useState('');
  const actions=['View','Create','Edit','Delete','Approve','Export'];
- const current=permissions[role]||{};
- const enabledCount=moduleList.filter(m=>current[m.key+':View']).length;
- function toggle(key:string,action:string,value:boolean){setPermissions(old=>({...old,[role]:{...(old[role]||{}),[key+':'+action]:value}}))}
- function setAll(value:boolean){setPermissions(old=>({...old,[role]:Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,value])))}))}
- function copyDraft(){const value=JSON.stringify({role,permissions:current},null,2);if(typeof navigator!=='undefined'&&navigator.clipboard?.writeText)void navigator.clipboard.writeText(value)}
+ const enabledCount=moduleList.filter(m=>permissions[m.key+':View']).length;
+ useEffect(()=>{let active=true;setBusy(true);setError('');setConfigured(false);request('/api/rbac/roles/'+encodeURIComponent(role)+'/permissions').then(result=>{if(active){setPermissions(result.permissions||{});setConfigured(Boolean(result.configured))}}).catch((err:any)=>{if(active)setError(err.message||'Could not load saved permissions')}).finally(()=>{if(active)setBusy(false)});return()=>{active=false}},[role]);
+ useEffect(()=>{let active=true;request('/api/rbac/audit-logs?limit=8').then(result=>{if(active)setAudit(result||[])}).catch(()=>{if(active)setAudit([])});return()=>{active=false}},[]);
+ function toggle(key:string,action:string,value:boolean){setPermissions(old=>({...old,[key+':'+action]:value}))}
+ function setAll(value:boolean){setPermissions(Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,value]))))}
+ async function save(){setBusy(true);setError('');setMessage('');try{const complete=Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,Boolean(permissions[m.key+':'+a])])));const result=await request('/api/rbac/roles/'+encodeURIComponent(role)+'/permissions',{method:'PUT',body:JSON.stringify({permissions:complete})});setPermissions(complete);setConfigured(true);setMessage(result.message||'Permissions saved successfully');setAudit(await request('/api/rbac/audit-logs?limit=8'))}catch(err:any){setError(err.message||'Could not save permissions')}finally{setBusy(false)}}
  return <div className="panel developer-permissions-panel">
-  <div className="panel-heading"><div><h3>Module permissions</h3><p>Select a role and configure permissions module by module.</p></div><ShieldCheck size={20}/></div>
+  <div className="panel-heading"><div><h3>Role permissions</h3><p>Saved permissions are checked by the API for supported modules and actions.</p></div><ShieldCheck size={20}/></div>
   <div className="permission-toolbar">
-   <label className="auth-field">Select role<select value={role} onChange={e=>setRole(e.target.value)}>{roles.filter(r=>r.roleKey!=='super_admin').map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></label>
+   <label className="auth-field">Select role<select value={role} disabled={busy} onChange={e=>setRole(e.target.value)}>{roles.filter(r=>r.roleKey!=='super_admin'&&r.roleKey!=='parent').map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></label>
    <div className="permission-summary"><strong>{enabledCount} / {moduleList.length}</strong><span>modules with View enabled</span></div>
-   <div className="permission-bulk-actions"><button type="button" className="secondary" onClick={()=>setAll(true)}>Select all</button><button type="button" className="secondary" onClick={()=>setAll(false)}>Clear all</button></div>
+   <div className="permission-bulk-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>setAll(true)}>Select all</button><button type="button" className="secondary" disabled={busy} onClick={()=>setAll(false)}>Clear all</button></div>
   </div>
-  <div className="table-wrap permission-table-wrap"><table className="permission-table"><thead><tr><th>Module</th>{actions.map(a=><th key={a}>{a}</th>)}</tr></thead><tbody>{moduleList.map(m=><tr key={m.key}><td><strong>{m.label}</strong><small>{m.description}</small></td>{actions.map(a=><td key={a}><input aria-label={m.label+' '+a+' permission'} type="checkbox" checked={Boolean(current[m.key+':'+a])} onChange={e=>toggle(m.key,a,e.target.checked)}/></td>)}</tr>)}</tbody></table></div>
-  <div className="permission-footer"><span>{role.replaceAll('_',' ')} · {Object.values(current).filter(Boolean).length} permissions selected</span><button type="button" className="secondary" onClick={copyDraft}>Copy permission draft</button></div>
-  <p className="status-note">Draft only: selections are local to this page and are not saved to the server or enforced by APIs. Backend authorization is required before these settings can control real access.</p>
+  {!configured&&<p className="status-note">Showing the existing default access for this role. These defaults are not yet saved as a custom permission matrix.</p>}{error&&<div className="error auth-message" role="alert">{error}</div>}{message&&<div className="success auth-message" role="status">{message}</div>}
+  <div className="table-wrap permission-table-wrap"><table className="permission-table"><thead><tr><th>Module</th>{actions.map(a=><th key={a}>{a}</th>)}</tr></thead><tbody>{moduleList.map(m=><tr key={m.key}><td><strong>{m.label}</strong><small>{m.description}</small></td>{actions.map(a=><td key={a}><input aria-label={m.label+' '+a+' permission'} type="checkbox" disabled={busy} checked={Boolean(permissions[m.key+':'+a])} onChange={e=>toggle(m.key,a,e.target.checked)}/></td>)}</tr>)}</tbody></table></div>
+  <div className="permission-footer"><span>{role.replaceAll('_',' ')} · {Object.values(permissions).filter(Boolean).length} permissions selected</span><button type="button" className="primary" disabled={busy} onClick={save}>{busy?'Saving…':'Save permissions'}</button></div>
+  <p className="status-note">Changes are stored in the database and enforced by protected API routes. Developer access is always platform-wide. Parent access remains restricted to linked-student endpoints.</p>
+  <div className="permission-audit"><div className="panel-heading"><div><h3>Recent access changes</h3><p>Latest role-permission updates</p></div><span className="record-count">{audit.length} events</span></div><div className="table-wrap"><table><thead><tr><th>Event</th><th>Role</th><th>Time</th></tr></thead><tbody>{audit.map(item=><tr key={item.id}><td>{item.event_type}</td><td>{item.target_id||'—'}</td><td>{item.created_at?new Date(item.created_at).toLocaleString('en-IN'):'—'}</td></tr>)}{!audit.length&&<tr><td colSpan={3}><div className="empty-state compact-empty"><strong>No access changes recorded yet</strong><p>Saved role-permission changes will appear here.</p></div></td></tr>}</tbody></table></div></div>
  </div>
 }
 

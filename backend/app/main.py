@@ -1,4 +1,5 @@
 import os
+import json
 import secrets
 import hashlib
 import hmac
@@ -21,7 +22,7 @@ from sqlalchemy import select, func, text
 from sqlalchemy.exc import IntegrityError
 from .database import Base, engine, get_db, SessionLocal
 from . import models, schemas
-from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles
+from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,6 +90,120 @@ app = FastAPI(title="School ERP API", version="0.1.0",
 origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "http://localhost,http://localhost:5173").split(",") if x.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type"])
+
+
+
+RBAC_ROLES = {
+    "user", "admin", "principal", "vice_principal", "teacher", "account", "accountant",
+    "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator",
+    "transport_manager", "hostel_warden", "security_guard", "others", "parent"
+}
+RBAC_MODULES = {
+    "dashboard", "parent-portal", "chatbot", "approvals", "schools", "students", "staff",
+    "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures",
+    "student-fees", "payments", "fee-reports"
+}
+RBAC_ACTIONS = {"View", "Create", "Edit", "Delete", "Approve", "Export"}
+
+DEFAULT_ROLE_MODULES = {
+    "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports"],
+    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports"],
+    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports"],
+    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports"],
+    "teacher": ["dashboard", "chatbot", "students", "classes", "documents"],
+    "account": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
+    "accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
+    "clerk": ["dashboard", "chatbot", "students", "student-fees", "payments", "documents"],
+    "office_assistant": ["dashboard", "chatbot", "students", "staff", "documents", "approvals"],
+    "librarian": ["dashboard", "chatbot", "students", "documents"],
+    "lab_assistant": ["dashboard", "chatbot", "documents", "maintenance"],
+    "it_administrator": ["dashboard", "chatbot", "staff", "documents", "maintenance", "approvals"],
+    "transport_manager": ["dashboard", "chatbot", "students", "vehicles", "documents", "maintenance"],
+    "hostel_warden": ["dashboard", "chatbot", "students", "hostels", "documents", "maintenance"],
+    "security_guard": ["dashboard", "chatbot", "students"],
+    "others": ["dashboard", "chatbot"],
+    "parent": ["parent-portal", "chatbot"],
+}
+
+
+
+def write_audit_log(db: Session, actor: models.User, event_type: str, target_type: str = "", target_id: str = "", details: dict | None = None):
+    db.add(models.AuditLog(
+        actor_user_id=actor.id,
+        event_type=event_type,
+        target_type=target_type,
+        target_id=target_id,
+        details=json.dumps(details or {}, separators=(",", ":"), sort_keys=True),
+    ))
+
+
+@app.get("/api/rbac/roles/{role}/permissions", tags=["rbac"])
+def get_role_permissions(role: str, db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
+    role = role.strip().lower()
+    if role not in RBAC_ROLES:
+        raise HTTPException(status_code=404, detail="Role not found")
+    grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role)).all()
+    if grants:
+        return {"role": role, "configured": True, "permissions": {f"{g.module_key}:{g.action}": g.enabled for g in grants}}
+    allowed_modules = set(DEFAULT_ROLE_MODULES.get(role, ["dashboard", "chatbot"]))
+    defaults = {
+        f"{module}:{action}": (
+            module in allowed_modules and action in {"View", "Create", "Edit", "Delete"}
+        ) or (module == "approvals" and action == "Approve" and module in allowed_modules)
+        for module in RBAC_MODULES for action in RBAC_ACTIONS
+    }
+    return {"role": role, "configured": False, "permissions": defaults}
+
+
+@app.put("/api/rbac/roles/{role}/permissions", tags=["rbac"])
+def save_role_permissions(role: str, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
+    role = role.strip().lower()
+    if role not in RBAC_ROLES:
+        raise HTTPException(status_code=404, detail="Role not found")
+    permissions = payload.get("permissions")
+    if not isinstance(permissions, dict):
+        raise HTTPException(status_code=422, detail="A permissions object is required")
+    expected = {f"{module}:{action}" for module in RBAC_MODULES for action in RBAC_ACTIONS}
+    unknown = set(permissions) - expected
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unknown permission keys: {', '.join(sorted(unknown)[:8])}")
+    if any(not isinstance(value, bool) for value in permissions.values()):
+        raise HTTPException(status_code=422, detail="Permission values must be true or false")
+    existing = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role)).all()
+    by_key = {(g.module_key, g.action): g for g in existing}
+    for key in expected:
+        module_key, action = key.rsplit(":", 1)
+        enabled = permissions.get(key, False)
+        grant = by_key.get((module_key, action))
+        if grant is None:
+            db.add(models.RolePermission(role=role, module_key=module_key, action=action, enabled=enabled))
+        else:
+            grant.enabled = enabled
+    write_audit_log(db, user, "rbac.permissions.updated", "role", role,
+                    {"enabled_count": sum(1 for value in permissions.values() if value), "module_count": len(RBAC_MODULES)})
+    db.commit()
+    return {"message": "Role permissions saved", "role": role, "saved": len(expected)}
+
+
+
+@app.get("/api/rbac/me", tags=["rbac"])
+def my_module_permissions(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+    if user.role == "super_admin":
+        return {"role": user.role, "configured": True, "permissions": {"*": True}}
+    grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == user.role)).all()
+    if not grants:
+        return {"role": user.role, "configured": False, "permissions": {}}
+    return {"role": user.role, "configured": True,
+            "permissions": {f"{g.module_key}:{g.action}": g.enabled for g in grants}}
+
+@app.get("/api/rbac/audit-logs", tags=["rbac"])
+def get_rbac_audit_logs(limit: int = Query(default=50, ge=1, le=200), db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
+    records = db.scalars(select(models.AuditLog).order_by(models.AuditLog.created_at.desc()).limit(limit)).all()
+    return [{
+        "id": item.id, "actor_user_id": item.actor_user_id, "event_type": item.event_type,
+        "target_type": item.target_type, "target_id": item.target_id,
+        "details": item.details, "created_at": item.created_at,
+    } for item in records]
 
 @app.get("/api/health")
 def health():
@@ -294,12 +409,12 @@ def reset_password(payload: dict, db: Session = Depends(get_db)):
     return {"message": "Password updated. You can now sign in."}
 
 @app.get("/api/auth/pending-users", tags=["auth"])
-def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_roles("admin"))):
+def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "View", "admin"))):
     return list(db.scalars(select(models.User).where(models.User.school_id == user.school_id,
         models.User.approval_status == "pending", models.User.email_verified.is_(True)).order_by(models.User.created_at)).all())
 
 @app.post("/api/auth/users/{user_id}/approval", tags=["auth"])
-def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_roles("admin"))):
+def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "Approve", "admin"))):
     target = db.get(models.User, user_id)
     decision = str(payload.get("decision", "")).lower()
     if not target or target.school_id != user.school_id or target.role == "super_admin":
@@ -408,7 +523,7 @@ def school_scope(model, user):
 
 
 @app.get("/api/dashboard")
-def dashboard(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+def dashboard(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("dashboard", "View", "teacher", "parent"))):
     if user.role == "parent":
         return {"students": 0, "staff": 0, "classes": 0, "vehicles": 0,
                 "hostel_rooms": 0, "open_maintenance": 0, "user_role": "parent"}
@@ -457,7 +572,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
                 raise HTTPException(status_code=404, detail="Document owner not found in your school")
     def list_items(q: str = Query(default="", max_length=120), limit: int = Query(default=100, ge=1, le=500),
                    offset: int = Query(default=0, ge=0), db: Session = Depends(get_db),
-                   user: models.User = Depends(require_roles(*roles))):
+                   user: models.User = Depends(require_module_permission(path, "View", *roles))):
         stmt = select(model)
         scope = school_scope(model, user)
         if scope is not None:
@@ -477,7 +592,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
         return list(db.scalars(stmt).all())
 
     def create_item(payload: Any, db: Session = Depends(get_db),
-                    user: models.User = Depends(require_roles(*roles))):
+                    user: models.User = Depends(require_module_permission(path, "Create", *roles))):
         if user.role != "super_admin" and not user.school_id:
             raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
         values = payload.model_dump()
@@ -530,14 +645,14 @@ def register_crud(path, model, schema_in, schema_out, roles):
         return obj
 
     def get_item(item_id: int, db: Session = Depends(get_db),
-                 user: models.User = Depends(require_roles(*roles))):
+                 user: models.User = Depends(require_module_permission(path, "View", *roles))):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
         return obj
 
     def update_item(item_id: int, payload: Any, db: Session = Depends(get_db),
-                    user: models.User = Depends(require_roles(*roles))):
+                    user: models.User = Depends(require_module_permission(path, "Edit", *roles))):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
@@ -564,7 +679,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
         return obj
 
     def delete_item(item_id: int, db: Session = Depends(get_db),
-                    user: models.User = Depends(require_roles("super_admin", "admin"))):
+                    user: models.User = Depends(require_module_permission(path, "Delete", "super_admin", "admin"))):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
@@ -572,11 +687,11 @@ def register_crud(path, model, schema_in, schema_out, roles):
         db.commit()
         return {"deleted": True}
 
-    list_items.__name__ = f"list_{path.replace('-', '_')}"
-    create_item.__name__ = f"create_{path.replace('-', '_')}"
-    get_item.__name__ = f"get_{path.replace('-', '_')}"
-    update_item.__name__ = f"update_{path.replace('-', '_')}"
-    delete_item.__name__ = f"delete_{path.replace('-', '_')}"
+    list_items.__name__ = f"list_{path}"
+    create_item.__name__ = f"create_{path}"
+    get_item.__name__ = f"get_{path}"
+    update_item.__name__ = f"update_{path}"
+    delete_item.__name__ = f"delete_{path}"
     create_item.__annotations__["payload"] = schema_in
     update_item.__annotations__["payload"] = schema_in
     app.add_api_route(f"/api/{path}", list_items, methods=["GET"], response_model=list[schema_out], tags=[path])
@@ -592,7 +707,7 @@ FINANCE_ROLES = ADMIN_ROLES
 @app.post("/api/students/import", tags=["students"])
 async def import_students(file: UploadFile = File(...), school_id: int | None = Form(default=None),
                          db: Session = Depends(get_db),
-                         user: models.User = Depends(require_roles("super_admin", "admin"))):
+                         user: models.User = Depends(require_module_permission("students", "Create", "super_admin", "admin"))):
     if user.role == "super_admin":
         target_school_id = school_id
         if not target_school_id or not db.get(models.School, target_school_id):
@@ -700,6 +815,7 @@ async def import_module_records(
     }
     if resource not in importable:
         raise HTTPException(status_code=404, detail="Bulk import is not enabled for this module")
+    require_module_permission(resource, "Create", "admin")(user=user, db=db)
     if user.role == "super_admin":
         target_school_id = school_id
         if not target_school_id or not db.get(models.School, target_school_id):
@@ -775,7 +891,7 @@ async def import_module_records(
             "skipped": skipped, "errors": errors[:100]}
 
 @app.get("/api/schools", response_model=list[schemas.SchoolOut], tags=["schools"])
-def list_schools(q: str = Query(default="", max_length=120), db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+def list_schools(q: str = Query(default="", max_length=120), db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("schools", "View", "teacher", "parent"))):
     stmt = select(models.School).order_by(models.School.name)
     if user.role != "super_admin":
         if not user.school_id:
@@ -838,7 +954,7 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
                 year: int | None = Query(default=None, ge=2000, le=2100),
                 school_id: int | None = Query(default=None, gt=0),
                 db: Session = Depends(get_db),
-                user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
+                user: models.User = Depends(require_module_permission("fee-reports", "View", "super_admin", "admin", "accountant"))):
     if user.role != "super_admin" and not user.school_id:
         raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
     target_school_id = user.school_id if user.role != "super_admin" else school_id
@@ -913,7 +1029,7 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
 
 @app.get("/api/fee-dues", tags=["payments"])
 def fee_dues(db: Session = Depends(get_db),
-             user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
+             user: models.User = Depends(require_module_permission("payments", "View", "super_admin", "admin", "accountant"))):
     if user.role != "super_admin" and not user.school_id:
         raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
     stmt = select(models.StudentFee, models.Student).join(
@@ -938,7 +1054,7 @@ def fee_dues(db: Session = Depends(get_db),
 
 @app.post("/api/student-fees/{fee_id}/payments", response_model=schemas.PaymentOut, tags=["payments"])
 def record_payment(fee_id: int, payload: schemas.PaymentIn, db: Session = Depends(get_db),
-                   user: models.User = Depends(require_roles("super_admin", "admin", "accountant"))):
+                   user: models.User = Depends(require_module_permission("payments", "Create", "super_admin", "admin", "accountant"))):
     fee = db.get(models.StudentFee, fee_id)
     if not fee or (user.role != "super_admin" and fee.school_id != user.school_id):
         raise HTTPException(status_code=404, detail="Student fee not found")
@@ -1057,7 +1173,7 @@ def parent_child_fees(student_id: int, db: Session = Depends(get_db),
 
 # Safe FAQ assistant: answers only approved school help topics, no student-specific data.
 @app.post("/api/chatbot/faq", tags=["chatbot"])
-def chatbot_faq(payload: dict, user: models.User = Depends(current_user)):
+def chatbot_faq(payload: dict, user: models.User = Depends(require_module_permission("chatbot", "View", "teacher", "parent"))):
     question = str(payload.get("question", "")).strip().lower()
     if not question or len(question) > 500:
         raise HTTPException(status_code=422, detail="Question must be between 1 and 500 characters")
