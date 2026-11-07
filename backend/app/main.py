@@ -1198,9 +1198,11 @@ def developer_user_account_overview(
     table_rows = []
     module_counts: dict[str, int] = {}
     if account.school_id is not None:
-        # Discover all mapped tenant tables dynamically. New modules with a
-        # school_id column are included automatically instead of silently
-        # disappearing when a static module list is incomplete.
+        # Include the parent school record and discover every mapped tenant
+        # table dynamically so newly added school-scoped modules are not missed.
+        if school is not None:
+            table_rows.append({"table": "schools", "module": "schools", "count": 1})
+            module_counts["schools"] = 1
         for mapper in Base.registry.mappers:
             model = mapper.class_
             if "school_id" not in model.__table__.columns:
@@ -1212,6 +1214,14 @@ def developer_user_account_overview(
             module_key = table_to_module.get(table_name, "other")
             table_rows.append({"table": table_name, "module": module_key, "count": count})
             module_counts[module_key] = module_counts.get(module_key, 0) + count
+
+    # Audit entries are actor-linked rather than school_id-linked, so include
+    # the selected user's own activity separately from tenant table counts.
+    audit_count = db.scalar(select(func.count()).select_from(models.AuditLog).where(
+        models.AuditLog.actor_user_id == account.id
+    )) or 0
+    table_rows.append({"table": "audit_logs (actor_user_id)", "module": "account-activity", "count": audit_count})
+    module_counts["account-activity"] = audit_count
 
     staff_matches = []
     if account.school_id is not None:
