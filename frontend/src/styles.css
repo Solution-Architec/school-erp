@@ -743,3 +743,9 @@
 .dashboard-finance-insights+.fee-chart{margin-top:15px}
 @media(max-width:900px){.platform-alert-grid{grid-template-columns:1fr}.platform-alert-item{min-height:62px}}
 @media(max-width:720px){.dashboard-finance-insights{grid-template-columns:1fr}.platform-alert-item{padding:11px}}
+
+.school-owner-assign .school-owner-user-field{flex:1 1 280px;min-width:240px}
+.school-owner-assign select{display:block;width:100%;min-height:42px;appearance:auto;-webkit-appearance:menulist;color:#203b4b;background-color:#fff;cursor:pointer}
+.school-owner-assign select:focus{outline:0;border-color:#168f82;box-shadow:0 0 0 3px #168f821c}
+.school-owner-assign select option{color:#203b4b;background:#fff}
+.school-owner-selection{display:block;min-height:14px;margin-top:2px;color:#168276;font-size:10px;font-weight:600;line-height:1.4}
