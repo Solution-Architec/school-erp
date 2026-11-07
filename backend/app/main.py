@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE role_permissions DROP CONSTRAINT IF EXISTS uq_role_permission_scope"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_global ON role_permissions (role, module_key, action) WHERE school_id IS NULL"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_school ON role_permissions (school_id, role, module_key, action) WHERE school_id IS NOT NULL"))
-        tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments")
+        tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments", "attendance_records", "timetable_entries", "exams", "report_cards")
         all_school_tables = ("users",) + tenant_tables
         for table in all_school_tables:
             conn.execute(text('ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)'))
@@ -108,16 +108,16 @@ RBAC_ROLES = {
 RBAC_MODULES = {
     "dashboard", "parent-portal", "chatbot", "approvals", "schools", "students", "staff",
     "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures",
-    "student-fees", "payments", "fee-reports"
+    "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards"
 }
 RBAC_ACTIONS = {"View", "Create", "Edit", "Delete", "Approve", "Export"}
 
 DEFAULT_ROLE_MODULES = {
-    "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports"],
-    "teacher": ["dashboard", "chatbot", "students", "classes", "documents"],
+    "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards"],
+    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards"],
+    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards"],
+    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports", "attendance", "timetable", "exams", "report-cards"],
+    "teacher": ["dashboard", "chatbot", "students", "classes", "documents", "attendance", "timetable", "exams", "report-cards"],
     "account": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
     "accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
     "clerk": ["dashboard", "chatbot", "students", "student-fees", "payments", "documents"],
@@ -701,6 +701,18 @@ def register_crud(path, model, schema_in, schema_out, roles):
             student = db.get(models.Student, values.get("owner_id"))
             if not student or (user.role != "super_admin" and student.school_id != user.school_id):
                 raise HTTPException(status_code=404, detail="Document owner not found in your school")
+        if model in (models.AttendanceRecord, models.ReportCard):
+            student = db.get(models.Student, values.get("student_id"))
+            target_school = values.get("school_id") or user.school_id
+            if not student or (target_school and student.school_id != target_school):
+                raise HTTPException(status_code=404, detail="Student not found in the selected school")
+        if model is models.ReportCard:
+            exam = db.get(models.Exam, values.get("exam_id"))
+            target_school = values.get("school_id") or user.school_id
+            if not exam or (target_school and exam.school_id != target_school):
+                raise HTTPException(status_code=404, detail="Exam not found in the selected school")
+            if Decimal(str(values.get("marks_obtained", 0))) > Decimal(str(exam.max_marks)):
+                raise HTTPException(status_code=422, detail="Marks obtained cannot exceed the exam maximum marks")
     def list_items(q: str = Query(default="", max_length=120), limit: int = Query(default=100, ge=1, le=500),
                    offset: int = Query(default=0, ge=0), db: Session = Depends(get_db),
                    user: models.User = Depends(require_module_permission(path, "View", *roles))):
@@ -754,6 +766,9 @@ def register_crud(path, model, schema_in, schema_out, roles):
                 raise HTTPException(status_code=422, detail="school_id is required for Super Admin record creation")
         if model is models.Document:
             values["uploaded_by"] = user.id
+        if model is models.AttendanceRecord:
+            values["marked_by"] = user.id
+        validate_related_records(values, user, db)
         obj = model(**values)
         db.add(obj)
         try:
@@ -921,6 +936,10 @@ register_crud("documents", models.Document, schemas.DocumentIn, schemas.Document
 register_crud("maintenance", models.MaintenanceRequest, schemas.MaintenanceIn, schemas.MaintenanceOut, ADMIN_ROLES)
 register_crud("fee-structures", models.FeeStructure, schemas.FeeStructureIn, schemas.FeeStructureOut, FINANCE_ROLES)
 register_crud("student-fees", models.StudentFee, schemas.StudentFeeIn, schemas.StudentFeeOut, FINANCE_ROLES)
+register_crud("attendance", models.AttendanceRecord, schemas.AttendanceIn, schemas.AttendanceOut, ADMIN_ROLES)
+register_crud("timetable", models.TimetableEntry, schemas.TimetableIn, schemas.TimetableOut, ADMIN_ROLES)
+register_crud("exams", models.Exam, schemas.ExamIn, schemas.ExamOut, ADMIN_ROLES)
+register_crud("report-cards", models.ReportCard, schemas.ReportCardIn, schemas.ReportCardOut, ADMIN_ROLES)
 
 
 # Shared CSV/XLSX import for operational modules. Financial payments and private
