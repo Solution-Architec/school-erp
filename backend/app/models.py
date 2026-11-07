@@ -261,3 +261,60 @@ class AuditLog(Base):
     target_id: Mapped[str] = mapped_column(String(120), default="")
     details: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AttendanceRecord(Base):
+    __tablename__ = "attendance_records"
+    __table_args__ = (UniqueConstraint("school_id", "student_id", "attendance_date", name="uq_attendance_school_student_date"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False, index=True)
+    attendance_date: Mapped[date] = mapped_column(Date, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="present")
+    remarks: Mapped[str] = mapped_column(String(300), default="")
+    marked_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TimetableEntry(Base):
+    __tablename__ = "timetable_entries"
+    __table_args__ = (UniqueConstraint("school_id", "class_name", "section", "day_of_week", "period", name="uq_timetable_school_class_period"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    class_name: Mapped[str] = mapped_column(String(80), index=True)
+    section: Mapped[str] = mapped_column(String(40), default="A")
+    day_of_week: Mapped[str] = mapped_column(String(12), index=True)
+    period: Mapped[int] = mapped_column(Integer)
+    subject: Mapped[str] = mapped_column(String(100))
+    teacher_name: Mapped[str] = mapped_column(String(180), default="")
+    room: Mapped[str] = mapped_column(String(40), default="")
+    start_time: Mapped[str] = mapped_column(String(5))
+    end_time: Mapped[str] = mapped_column(String(5))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Exam(Base):
+    __tablename__ = "exams"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), index=True)
+    class_name: Mapped[str] = mapped_column(String(80), index=True)
+    section: Mapped[str] = mapped_column(String(40), default="")
+    subject: Mapped[str] = mapped_column(String(100))
+    exam_date: Mapped[date] = mapped_column(Date, index=True)
+    max_marks: Mapped[float] = mapped_column(Numeric(8, 2))
+    pass_marks: Mapped[float] = mapped_column(Numeric(8, 2))
+    academic_year: Mapped[str] = mapped_column(String(20), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ReportCard(Base):
+    __tablename__ = "report_cards"
+    __table_args__ = (UniqueConstraint("school_id", "student_id", "exam_id", name="uq_report_card_school_student_exam"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False, index=True)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id"), nullable=False, index=True)
+    marks_obtained: Mapped[float] = mapped_column(Numeric(8, 2))
+    remarks: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
