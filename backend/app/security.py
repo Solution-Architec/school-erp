@@ -75,7 +75,9 @@ _LEADERSHIP_MODULES = {
     "payments", "fee-reports",
 }
 DEFAULT_ROLE_PERMISSIONS: dict[str, dict[str, set[str]]] = {
-    "user": {**{m: set(_VIEW_CREATE_EDIT) for m in _LEADERSHIP_MODULES}, "approvals": {"View", "Approve"}},
+    # Generic/legacy accounts receive dashboard visibility only until a Developer
+    # explicitly grants additional module/action permissions.
+    "user": {"dashboard": set(_VIEW_ONLY)},
     "admin": {**{m: set(_VIEW_CREATE_EDIT) for m in _LEADERSHIP_MODULES}, "approvals": {"View", "Approve"}},
     "principal": {**{m: set(_VIEW_CREATE_EDIT) for m in _LEADERSHIP_MODULES}, "approvals": {"View", "Approve"}},
     "vice_principal": {
