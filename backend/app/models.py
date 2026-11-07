@@ -12,6 +12,8 @@ class School(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(180), unique=True, index=True)
     code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    # Existing schools remain approved; public self-registration starts pending.
+    approval_status: Mapped[str] = mapped_column(String(20), default="approved", index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

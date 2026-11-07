@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
+        conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
         tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments")
         all_school_tables = ("users",) + tenant_tables
         for table in all_school_tables:
@@ -324,19 +325,19 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail="All fields are required and password must be at least 12 characters")
     if db.scalar(select(models.User.id).where(models.User.email == email)):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
-    school = models.School(name=school_name, code=school_code)
+    school = models.School(name=school_name, code=school_code, is_active=False, approval_status="pending")
     db.add(school)
     try:
         db.flush()
         account = models.User(name=name, email=email, password_hash=hash_password(password), role="principal",
-            school_id=school.id, is_active=False, email_verified=False, approval_status="approved")
+            school_id=school.id, is_active=False, email_verified=False, approval_status="pending")
         db.add(account)
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="School name/code or email already exists")
     _issue_auth_code(db, email, "verify")
-    return {"message": "School registered. Verify the email address to activate your Principal account.", "email": email}
+    return {"message": "School registration submitted. Verify your email; your school will remain pending until the SchoolOS Developer approves it.", "email": email, "approval_status": "pending"}
 
 @app.post("/api/auth/register-staff", tags=["auth"])
 def register_staff(payload: dict, db: Session = Depends(get_db)):
@@ -372,10 +373,24 @@ def verify_email(payload: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     _consume_auth_code(db, email, code, "verify")
     account.email_verified = True
-    if account.approval_status == "approved":
+    school = db.get(models.School, account.school_id) if account.school_id else None
+    # School founders must wait for platform approval even after OTP verification.
+    if account.role == "super_admin":
         account.is_active = True
+    elif school and school.approval_status == "approved" and school.is_active and account.approval_status == "approved":
+        account.is_active = True
+    else:
+        account.is_active = False
     db.commit()
-    return {"message": "Email verified. " + ("You can now sign in." if account.is_active else "Your school must approve your account before sign-in.")}
+    if school and school.approval_status == "pending":
+        message = "Email verified. Your school registration is awaiting SchoolOS Developer approval."
+    elif account.approval_status == "pending":
+        message = "Email verified. Your account is awaiting approval by your school administrator."
+    elif account.is_active:
+        message = "Email verified. You can now sign in."
+    else:
+        message = "Email verified. This account is not active; contact the platform administrator."
+    return {"message": message, "approval_status": school.approval_status if school else account.approval_status}
 
 @app.post("/api/auth/resend-verification", tags=["auth"])
 def resend_verification(payload: dict, db: Session = Depends(get_db)):
@@ -425,6 +440,71 @@ def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), use
     target.is_active = decision == "approve"
     db.commit()
     return {"message": "Account " + ("approved" if decision == "approve" else "rejected")}
+
+@app.get("/api/developer/pending-schools", tags=["developer"])
+def developer_pending_schools(db: Session = Depends(get_db),
+                              user: models.User = Depends(require_roles("super_admin"))):
+    """List self-registered schools awaiting platform approval."""
+    schools = db.scalars(select(models.School).where(
+        models.School.approval_status == "pending"
+    ).order_by(models.School.created_at.asc())).all()
+    result = []
+    for school in schools:
+        founder = db.scalar(select(models.User).where(
+            models.User.school_id == school.id, models.User.role == "principal"
+        ).order_by(models.User.created_at.asc()))
+        result.append({
+            "school_id": school.id,
+            "school_name": school.name,
+            "school_code": school.code,
+            "created_at": school.created_at,
+            "approval_status": school.approval_status,
+            "founder": {
+                "user_id": founder.id,
+                "name": founder.name,
+                "email": founder.email,
+                "email_verified": founder.email_verified,
+            } if founder else None,
+        })
+    return result
+
+
+@app.post("/api/developer/schools/{school_id}/approval", tags=["developer"])
+def developer_approve_school(school_id: int, payload: dict,
+                             db: Session = Depends(get_db),
+                             user: models.User = Depends(require_roles("super_admin"))):
+    """Approve or reject a school registration. This is platform-admin-only."""
+    decision = str(payload.get("decision", "")).strip().lower()
+    reason = str(payload.get("reason", "")).strip()[:500]
+    if decision not in {"approve", "reject"}:
+        raise HTTPException(status_code=422, detail="Decision must be approve or reject")
+    school = db.get(models.School, school_id)
+    if not school:
+        raise HTTPException(status_code=404, detail="School registration not found")
+    if school.approval_status != "pending":
+        raise HTTPException(status_code=409, detail="This school registration has already been reviewed")
+    founder = db.scalar(select(models.User).where(
+        models.User.school_id == school.id, models.User.role == "principal"
+    ).order_by(models.User.created_at.asc()))
+    approved = decision == "approve"
+    school.approval_status = "approved" if approved else "rejected"
+    school.is_active = approved
+    if founder:
+        founder.approval_status = "approved" if approved else "rejected"
+        # Approval does not bypass email verification.
+        founder.is_active = approved and founder.email_verified
+    write_audit_log(db, user, "school.registration." + school.approval_status,
+                    "school", str(school.id),
+                    {"school_name": school.name, "founder_user_id": founder.id if founder else None,
+                     "reason": reason})
+    db.commit()
+    return {
+        "message": "School registration " + ("approved" if approved else "rejected"),
+        "school_id": school.id,
+        "approval_status": school.approval_status,
+        "principal_active": bool(founder and founder.is_active),
+    }
+
 
 DEMO_LOGIN_EMAILS = {
     "demo.developer@jovoo.in", "demo.principal@jovoo.in",
