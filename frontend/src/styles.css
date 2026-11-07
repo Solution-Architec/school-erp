@@ -962,3 +962,40 @@ button:disabled{
     transition:none!important;
   }
 }
+
+/* Roles & Authentication — clear role directory */
+.dashboard-roles-panel{margin-top:22px;padding:clamp(18px,2.2vw,26px);border:1px solid #e4ebef;border-radius:16px;background:#fff;box-shadow:0 8px 26px rgba(23,48,63,.045)}
+.roles-auth-heading{align-items:center;margin-bottom:19px}
+.roles-auth-heading .section-eyebrow{display:inline-block;margin-bottom:7px;color:#0f766e;font-size:9px;font-weight:800;letter-spacing:1.15px}
+.roles-auth-heading h3{margin:0;color:#203846;font-size:16px;font-weight:800;letter-spacing:-.25px}
+.roles-auth-heading p{margin:5px 0 0;color:#7a8d98;font-size:11px}
+.roles-auth-total{min-width:88px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:9px 14px;border:1px solid #e2eeeb;border-radius:12px;background:#f7fbfa}
+.roles-auth-total strong{color:#176e64;font-size:21px;line-height:1.1;font-weight:800}
+.roles-auth-total span{margin-top:4px;color:#71857f;font-size:9px;font-weight:700}
+.roles-auth-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.role-auth-card{min-width:0;padding:14px;border:1px solid #e7edf0;border-radius:12px;background:linear-gradient(150deg,#fff 0%,#fcfdfd 100%);transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+.role-auth-card:hover{border-color:#c8ddd8;box-shadow:0 5px 16px rgba(24,65,59,.055);transform:translateY(-1px)}
+.role-auth-card.is-current{border-color:#9bcfc4;background:linear-gradient(145deg,#fbfffd,#f3faf7);box-shadow:inset 3px 0 0 #0f766e}
+.role-auth-card-top{display:flex;align-items:center;gap:10px;min-width:0}
+.role-auth-avatar{width:36px;height:36px;min-width:36px;display:grid;place-items:center;border:1px solid #e1ebe9;border-radius:10px;background:#f1f7f5;color:#31776c;font-size:10px;font-weight:800;letter-spacing:.2px}
+.is-platform-role .role-auth-avatar{border-color:#e6e1f5;background:#f5f2fc;color:#6855a6}
+.is-parent-role .role-auth-avatar{border-color:#dcebf2;background:#f1f8fb;color:#317d9b}
+.role-auth-title{min-width:0;flex:1}
+.role-auth-title h4{overflow:hidden;margin:0;color:#2c4350;font-size:11px;font-weight:800;text-overflow:ellipsis;white-space:nowrap}
+.role-auth-title>span{display:block;margin-top:3px;color:#91a0a9;font-size:9px}
+.role-current-badge{display:inline-flex;align-items:center;gap:5px;flex:none;padding:5px 7px;border:1px solid #cce8df;border-radius:20px;background:#eaf7f1;color:#21765b;font-size:8px;font-weight:800;white-space:nowrap}
+.role-current-badge>span{width:5px;height:5px;border-radius:50%;background:#24956e}
+.role-auth-description{min-height:34px;margin:12px 0;color:#667b87;font-size:10px;line-height:1.55}
+.role-auth-card-footer{display:flex;align-items:center;justify-content:space-between;gap:7px;padding-top:10px;border-top:1px solid #edf1f3}
+.role-access-badge{display:inline-flex;align-items:center;max-width:70%;padding:5px 8px;border-radius:6px;font-size:8px;font-weight:800;line-height:1.25}
+.role-access-badge.workspace{background:#eef4f8;color:#526b7b}
+.role-access-badge.platform{background:#f1edfb;color:#6652a4}
+.role-access-badge.linked{background:#eaf5fa;color:#317b98}
+.role-auth-state{color:#9aa8af;font-size:8px;font-weight:600;text-align:right}
+.roles-auth-note{display:flex;align-items:flex-start;gap:10px;margin-top:16px;padding:13px 14px;border:1px solid #e4efeb;border-radius:10px;background:#f7fbf9;color:#247365}
+.roles-auth-note>svg{flex:none;margin-top:1px}
+.roles-auth-note p{margin:0;color:#667e78;font-size:10px;line-height:1.65}
+.roles-auth-note p strong{color:#35685e;font-weight:800}
+@media(max-width:1050px){.roles-auth-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.dashboard-roles-panel{padding:15px}.roles-auth-grid{grid-template-columns:minmax(0,1fr);gap:9px}.role-auth-description{min-height:0}.roles-auth-heading{align-items:flex-start}.roles-auth-total{min-width:72px;padding:8px 10px}.role-auth-card{padding:12px}}
+@media(prefers-reduced-motion:reduce){.role-auth-card{transition:none}}
