@@ -52,13 +52,13 @@ STANDARD_USER_ROLES = {
 
 
 def require_roles(*roles: str):
-    """Authorize only the listed platform roles or explicitly supported school roles."""
-    allows_standard_users = bool(STANDARD_USER_ROLES.intersection(roles))
+    """Authorize only the exact roles listed by a route.
 
+    School operational access must use require_module_permission so that every
+    module/action is checked against the role permission matrix.
+    """
     def checker(user: User = Depends(current_user)) -> User:
         if user.role in roles:
-            return user
-        if allows_standard_users and user.role in STANDARD_USER_ROLES:
             return user
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return checker
@@ -70,14 +70,14 @@ def require_roles(*roles: str):
 _VIEW_ONLY = {"View"}
 _VIEW_CREATE_EDIT = {"View", "Create", "Edit"}
 _LEADERSHIP_MODULES = {
-    "dashboard", "chatbot", "approvals", "students", "staff", "classes",
-    "vehicles", "hostels", "documents", "maintenance", "fee-structures",
-    "student-fees", "payments", "fee-reports",
+    "dashboard", "chatbot", "students", "staff", "classes", "vehicles",
+    "hostels", "documents", "maintenance", "fee-structures", "student-fees",
+    "payments", "fee-reports",
 }
 DEFAULT_ROLE_PERMISSIONS: dict[str, dict[str, set[str]]] = {
-    "user": {m: set(_VIEW_CREATE_EDIT) for m in _LEADERSHIP_MODULES},
-    "admin": {m: set(_VIEW_CREATE_EDIT) for m in _LEADERSHIP_MODULES},
-    "principal": {m: set(_VIEW_CREATE_EDIT) for m in _LEADERSHIP_MODULES},
+    "user": {**{m: set(_VIEW_CREATE_EDIT) for m in _LEADERSHIP_MODULES}, "approvals": {"View", "Approve"}},
+    "admin": {**{m: set(_VIEW_CREATE_EDIT) for m in _LEADERSHIP_MODULES}, "approvals": {"View", "Approve"}},
+    "principal": {**{m: set(_VIEW_CREATE_EDIT) for m in _LEADERSHIP_MODULES}, "approvals": {"View", "Approve"}},
     "vice_principal": {
         **{m: set(_VIEW_ONLY) for m in ("dashboard", "chatbot", "fee-reports")},
         **{m: set(_VIEW_CREATE_EDIT) for m in ("students", "staff", "classes", "documents", "maintenance")},
