@@ -815,3 +815,150 @@
  .developer-permissions-panel .permission-footer button.primary{min-width:0}
  .developer-permissions-panel .permission-audit .panel-heading{align-items:flex-start}
 }
+
+
+/* Platform-wide button system: consistent sizing, hierarchy and accessibility */
+:root{
+  --button-primary:#0f766e;
+  --button-primary-hover:#0b625c;
+  --button-secondary-text:#405966;
+  --button-border:#d8e3e8;
+  --button-focus:rgba(15,118,110,.22);
+}
+button.primary,
+button.secondary,
+button.danger-button,
+button.danger,
+.heading-actions button,
+.form-actions button,
+.approval-actions button,
+.permission-bulk-actions button{
+  min-height:40px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:0 15px;
+  border-radius:9px;
+  font-family:'DM Sans',sans-serif;
+  font-size:11px;
+  font-weight:700;
+  line-height:1.2;
+  letter-spacing:.08px;
+  white-space:nowrap;
+  text-decoration:none;
+  transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+button.primary{
+  border:1px solid var(--button-primary);
+  background:var(--button-primary);
+  color:#fff;
+  box-shadow:0 2px 5px rgba(15,118,110,.14);
+}
+button.primary:hover:not(:disabled){
+  border-color:var(--button-primary-hover);
+  background:var(--button-primary-hover);
+  box-shadow:0 4px 10px rgba(15,118,110,.18);
+  transform:translateY(-1px);
+}
+button.secondary{
+  border:1px solid var(--button-border);
+  background:#fff;
+  color:var(--button-secondary-text);
+  box-shadow:0 1px 2px rgba(24,52,68,.035);
+}
+button.secondary:hover:not(:disabled){
+  border-color:#a9cbc4;
+  background:#f5faf8;
+  color:#176e64;
+}
+button.danger-button,
+button.danger{
+  border:1px solid #f0caca;
+  background:#fff;
+  color:#b54747;
+}
+button.danger-button:hover:not(:disabled),
+button.danger:hover:not(:disabled){
+  border-color:#e7a8a8;
+  background:#fff5f5;
+  color:#a83232;
+}
+button.primary:active:not(:disabled),
+button.secondary:active:not(:disabled),
+button.danger-button:active:not(:disabled),
+button.danger:active:not(:disabled){
+  transform:translateY(0);
+  box-shadow:none;
+}
+button.primary:focus-visible,
+button.secondary:focus-visible,
+button.danger-button:focus-visible,
+button.danger:focus-visible,
+button.icon-button:focus-visible,
+.heading-actions button:focus-visible,
+.form-actions button:focus-visible,
+.approval-actions button:focus-visible,
+.permission-bulk-actions button:focus-visible,
+.quick-item:focus-visible,
+.platform-alert-item:focus-visible{
+  outline:3px solid var(--button-focus);
+  outline-offset:2px;
+}
+button:disabled{
+  opacity:.52;
+  cursor:not-allowed;
+  box-shadow:none!important;
+  transform:none!important;
+}
+.icon-button{
+  width:36px;
+  height:36px;
+  min-width:36px;
+  padding:0;
+  border:1px solid transparent;
+  border-radius:9px;
+  background:transparent;
+  color:#687d89;
+  transition:background-color .16s ease,border-color .16s ease,color .16s ease;
+}
+.icon-button:hover:not(:disabled){
+  border-color:#e3ebef;
+  background:#f3f7f8;
+  color:#176e64;
+}
+.heading-actions,.form-actions,.approval-actions,.permission-bulk-actions{
+  align-items:center;
+  gap:9px;
+}
+.heading-actions button{min-width:104px}
+.form-actions button{min-width:104px}
+.approval-actions button{min-height:36px;padding-inline:12px}
+.permission-bulk-actions button{min-height:38px}
+.quick-item{
+  min-height:48px;
+  border-radius:10px;
+  transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+.quick-item:hover:not(:disabled){
+  border-color:#a6d8ce;
+  background:#f5fbf9;
+  box-shadow:0 3px 10px rgba(20,72,65,.06);
+  transform:translateY(-1px);
+}
+.platform-alert-item{
+  min-height:68px;
+  border-radius:11px;
+}
+@media(max-width:720px){
+  .heading-actions button,.form-actions button{min-width:0}
+  .heading-actions button{flex:1 1 auto}
+  .form-actions button{flex:1 1 130px}
+  .approval-actions{flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){
+  button.primary,button.secondary,button.danger-button,button.danger,
+  .icon-button,.quick-item,.platform-alert-item{
+    transition:none!important;
+  }
+}
