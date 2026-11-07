@@ -22,7 +22,7 @@ from sqlalchemy import select, func, text
 from sqlalchemy.exc import IntegrityError
 from .database import Base, engine, get_db, SessionLocal
 from . import models, schemas
-from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission
+from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission, default_permission_matrix
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -125,27 +125,6 @@ RBAC_MODULES = {
 }
 RBAC_ACTIONS = {"View", "Create", "Edit", "Delete", "Approve", "Export"}
 
-DEFAULT_ROLE_MODULES = {
-    "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports"],
-    "teacher": ["dashboard", "chatbot", "students", "classes", "documents"],
-    "account": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "clerk": ["dashboard", "chatbot", "students", "student-fees", "payments", "documents"],
-    "office_assistant": ["dashboard", "chatbot", "students", "staff", "documents", "approvals"],
-    "librarian": ["dashboard", "chatbot", "students", "documents"],
-    "lab_assistant": ["dashboard", "chatbot", "documents", "maintenance"],
-    "it_administrator": ["dashboard", "chatbot", "staff", "documents", "maintenance", "approvals"],
-    "transport_manager": ["dashboard", "chatbot", "students", "vehicles", "documents", "maintenance"],
-    "hostel_warden": ["dashboard", "chatbot", "students", "hostels", "documents", "maintenance"],
-    "security_guard": ["dashboard", "chatbot", "students"],
-    "others": ["dashboard", "chatbot"],
-    "parent": ["parent-portal", "chatbot"],
-}
-
-
 
 def write_audit_log(db: Session, actor: models.User, event_type: str, target_type: str = "", target_id: str = "", details: dict | None = None):
     db.add(models.AuditLog(
@@ -158,8 +137,7 @@ def write_audit_log(db: Session, actor: models.User, event_type: str, target_typ
 
 
 def _default_permission_matrix(role: str) -> dict[str, bool]:
-    allowed_modules = set(DEFAULT_ROLE_MODULES.get(role, ["dashboard", "chatbot"]))
-    return {f"{module}:{action}": (module in allowed_modules and action in {"View", "Create", "Edit", "Delete"}) or (module == "approvals" and action == "Approve" and module in allowed_modules) for module in RBAC_MODULES for action in RBAC_ACTIONS}
+    return default_permission_matrix(role, RBAC_MODULES, RBAC_ACTIONS)
 
 
 def _permission_scope_matrix(db: Session, role: str, school_id: int | None):
