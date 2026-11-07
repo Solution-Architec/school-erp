@@ -360,7 +360,7 @@ function App(){
  const [paymentFeeId,setPaymentFeeId]=useState('')
  const [paymentAmount,setPaymentAmount]=useState('')
  const [paymentMethod,setPaymentMethod]=useState('cash')
- const allowedModuleKeys=user?.role==='super_admin'?modules.map(m=>m.key):rbacPermissions?.role===user?.role?modules.filter(m=>Boolean(rbacPermissions.permissions?.[m.key+':View'])).map(m=>m.key):[]
+ const allowedModuleKeys=user?.role==='super_admin'?modules.map(m=>m.key):rbacPermissions&&rbacPermissions.role===user?.role?modules.filter(m=>Boolean(rbacPermissions.permissions?.[m.key+':View'])).map(m=>m.key):[]
  const availableModules=[...modules.filter(m=>allowedModuleKeys.includes(m.key)),...(user?.role==='super_admin'?[developerAccountModule]:[])]
  const selected=([...modules,developerAccountModule].find(m=>m.key===active))||modules[0]
  const roleLabel=roleLabels[user?.role||'user']||'School User'
