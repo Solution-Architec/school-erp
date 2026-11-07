@@ -284,7 +284,7 @@ function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers
    <div className="panel-heading"><div><h3>All registered user accounts</h3><p>Platform-wide directory. Select an account to inspect its school links, module data counts and effective permissions.</p></div><span className="record-count">{total} accounts</span></div>
    <div className="developer-account-filters">
     <label className="developer-account-search">Search name or email<input value={search} onChange={e=>{setPage(0);setSearch(e.target.value)}} placeholder="Search all accounts…"/></label>
-    <label>Role<select value={roleFilter} onChange={e=>{setPage(0);setRoleFilter(e.target.value)}}><option value="">All roles</option>{Object.entries(roleLabels).filter(([key])=>key!=='user'&&key!=='accountant').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+    <label>Role<select value={roleFilter} onChange={e=>{setPage(0);setRoleFilter(e.target.value)}}><option value="">All roles</option>{Object.entries(roleLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
     <label>School<select value={schoolFilter} onChange={e=>{setPage(0);setSchoolFilter(e.target.value)}}><option value="">All schools</option>{schools.map(s=><option key={s.id} value={String(s.id)}>{s.name}</option>)}</select></label>
     <label>Status<select value={statusFilter} onChange={e=>{setPage(0);setStatusFilter(e.target.value)}}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="pending">Pending approval</option></select></label>
    </div>
