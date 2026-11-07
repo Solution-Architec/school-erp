@@ -414,3 +414,7 @@ class ParentTeacherMessageOut(BaseModel):
     created_at: datetime
     read_at: datetime | None
     model_config = ConfigDict(from_attributes=True)
+
+class StudentLeaveReviewIn(BaseModel):
+    status: Literal["approved", "rejected"]
+    reviewer_note: str = Field(default="", max_length=500)
