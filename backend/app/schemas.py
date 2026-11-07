@@ -291,6 +291,7 @@ class StudentFeeOut(StudentFeeIn):
 
 
 class AttendanceIn(BaseModel):
+    school_id: int | None = Field(default=None, gt=0)
     student_id: int = Field(gt=0)
     attendance_date: date
     status: Literal["present", "absent", "late", "leave"] = "present"
@@ -303,6 +304,7 @@ class AttendanceOut(AttendanceIn):
     model_config = ConfigDict(from_attributes=True)
 
 class TimetableIn(BaseModel):
+    school_id: int | None = Field(default=None, gt=0)
     class_name: str = Field(min_length=1, max_length=80)
     section: str = Field(default="A", max_length=40)
     day_of_week: Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -325,6 +327,7 @@ class TimetableOut(TimetableIn):
     model_config = ConfigDict(from_attributes=True)
 
 class ExamIn(BaseModel):
+    school_id: int | None = Field(default=None, gt=0)
     name: str = Field(min_length=1, max_length=120)
     class_name: str = Field(min_length=1, max_length=80)
     section: str = Field(default="", max_length=40)
@@ -346,6 +349,7 @@ class ExamOut(ExamIn):
     model_config = ConfigDict(from_attributes=True)
 
 class ReportCardIn(BaseModel):
+    school_id: int | None = Field(default=None, gt=0)
     student_id: int = Field(gt=0)
     exam_id: int = Field(gt=0)
     marks_obtained: Decimal = Field(ge=0, max_digits=8, decimal_places=2)
