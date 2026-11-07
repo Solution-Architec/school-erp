@@ -6,8 +6,8 @@ A modular-monolith School ERP built around the architecture in the project diagr
 
 - **Frontend:** React + TypeScript + Vite
 - **Backend:** Python + FastAPI
-- **Database:** PostgreSQL (SQLite supported for local development)
-- **Authentication:** JWT access tokens + password hashing + role-based permissions
+- **Database:** PostgreSQL 16+ (the current schema migration supports PostgreSQL only)
+- **Authentication:** JWT access tokens with per-user revocation version + password hashing + role-based permissions
 - **Deployment:** Docker Compose, Nginx, Linux
 - **API documentation:** OpenAPI / Swagger UI
 
@@ -31,11 +31,7 @@ docker compose up --build -d
    - API docs: http://localhost:8000/docs
    - API health: http://localhost:8000/api/health
 
-Default bootstrap administrator:
-- Email: `admin@example.com`
-- Password: `ChangeMe123!`
-
-**Do not use the bootstrap credentials in production.** Change the password, JWT secret, database password, and CORS origins before exposing the application.
+Bootstrap administrator credentials are created from `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env`. There are no built-in default credentials. Use a unique password of at least 16 characters and a randomly generated JWT secret of at least 32 characters.
 
 ## Local development
 
@@ -46,10 +42,10 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-export DATABASE_URL=sqlite:///./school_erp.db
-export JWT_SECRET_KEY='replace-with-a-long-random-secret'
-export BOOTSTRAP_ADMIN_EMAIL=admin@example.com
-export BOOTSTRAP_ADMIN_PASSWORD='ChangeMe123!'
+export DATABASE_URL='postgresql+psycopg://school_erp:YOUR_DB_PASSWORD@localhost:5432/school_erp'
+export JWT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+export BOOTSTRAP_ADMIN_EMAIL='admin@your-school.example'
+export BOOTSTRAP_ADMIN_PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
 uvicorn app.main:app --reload
 ```
 
@@ -134,7 +130,7 @@ The login page shows a **Demo workspace** role selector. Selecting a role fills 
 - Approved FAQ chatbot endpoint and Help Assistant UI
 - Student CSV / XLSX import
 - Searchable admin tables and create forms
-- PostgreSQL deployment and SQLite local development
+- PostgreSQL deployment and local development
 
 See [Architecture and implementation notes](docs/architecture.md) for component boundaries, tenant isolation, API domains, and deployment notes.
 
