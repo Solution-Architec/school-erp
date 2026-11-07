@@ -1097,6 +1097,175 @@ def list_users(db: Session = Depends(get_db), user: models.User = Depends(requir
     return list(db.scalars(stmt).all())
 
 
+@app.get("/api/developer/user-accounts", tags=["developer"])
+def developer_user_accounts(
+    q: str = Query(default="", max_length=160),
+    role: str = Query(default="", max_length=40),
+    school_id: int | None = Query(default=None, gt=0),
+    status: str = Query(default="all", pattern="^(all|active|inactive|pending)$"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("super_admin")),
+):
+    """Global account directory. Never returns credentials or password hashes."""
+    filters = []
+    if q.strip():
+        term = f"%{q.strip()}%"
+        filters.append(or_(models.User.name.ilike(term), models.User.email.ilike(term)))
+    if role.strip():
+        filters.append(models.User.role == role.strip().lower())
+    if school_id is not None:
+        filters.append(models.User.school_id == school_id)
+    if status == "active":
+        filters.append(models.User.is_active.is_(True))
+        filters.append(models.User.approval_status == "approved")
+    elif status == "inactive":
+        filters.append(models.User.is_active.is_(False))
+    elif status == "pending":
+        filters.append(models.User.approval_status == "pending")
+
+    base = select(models.User, models.School.name, models.School.code,
+                  models.School.is_active, models.School.approval_status).outerjoin(
+        models.School, models.User.school_id == models.School.id
+    )
+    if filters:
+        base = base.where(*filters)
+    total = db.scalar(select(func.count()).select_from(models.User).where(*filters)) or 0
+    records = db.execute(base.order_by(models.User.id.desc()).offset(offset).limit(limit)).all()
+    role_counts = db.execute(select(models.User.role, func.count()).group_by(models.User.role)).all()
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "role_counts": {role_name: count for role_name, count in role_counts},
+        "users": [{
+            "id": account.id,
+            "name": account.name,
+            "email": account.email,
+            "role": account.role,
+            "school_id": account.school_id,
+            "school_name": school_name,
+            "school_code": school_code,
+            "school_is_active": school_is_active,
+            "school_approval_status": school_approval_status,
+            "is_school_owner": account.is_school_owner,
+            "is_active": account.is_active,
+            "email_verified": account.email_verified,
+            "approval_status": account.approval_status,
+            "created_at": account.created_at,
+        } for account, school_name, school_code, school_is_active, school_approval_status in records],
+    }
+
+
+@app.get("/api/developer/user-accounts/{account_id}/overview", tags=["developer"])
+def developer_user_account_overview(
+    account_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("super_admin")),
+):
+    """Show the selected account, effective access and every school-linked table count."""
+    account = db.get(models.User, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="User account not found")
+
+    school = db.get(models.School, account.school_id) if account.school_id else None
+    if account.role == "super_admin":
+        permissions = {"*": True}
+        global_configured = school_configured = True
+    else:
+        permissions, global_configured, school_configured = _permission_scope_matrix(
+            db, account.role, account.school_id
+        )
+
+    table_to_module = {
+        "users": "user-accounts",
+        "students": "students",
+        "staff": "staff",
+        "classes": "classes",
+        "vehicles": "vehicles",
+        "hostels": "hostels",
+        "documents": "documents",
+        "maintenance_requests": "maintenance",
+        "fee_structures": "fee-structures",
+        "student_fees": "student-fees",
+        "fee_payments": "payments",
+        "parent_student_links": "parent-portal",
+        "role_permissions": "access-control",
+        "library_books": "library-management",
+        "library_loans": "library-management",
+    }
+    table_rows = []
+    module_counts: dict[str, int] = {}
+    if account.school_id is not None:
+        # Discover all mapped tenant tables dynamically. New modules with a
+        # school_id column are included automatically instead of silently
+        # disappearing when a static module list is incomplete.
+        for mapper in Base.registry.mappers:
+            model = mapper.class_
+            if "school_id" not in model.__table__.columns:
+                continue
+            table_name = model.__table__.name
+            count = db.scalar(
+                select(func.count()).select_from(model).where(model.school_id == account.school_id)
+            ) or 0
+            module_key = table_to_module.get(table_name, "other")
+            table_rows.append({"table": table_name, "module": module_key, "count": count})
+            module_counts[module_key] = module_counts.get(module_key, 0) + count
+
+    staff_matches = []
+    if account.school_id is not None:
+        staff_matches = [{
+            "id": item.id, "employee_no": item.employee_no,
+            "full_name": item.full_name, "designation": item.designation,
+            "status": item.status,
+        } for item in db.scalars(select(models.Staff).where(
+            models.Staff.school_id == account.school_id,
+            func.lower(models.Staff.email) == account.email.lower()
+        ).order_by(models.Staff.id.desc())).all()]
+
+    parent_links = []
+    if account.school_id is not None:
+        linked_rows = db.execute(
+            select(models.ParentStudentLink, models.Student)
+            .join(models.Student, models.Student.id == models.ParentStudentLink.student_id)
+            .where(models.ParentStudentLink.school_id == account.school_id,
+                   models.ParentStudentLink.parent_user_id == account.id,
+                   models.ParentStudentLink.is_active.is_(True))
+            .order_by(models.Student.full_name)
+        ).all()
+        parent_links = [{
+            "link_id": link.id, "relationship": link.relationship,
+            "student_id": student.id, "admission_no": student.admission_no,
+            "student_name": student.full_name, "class_name": student.class_name,
+            "section": student.section,
+        } for link, student in linked_rows]
+
+    return {
+        "account": {
+            "id": account.id, "name": account.name, "email": account.email,
+            "role": account.role, "school_id": account.school_id,
+            "is_school_owner": account.is_school_owner,
+            "is_active": account.is_active, "email_verified": account.email_verified,
+            "approval_status": account.approval_status, "created_at": account.created_at,
+        },
+        "school": ({
+            "id": school.id, "name": school.name, "code": school.code,
+            "is_active": school.is_active, "approval_status": school.approval_status,
+        } if school else None),
+        "permissions": permissions,
+        "permission_configuration": {
+            "global_configured": global_configured,
+            "school_configured": school_configured,
+            "effective_scope": "school override + global defaults" if school_configured else "global defaults",
+        },
+        "module_counts": module_counts,
+        "linked_tables": sorted(table_rows, key=lambda item: (item["module"], item["table"])),
+        "staff_records": staff_matches,
+        "parent_student_links": parent_links,
+    }
+
+
 @app.post("/api/users", response_model=schemas.UserOut, tags=["users"])
 def create_user(payload: dict, db: Session = Depends(get_db),
                 user: models.User = Depends(require_roles("super_admin"))):
