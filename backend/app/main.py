@@ -192,6 +192,28 @@ def save_role_permissions(role: str, payload: dict, school_id: int | None = Quer
     return {"message": "Client-specific permissions saved" if school_id is not None else "ERP-wide defaults saved", "role": role, "school_id": school_id, "scope": "school" if school_id is not None else "global", "saved": len(expected)}
 
 
+@app.delete("/api/rbac/roles/{role}/permissions", tags=["rbac"])
+def reset_school_role_permissions(role: str, school_id: int = Query(gt=0),
+                                  db: Session = Depends(get_db),
+                                  user: models.User = Depends(require_roles("super_admin"))):
+    """Remove one school's overrides so it inherits the ERP-wide matrix again."""
+    role = role.strip().lower()
+    if role not in RBAC_ROLES:
+        raise HTTPException(status_code=404, detail="Role not found")
+    if not db.get(models.School, school_id):
+        raise HTTPException(status_code=404, detail="School not found")
+    grants = db.scalars(select(models.RolePermission).where(
+        models.RolePermission.school_id == school_id,
+        models.RolePermission.role == role)).all()
+    for grant in grants:
+        db.delete(grant)
+    write_audit_log(db, user, "rbac.permissions.reset", "school", str(school_id),
+                    {"role": role, "school_id": school_id, "removed_grants": len(grants)})
+    db.commit()
+    return {"message": "Client now inherits ERP-wide permissions", "role": role,
+            "school_id": school_id, "removed": len(grants)}
+
+
 @app.get("/api/rbac/me", tags=["rbac"])
 def my_module_permissions(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
     if user.role == "super_admin": return {"role": user.role, "configured": True, "permissions": {"*": True}}
