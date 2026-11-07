@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
         conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
         conn.execute(text("ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_role_permissions_school_id ON role_permissions (school_id)"))
         conn.execute(text("ALTER TABLE role_permissions DROP CONSTRAINT IF EXISTS uq_role_permission_scope"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_global ON role_permissions (role, module_key, action) WHERE school_id IS NULL"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_school ON role_permissions (school_id, role, module_key, action) WHERE school_id IS NOT NULL"))
