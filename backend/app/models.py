@@ -357,3 +357,31 @@ class ParentTeacherMessage(Base):
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class LibraryBook(Base):
+    __tablename__ = "library_books"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(180), index=True)
+    author: Mapped[str] = mapped_column(String(180), default="")
+    isbn: Mapped[str] = mapped_column(String(32), default="", index=True)
+    publisher: Mapped[str] = mapped_column(String(180), default="")
+    category: Mapped[str] = mapped_column(String(100), default="")
+    total_copies: Mapped[int] = mapped_column(Integer, default=1)
+    available_copies: Mapped[int] = mapped_column(Integer, default=1)
+    shelf_location: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class LibraryLoan(Base):
+    __tablename__ = "library_loans"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("library_books.id"), nullable=False, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False, index=True)
+    issued_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    due_date: Mapped[date] = mapped_column(Date, index=True)
+    returned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="issued", index=True)

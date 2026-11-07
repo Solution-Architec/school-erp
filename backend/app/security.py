@@ -87,6 +87,12 @@ def require_module_permission(module_key: str, action: str, *fallback_roles: str
             if grant.enabled:
                 return user
             raise HTTPException(status_code=403, detail=f"Permission denied: {module_key} / {action}")
+        if module_key in {"library-books", "library-loans"}:
+            library_roles = {"admin", "principal", "vice_principal", "user", "librarian"}
+            if user.role not in library_roles:
+                raise HTTPException(status_code=403, detail="Library access is restricted to school leadership and librarians")
+            if action == "Delete" and user.role not in {"admin", "user"}:
+                raise HTTPException(status_code=403, detail="Only school administrators can delete library records")
         allows_standard_users = bool(STANDARD_USER_ROLES.intersection(fallback_roles))
         if user.role in fallback_roles or (allows_standard_users and user.role not in ("parent", "super_admin")):
             return user
