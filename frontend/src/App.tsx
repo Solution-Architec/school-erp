@@ -182,7 +182,7 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
   <main className="auth-main">
    <div className="auth-mobile-brand"><div className="auth-brand-icon"><GraduationCap size={22}/></div><strong>SchoolOS</strong></div>
    <section className="auth-form-shell">
-    <form className="auth-form-card" onSubmit={submit}>
+    <form className={"auth-form-card " + (mode === "school" ? "school-registration-card" : "")} onSubmit={submit}>
      <div className="auth-form-top"><span className="auth-step-icon">{mode==='school'?<Building2 size={20}/>:mode==='staff'?<Users size={20}/>:mode==='verify'?<ShieldCheck size={20}/>:<GraduationCap size={20}/>}</span><span className="auth-form-context">{mode==='school'?'SCHOOL SETUP':mode==='staff'?'STAFF REGISTRATION':mode==='signin'?'YOUR SCHOOL WORKSPACE':'ACCOUNT ACCESS'}</span></div>
      <p className="eyebrow">SCHOOL MANAGEMENT PLATFORM</p>
      <h1>{titles[mode]}</h1>
