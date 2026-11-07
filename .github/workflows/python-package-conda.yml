@@ -18,6 +18,7 @@ jobs:
       - name: Check Python syntax and undefined names
         run: flake8 backend --count --select=E9,F63,F7,F82 --show-source --statistics
       - name: Run backend tests
+        working-directory: backend
         run: pytest -q
   frontend:
     runs-on: ubuntu-latest
