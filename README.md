@@ -128,7 +128,7 @@ The login page shows a **Demo workspace** role selector. Selecting a role fills 
 - Roles: `super_admin`, `admin`, `accountant`, `teacher`, `transport_manager`, `hostel_warden`, `student`, `parent`
 - Tenant / school onboarding and school assignment
 - Tenant-scoped dashboard statistics and API queries
-- Students, staff, classes, transport vehicles, hostels, documents, maintenance requests
+- Students, staff, classes, library catalog and issue/return tracking, transport vehicles, hostels, documents, maintenance requests
 - Fee structures, student fees, payment recording, fee dues and fee reports
 - Parent Portal with explicit parent-to-student association and tenant-scoped fee balances
 - Approved FAQ chatbot endpoint and Help Assistant UI
