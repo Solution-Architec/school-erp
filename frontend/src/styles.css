@@ -1049,3 +1049,54 @@ button:disabled{
 @keyframes workspace-refresh-pulse{0%,100%{box-shadow:0 10px 32px rgba(20,65,72,.10)}50%{box-shadow:0 12px 38px rgba(15,118,110,.22)}}
 @keyframes workspace-refresh-fade-in{from{opacity:0}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.workspace-refresh-overlay,.workspace-refresh-indicator,.workspace-refresh-indicator svg{animation:none}}
+
+/* School registration: keep the complete form comfortable on shorter viewports. */
+@media (min-width:761px) and (max-height:900px){
+  .auth-page{min-height:100svh;align-items:stretch}
+  .auth-showcase{min-height:100svh;padding-top:25px;padding-bottom:25px}
+  .auth-showcase-copy{margin-top:clamp(28px,5vh,52px)}
+  .auth-visual{height:clamp(170px,25vh,235px);margin:10px 0}
+  .auth-main{padding-top:18px;padding-bottom:18px;align-items:flex-start}
+  .school-registration-card{padding:22px 28px;border-radius:17px}
+  .school-registration-card .auth-form-top{margin-bottom:12px}
+  .school-registration-card .eyebrow{margin-bottom:6px}
+  .school-registration-card h1{font-size:27px}
+  .school-registration-card .auth-intro{font-size:11px;line-height:1.45;margin:6px 0 12px}
+  .school-registration-card .auth-section-label{gap:9px;margin:11px 0 8px;padding-bottom:7px}
+  .school-registration-card .auth-section-label>span{height:23px;width:23px}
+  .school-registration-card .auth-section-label strong{font-size:10px}
+  .school-registration-card .auth-section-label small{font-size:8px;margin-top:2px}
+  .school-registration-card .auth-section-admin{margin-top:12px}
+  .school-registration-card .auth-field{margin-bottom:9px}
+  .school-registration-card .auth-field>label{font-size:10px;margin-bottom:5px}
+  .school-registration-card .auth-field>input,
+  .school-registration-card .auth-field>select{height:39px;font-size:11px}
+  .school-registration-card .auth-field>small{font-size:8px;margin-top:4px}
+  .school-registration-card .auth-submit{min-height:42px;margin-top:3px}
+  .school-registration-card .auth-links{margin-top:11px}
+  .school-registration-card .auth-copyright{margin-top:9px}
+}
+@media (max-width:760px){
+  .auth-main{justify-content:flex-start;min-height:100svh}
+  .auth-mobile-brand{margin:0 0 14px}
+  .school-registration-card{padding-top:19px;padding-bottom:19px}
+  .school-registration-card .auth-form-top{margin-bottom:14px}
+  .school-registration-card .auth-intro{margin:8px 0 17px}
+  .school-registration-card .auth-section-label{margin:16px 0 10px}
+  .school-registration-card .auth-section-admin{margin-top:17px}
+  .school-registration-card .auth-field{margin-bottom:13px}
+}
+@media (max-height:760px) and (min-width:761px){
+  .auth-showcase-copy{margin-top:22px}
+  .auth-visual{height:150px;margin:5px 0}
+  .school-registration-card{padding:17px 24px}
+  .school-registration-card .auth-form-top{margin-bottom:8px}
+  .school-registration-card .auth-intro{margin:5px 0 8px}
+  .school-registration-card .auth-section-label{margin:8px 0 6px}
+  .school-registration-card .auth-section-admin{margin-top:8px}
+  .school-registration-card .auth-field{margin-bottom:7px}
+  .school-registration-card .auth-field>input,
+  .school-registration-card .auth-field>select{height:36px}
+  .school-registration-card .auth-links{margin-top:7px}
+  .school-registration-card .auth-copyright{margin-top:5px}
+}
