@@ -686,7 +686,81 @@ def dashboard(db: Session = Depends(get_db), user: models.User = Depends(require
     return result
 
 
-def register_crud(path, model, schema_in, schema_out, roles):
+
+def _linked_parent_student(db: Session, user: models.User, student_id: int):
+    link = db.scalar(select(models.ParentStudentLink).where(
+        models.ParentStudentLink.parent_user_id == user.id,
+        models.ParentStudentLink.student_id == student_id,
+        models.ParentStudentLink.school_id == user.school_id,
+        models.ParentStudentLink.is_active.is_(True),
+    ))
+    return link
+
+@app.post("/api/parent-portal/leave", response_model=schemas.StudentLeaveOut, tags=["student-leave"])
+def parent_submit_leave(payload: schemas.StudentLeaveIn, db: Session = Depends(get_db),
+                        user: models.User = Depends(current_user)):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
+    student = db.get(models.Student, payload.student_id)
+    if not student or student.school_id != user.school_id or not _linked_parent_student(db, user, student.id):
+        raise HTTPException(status_code=404, detail="Linked student not found")
+    obj = models.StudentLeaveRequest(school_id=user.school_id, student_id=student.id,
+        start_date=payload.start_date, end_date=payload.end_date, reason=payload.reason, status="pending")
+    db.add(obj); db.commit(); db.refresh(obj)
+    return obj
+
+@app.post("/api/student-leave/{item_id}/review", response_model=schemas.StudentLeaveOut, tags=["student-leave"])
+def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, db: Session = Depends(get_db),
+                         user: models.User = Depends(require_module_permission("student-leave", "Approve", *ADMIN_ROLES))):
+    obj = db.get(models.StudentLeaveRequest, item_id)
+    if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    obj.status = decision.status
+    obj.reviewer_note = decision.reviewer_note
+    obj.reviewed_by = user.id
+    db.commit(); db.refresh(obj)
+    return obj
+
+@app.get("/api/parent-messages", response_model=list[schemas.ParentTeacherMessageOut], tags=["parent-messages"])
+def list_parent_teacher_messages(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+    if user.role == "super_admin":
+        raise HTTPException(status_code=403, detail="Use a school account to access conversations")
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
+    stmt = select(models.ParentTeacherMessage).where(
+        models.ParentTeacherMessage.school_id == user.school_id,
+        or_(models.ParentTeacherMessage.sender_user_id == user.id,
+            models.ParentTeacherMessage.recipient_user_id == user.id)
+    ).order_by(models.ParentTeacherMessage.created_at.asc()).limit(500)
+    return list(db.scalars(stmt).all())
+
+@app.post("/api/parent-messages", response_model=schemas.ParentTeacherMessageOut, tags=["parent-messages"])
+def send_parent_teacher_message(payload: schemas.ParentTeacherMessageIn, db: Session = Depends(get_db),
+                                user: models.User = Depends(current_user)):
+    if user.role not in ("parent", "teacher", "principal", "vice_principal", "admin", "user") or not user.school_id:
+        raise HTTPException(status_code=403, detail="School parent or teaching account required")
+    student = db.get(models.Student, payload.student_id)
+    recipient = db.get(models.User, payload.recipient_user_id)
+    if not student or student.school_id != user.school_id or not recipient or recipient.school_id != user.school_id:
+        raise HTTPException(status_code=404, detail="Student or recipient not found in your school")
+    if recipient.id == user.id:
+        raise HTTPException(status_code=422, detail="Choose another conversation participant")
+    if user.role == "parent":
+        if not _linked_parent_student(db, user, student.id):
+            raise HTTPException(status_code=404, detail="Linked student not found")
+        if recipient.role not in ("teacher", "principal", "vice_principal", "admin", "user"):
+            raise HTTPException(status_code=403, detail="Parents can message school staff only")
+    elif recipient.role == "parent":
+        if not _linked_parent_student(db, recipient, student.id):
+            raise HTTPException(status_code=403, detail="Recipient is not linked to this student")
+    elif recipient.role not in ("teacher", "principal", "vice_principal", "admin", "user", "parent"):
+        raise HTTPException(status_code=403, detail="Recipient is not an authorized school participant")
+    obj = models.ParentTeacherMessage(school_id=user.school_id, student_id=student.id,
+        sender_user_id=user.id, recipient_user_id=recipient.id, subject=payload.subject, body=payload.body)
+    db.add(obj); db.commit(); db.refresh(obj)
+    return obj
+
+\ndef register_crud(path, model, schema_in, schema_out, roles):
     def validate_related_records(values, user, db):
         if model is models.StudentFee:
             student = db.get(models.Student, values.get("student_id"))
