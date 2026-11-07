@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE role_permissions DROP CONSTRAINT IF EXISTS uq_role_permission_scope"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_global ON role_permissions (role, module_key, action) WHERE school_id IS NULL"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_school ON role_permissions (school_id, role, module_key, action) WHERE school_id IS NOT NULL"))
-        tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments", "attendance_records", "timetable_entries", "exams", "report_cards", "homework", "student_leave_requests", "parent_teacher_messages")
+        tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments", "attendance_records", "timetable_entries", "exams", "report_cards", "homework", "student_leave_requests", "parent_teacher_messages", "library_books", "library_loans")
         all_school_tables = ("users",) + tenant_tables
         for table in all_school_tables:
             conn.execute(text('ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)'))
@@ -108,21 +108,21 @@ RBAC_ROLES = {
 RBAC_MODULES = {
     "dashboard", "parent-portal", "chatbot", "approvals", "schools", "students", "staff",
     "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures",
-    "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages"
+    "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"
 }
 RBAC_ACTIONS = {"View", "Create", "Edit", "Delete", "Approve", "Export"}
 
 DEFAULT_ROLE_MODULES = {
-    "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages"],
-    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards"],
-    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards"],
-    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports", "attendance", "timetable", "exams", "report-cards"],
+    "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
+    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "library-books", "library-loans"],
+    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "library-books", "library-loans"],
+    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports", "attendance", "timetable", "exams", "report-cards", "library-books", "library-loans"],
     "teacher": ["dashboard", "chatbot", "students", "classes", "documents", "attendance", "timetable", "exams", "report-cards"],
     "account": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
     "accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
     "clerk": ["dashboard", "chatbot", "students", "student-fees", "payments", "documents"],
     "office_assistant": ["dashboard", "chatbot", "students", "staff", "documents", "approvals"],
-    "librarian": ["dashboard", "chatbot", "students", "documents"],
+    "librarian": ["dashboard", "chatbot", "students", "documents", "library-books", "library-loans"],
     "lab_assistant": ["dashboard", "chatbot", "documents", "maintenance"],
     "it_administrator": ["dashboard", "chatbot", "staff", "documents", "maintenance", "approvals"],
     "transport_manager": ["dashboard", "chatbot", "students", "vehicles", "documents", "maintenance"],
@@ -789,6 +789,14 @@ def register_crud(path, model, schema_in, schema_out, roles):
             student = db.get(models.Student, values.get("owner_id"))
             if not student or (user.role != "super_admin" and student.school_id != user.school_id):
                 raise HTTPException(status_code=404, detail="Document owner not found in your school")
+        if model is models.LibraryLoan:
+            target_school = values.get("school_id") or user.school_id
+            book = db.get(models.LibraryBook, values.get("book_id"))
+            student = db.get(models.Student, values.get("student_id"))
+            if not book or not student or (target_school and (book.school_id != target_school or student.school_id != target_school)):
+                raise HTTPException(status_code=404, detail="Book or student not found in the selected school")
+            if book.available_copies < 1:
+                raise HTTPException(status_code=409, detail="No available copies of this book")
         if model is models.StudentLeaveRequest:
             student = db.get(models.Student, values.get("student_id"))
             target_school = values.get("school_id") or user.school_id
@@ -813,7 +821,10 @@ def register_crud(path, model, schema_in, schema_out, roles):
         scope = school_scope(model, user)
         if scope is not None:
             stmt = stmt.where(scope)
-        if q and model is models.Student:
+        if q and model is models.LibraryBook:
+            term = f"%{q}%"
+            stmt = stmt.where(or_(models.LibraryBook.title.ilike(term), models.LibraryBook.author.ilike(term), models.LibraryBook.isbn.ilike(term)))
+        elif q and model is models.Student:
             term = f"%{q}%"
             stmt = stmt.where(or_(
                 models.Student.full_name.ilike(term),
@@ -861,6 +872,14 @@ def register_crud(path, model, schema_in, schema_out, roles):
             values["uploaded_by"] = user.id
         if model is models.AttendanceRecord:
             values["marked_by"] = user.id
+        if model is models.LibraryBook:
+            values["available_copies"] = values["total_copies"]
+        if model is models.LibraryLoan:
+            book = db.scalar(select(models.LibraryBook).where(models.LibraryBook.id == values["book_id"], models.LibraryBook.school_id == values["school_id"]).with_for_update())
+            if not book or book.available_copies < 1:
+                raise HTTPException(status_code=409, detail="No available copies of this book")
+            book.available_copies -= 1
+            values.update({"issued_by": user.id, "status": "issued", "issued_at": datetime.utcnow(), "returned_at": None})
         validate_related_records(values, user, db)
         obj = model(**values)
         db.add(obj)
@@ -905,6 +924,17 @@ def register_crud(path, model, schema_in, schema_out, roles):
                 values["school_id"] = user.school_id
             elif not values.get("school_id"):
                 values["school_id"] = obj.school_id
+        if model is models.LibraryLoan:
+            if obj.status != "issued":
+                raise HTTPException(status_code=409, detail="Returned loan records cannot be edited")
+            if values.get("book_id") != obj.book_id or values.get("student_id") != obj.student_id or values.get("school_id") != obj.school_id:
+                raise HTTPException(status_code=422, detail="A loan's book, student, and school cannot be changed after issue")
+            values = {"due_date": values["due_date"]}
+        if model is models.LibraryBook:
+            copy_delta = values["total_copies"] - obj.total_copies
+            if obj.available_copies + copy_delta < 0:
+                raise HTTPException(status_code=409, detail="Total copies cannot be lower than the number currently issued")
+            obj.available_copies += copy_delta
         validate_related_records(values, user, db)
         for key, value in values.items():
             setattr(obj, key, value)
@@ -921,6 +951,10 @@ def register_crud(path, model, schema_in, schema_out, roles):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
+        if model is models.LibraryBook and db.scalar(select(models.LibraryLoan.id).where(models.LibraryLoan.book_id == obj.id, models.LibraryLoan.status == "issued")):
+            raise HTTPException(status_code=409, detail="This book has an active loan and cannot be deleted")
+        if model is models.LibraryLoan:
+            raise HTTPException(status_code=409, detail="Library loan history cannot be deleted")
         db.delete(obj)
         db.commit()
         return {"deleted": True}
@@ -942,6 +976,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
 STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student")
 ADMIN_ROLES = ("super_admin",) + STANDARD_ROLES
 FINANCE_ROLES = ADMIN_ROLES
+LIBRARY_ROLES = ("super_admin", "admin", "principal", "vice_principal", "librarian")
 @app.post("/api/students/import", tags=["students"])
 async def import_students(file: UploadFile = File(...), school_id: int | None = Form(default=None),
                          db: Session = Depends(get_db),
@@ -1034,6 +1069,29 @@ register_crud("exams", models.Exam, schemas.ExamIn, schemas.ExamOut, ADMIN_ROLES
 register_crud("report-cards", models.ReportCard, schemas.ReportCardIn, schemas.ReportCardOut, ADMIN_ROLES)
 register_crud("homework", models.Homework, schemas.HomeworkIn, schemas.HomeworkOut, ADMIN_ROLES)
 register_crud("student-leave", models.StudentLeaveRequest, schemas.StudentLeaveIn, schemas.StudentLeaveOut, ADMIN_ROLES)
+register_crud("library-books", models.LibraryBook, schemas.LibraryBookIn, schemas.LibraryBookOut, LIBRARY_ROLES)
+register_crud("library-loans", models.LibraryLoan, schemas.LibraryLoanIn, schemas.LibraryLoanOut, LIBRARY_ROLES)
+
+
+# Return is an explicit state transition; loan history is retained for auditability.
+@app.post("/api/library-loans/{item_id}/return", response_model=schemas.LibraryLoanOut, tags=["library"])
+def return_library_loan(item_id: int, db: Session = Depends(get_db),
+                        user: models.User = Depends(require_module_permission("library-loans", "Edit", *LIBRARY_ROLES))):
+    loan = db.get(models.LibraryLoan, item_id)
+    if not loan or (user.role != "super_admin" and loan.school_id != user.school_id):
+        raise HTTPException(status_code=404, detail="Library loan not found")
+    if loan.status != "issued":
+        raise HTTPException(status_code=409, detail="This book has already been returned")
+    book = db.scalar(select(models.LibraryBook).where(models.LibraryBook.id == loan.book_id, models.LibraryBook.school_id == loan.school_id).with_for_update())
+    if not book:
+        raise HTTPException(status_code=409, detail="The linked library book record is unavailable")
+    loan.status = "returned"
+    loan.returned_at = datetime.utcnow()
+    book.available_copies = min(book.total_copies, book.available_copies + 1)
+    write_audit_log(db, user, "library.book.returned", "library_loan", str(loan.id), {"book_id": book.id, "student_id": loan.student_id})
+    db.commit()
+    db.refresh(loan)
+    return loan
 
 
 # Shared CSV/XLSX import for operational modules. Financial payments and private
