@@ -35,13 +35,13 @@ async def lifespan(app: FastAPI):
             UPDATE users AS candidate SET is_school_owner = TRUE
             WHERE candidate.id IN (
                 SELECT DISTINCT ON (u.school_id) u.id FROM users AS u
-                WHERE u.school_id IS NOT NULL AND u.role IN ('admin', 'principal')
+                WHERE u.school_id IS NOT NULL AND u.role NOT IN ('super_admin', 'parent')
                   AND NOT EXISTS (
                       SELECT 1 FROM users AS existing_owner
                       WHERE existing_owner.school_id = u.school_id
                         AND existing_owner.is_school_owner IS TRUE
                   )
-                ORDER BY u.school_id, CASE WHEN u.role = 'admin' THEN 0 ELSE 1 END, u.id ASC
+                ORDER BY u.school_id, CASE WHEN u.role = 'admin' THEN 0 WHEN u.role = 'principal' THEN 1 ELSE 2 END, u.id ASC
             )
         """))
         conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
