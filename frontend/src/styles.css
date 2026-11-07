@@ -877,3 +877,9 @@
 .primary,.secondary{font-size:13px}
 .form-grid label,.record-form label{font-size:13px}
 .search-box input,.table-tools input{font-size:14px}
+
+.developer-direct-links-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:9px;padding:0 20px 18px}
+.developer-direct-links-grid>div{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid #dcebe7;border-radius:9px;background:#f7fbfa}
+.developer-direct-links-grid span{color:#718493;font-size:11px;text-transform:capitalize}
+.developer-direct-links-grid strong{color:#16786f;font:800 19px Manrope,sans-serif}
+@media(max-width:600px){.developer-direct-links-grid{padding:0 13px 14px;grid-template-columns:repeat(2,minmax(0,1fr))}}
