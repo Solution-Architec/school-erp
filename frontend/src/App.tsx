@@ -361,7 +361,43 @@ function App(){
     <div className="panel dashboard-modules-panel"><div className="panel-heading"><div><h3>Entire School ERP Project</h3><p>Complete list of modules available in this application</p></div><GraduationCap size={19}/></div><div className="table-wrap"><table><thead><tr><th>Module</th><th>Project area</th><th>Description</th><th>Action</th></tr></thead><tbody>{availableModules.map(m=><tr key={m.key}><td><strong>{m.label}</strong></td><td>{m.key==='dashboard'?'Overview':m.key.startsWith('fee')||m.key==='payments'||m.key==='student-fees'?'Finance':m.key==='students'||m.key==='classes'?'Academics':m.key==='staff'?'HR':m.key==='vehicles'?'Transport':m.key==='hostels'?'Accommodation':m.key==='documents'?'Administration':'Operations'}</td><td>{m.description}</td><td><button className="secondary" onClick={()=>setActive(m.key)}>Open</button></td></tr>)}</tbody></table></div><div className="table-footer">Available modules: {availableModules.length}<span>SchoolOS · Project overview</span></div></div>
     </>}
 
-    </>:active==='approvals'?<div className="panel data-panel"><div className="panel-heading"><div><h3>Staff account requests</h3><p>All pending registrations are listed here. Email verification is required before approval.</p></div><span className="record-count">{rows.length} pending</span></div><div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Email verification</th><th>Requested</th><th>Decision</th></tr></thead><tbody>{rows.map((r:any)=><tr key={r.id}><td><strong>{r.name}</strong></td><td>{r.email}</td><td>{String(r.role||'').replaceAll('_',' ')}</td><td><span className={r.email_verified?'status-badge active':'status-badge pending'}>{r.email_verified?'Verified':'Awaiting verification'}</span></td><td>{r.created_at?new Date(r.created_at).toLocaleDateString('en-IN'):'—'}</td><td><div className="approval-actions"><button className="primary" disabled={!r.email_verified} title={!r.email_verified?'Email verification is required before approval':undefined} onClick={async()=>{try{await request('/api/auth/users/'+r.id+'/approval',{method:'POST',body:JSON.stringify({decision:'approve'})});setNotice('Staff account approved');await load()}catch(e:any){setError(e.message)}}}>Approve</button><button className="secondary" disabled={!r.email_verified} title={!r.email_verified?'Email verification is required before rejection':undefined} onClick={async()=>{try{await request('/api/auth/users/'+r.id+'/approval',{method:'POST',body:JSON.stringify({decision:'reject'})});setNotice('Staff account rejected');await load()}catch(e:any){setError(e.message)}}}>Reject</button></div></td></tr>)}{!rows.length&&<tr><td colSpan={6}><div className="empty-state"><strong>No pending staff requests</strong><p>New registrations for this school will appear here, including accounts awaiting email verification.</p></div></td></tr>}</tbody></table></div></div>:active==='payments'?<div className="panel payment-entry-panel">
+    </>:active==='approvals'?<section className="approval-workspace" aria-labelledby="staff-approvals-title">
+    <div className="approval-page-heading">
+     <div className="approval-heading-copy">
+      <span className="approval-eyebrow"><ShieldCheck size={14}/> SCHOOL ERP / APPROVALS</span>
+      <h2 id="staff-approvals-title">Staff Approvals</h2>
+      <p>Review staff registrations and confirm access to this school's workspace.</p>
+     </div>
+     <button className="secondary approval-refresh" onClick={load} disabled={loading}>
+      <RefreshCw size={15} className={loading?'approval-refresh-spinning':''}/> {loading?'Refreshing…':'Refresh'}
+     </button>
+    </div>
+    <div className="approval-summary-grid">
+     <div className="approval-summary-card">
+      <span className="approval-summary-icon"><Users size={18}/></span>
+      <span className="approval-summary-copy"><small>Pending requests</small><strong>{rows.length}</strong></span>
+     </div>
+     <div className="approval-summary-card">
+      <span className="approval-summary-icon approval-summary-icon-verified"><ShieldCheck size={18}/></span>
+      <span className="approval-summary-copy"><small>Verified email addresses</small><strong>{rows.filter((r:any)=>Boolean(r.email_verified)).length}</strong></span>
+     </div>
+    </div>
+    <div className="panel approval-requests-panel">
+     <div className="approval-requests-heading">
+      <div><h3>Staff account requests</h3><p>Only verified email addresses can be approved or rejected.</p></div>
+      <span className="approval-pending-count">{rows.length} pending</span>
+     </div>
+     {loading&&!rows.length?<div className="approval-empty-state"><span className="approval-empty-icon"><RefreshCw size={22}/></span><strong>Loading staff requests</strong><p>Fetching the latest registrations for this school.</p></div>:rows.length===0?<div className="approval-empty-state"><span className="approval-empty-icon"><Users size={23}/></span><strong>No pending staff requests</strong><p>New staff registrations will appear here after they submit their account request.</p></div>:<div className="table-wrap approval-table-wrap"><table className="approval-table"><thead><tr><th>Staff member</th><th>Email address</th><th>Requested role</th><th>Email verification</th><th>Request date</th><th className="approval-decision-heading">Decision</th></tr></thead><tbody>{rows.map((r:any)=><tr key={r.id}>
+      <td><div className="approval-person"><span className="approval-person-avatar">{String(r.name||'S').trim().charAt(0).toUpperCase()}</span><strong>{r.name||'Unnamed staff member'}</strong></div></td>
+      <td className="approval-email">{r.email||'—'}</td>
+      <td><span className="approval-role-label">{String(r.role||'').replaceAll('_',' ')||'—'}</span></td>
+      <td><span className={r.email_verified?'approval-verification verified':'approval-verification waiting'}><span/> {r.email_verified?'Verified':'Awaiting verification'}</span></td>
+      <td>{r.created_at?new Date(r.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—'}</td>
+      <td><div className="approval-actions"><button className="primary" disabled={!r.email_verified||loading} title={!r.email_verified?'Email verification is required before approval':undefined} onClick={async()=>{try{await request('/api/auth/users/'+r.id+'/approval',{method:'POST',body:JSON.stringify({decision:'approve'})});setNotice('Staff account approved');await load()}catch(e:any){setError(e.message)}}}>Approve</button><button className="secondary" disabled={!r.email_verified||loading} title={!r.email_verified?'Email verification is required before rejection':undefined} onClick={async()=>{try{await request('/api/auth/users/'+r.id+'/approval',{method:'POST',body:JSON.stringify({decision:'reject'})});setNotice('Staff account rejected');await load()}catch(e:any){setError(e.message)}}}>Reject</button></div></td>
+     </tr>)}</tbody></table></div>}
+     <div className="approval-panel-footer"><span>SchoolOS · Staff access management</span><span>{rows.length} {rows.length===1?'request':'requests'} in this view</span></div>
+    </div>
+   </section>:active==='payments'?<div className="panel payment-entry-panel">
    <div className="panel-heading"><div><h3>Record student fee payment</h3><p>Select a fee with an outstanding balance and record the amount received.</p></div><Wallet size={20}/></div>
    <div className="payment-entry-form">
     <label>Student fee<select value={paymentFeeId} onChange={e=>setPaymentFeeId(e.target.value)}><option value="">Select student fee</option>{feeDues.map(f=><option key={f.fee_id} value={f.fee_id}>{f.student_name} · {f.admission_no} · Balance {money(f.balance)}</option>)}</select></label>
