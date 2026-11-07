@@ -787,7 +787,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
             db.refresh(obj)
         except IntegrityError:
             db.rollback()
-            raise HTTPException(status_code=409, detail="Duplicate staff employee number or login email")
+            raise HTTPException(status_code=409, detail="Duplicate or conflicting record; check unique fields and existing schedule entries")
         return obj
 
     def get_item(item_id: int, db: Session = Depends(get_db),
@@ -807,13 +807,12 @@ def register_crud(path, model, schema_in, schema_out, roles):
             if values.pop("create_account", False) or values.pop("account_password", None):
                 raise HTTPException(status_code=422, detail="Create login accounts when adding a staff record, not while editing")
             values.pop("account_role", None)
-        validate_related_records(values, user, db)
-        if model is models.Staff:
-            # Standard users can never move staff outside their assigned school.
+        if hasattr(model, "school_id"):
             if user.role != "super_admin":
                 values["school_id"] = user.school_id
             elif not values.get("school_id"):
                 values["school_id"] = obj.school_id
+        validate_related_records(values, user, db)
         for key, value in values.items():
             setattr(obj, key, value)
         try:
