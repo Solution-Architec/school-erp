@@ -2,7 +2,7 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas import HomeworkIn, StudentLeaveIn, StudentLeaveReviewIn, ParentTeacherMessageIn
+from app.schemas import HomeworkIn, StudentLeaveIn, StudentLeaveReviewIn, ParentTeacherMessageIn
 
 
 def test_homework_requires_title_and_due_date():
