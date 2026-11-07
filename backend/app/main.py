@@ -524,6 +524,8 @@ def developer_approve_school(school_id: int, payload: dict,
         models.User.school_id == school.id, models.User.role == "principal"
     ).order_by(models.User.created_at.asc()))
     approved = decision == "approve"
+    if approved and (not founder or not founder.email_verified):
+        raise HTTPException(status_code=409, detail="The school founder must verify their email before school approval")
     school.approval_status = "approved" if approved else "rejected"
     school.is_active = approved
     if founder:
