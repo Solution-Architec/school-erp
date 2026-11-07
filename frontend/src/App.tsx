@@ -354,7 +354,20 @@ function App(){
      </div>
     </>}
     {user.role==='super_admin'&&<>
-    <div className="panel dashboard-roles-panel"><div className="panel-heading"><div><h3>Roles &amp; Authentication</h3><p>Application roles and their authenticated access scope</p></div><Users size={19}/></div><div className="table-wrap"><table><thead><tr><th>Role</th><th>Authentication / access scope</th><th>Access level</th><th>Current user</th></tr></thead><tbody>{roleCatalog.map(r=><tr key={r.roleKey}><td><strong>{r.role}</strong></td><td>{r.scope}</td><td><span className="status-badge active">{r.level}</span></td><td>{user.role===r.roleKey?<span className="status-badge active">Signed in</span>:'—'}</td></tr>)}</tbody></table></div><div className="status-note">Each school role receives a focused workspace and matching navigation. Developer has platform-wide access. Parent accounts use explicit guardian-to-student links and can access linked students only. Saved module permissions are enforced by supported API routes and changes are audited.</div></div>
+    <section className="panel dashboard-roles-panel" aria-labelledby="roles-auth-title">
+     <div className="panel-heading roles-auth-heading">
+      <div><span className="section-eyebrow">ACCESS CONTROL</span><h3 id="roles-auth-title">Roles &amp; Authentication</h3><p>Understand how each account type accesses the SchoolOS platform.</p></div>
+      <div className="roles-auth-total"><strong>{roleCatalog.length}</strong><span>Account roles</span></div>
+     </div>
+     <div className="roles-auth-grid">
+      {roleCatalog.map(r=><article className={`role-auth-card ${user.role===r.roleKey?'is-current':''} ${r.roleKey==='super_admin'?'is-platform-role':r.roleKey==='parent'?'is-parent-role':''}`} key={r.roleKey}>
+       <div className="role-auth-card-top"><span className="role-auth-avatar" aria-hidden="true">{r.role.split(/\\s+/).map(part=>part[0]).slice(0,2).join('').toUpperCase()}</span><div className="role-auth-title"><h4>{r.role}</h4><span>{r.roleKey==='super_admin'?'Platform administrator':r.roleKey==='parent'?'Family account':'School account'}</span></div>{user.role===r.roleKey&&<span className="role-current-badge"><span/>Signed in</span>}</div>
+       <p className="role-auth-description">{r.scope}</p>
+       <div className="role-auth-card-footer"><span className={`role-access-badge ${r.roleKey==='super_admin'?'platform':r.roleKey==='parent'?'linked':'workspace'}`}>{r.level}</span><span className="role-auth-state">{user.role===r.roleKey?'Current session':'Available role'}</span></div>
+      </article>)}
+     </div>
+     <div className="roles-auth-note"><ShieldCheck size={17}/><p><strong>Access is controlled by role and permissions.</strong> School roles receive dedicated workspaces and navigation. Developer accounts have platform-wide administration access. Parent accounts are restricted to students linked through verified guardian relationships. Supported API routes enforce saved module permissions, and permission changes are recorded in the audit log.</p></div>
+    </section>
     </>}
     {user.role==='super_admin'&&<DeveloperModulePermissionPanel moduleList={modules} roles={roleCatalog} schools={schools} request={request}/>}
     {user.role==='super_admin'&&<>
