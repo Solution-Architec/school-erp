@@ -244,6 +244,7 @@ function App(){
  const [rows,setRows]=useState<any[]>([])
  const [stats,setStats]=useState<any>({})
  const [loading,setLoading]=useState(false)
+ const [refreshVersion,setRefreshVersion]=useState(0)
  const [error,setError]=useState('')
  const [query,setQuery]=useState('')
  const [showForm,setShowForm]=useState(false)
@@ -316,6 +317,7 @@ function App(){
  async function save(e: FormEvent<HTMLFormElement>) {e.preventDefault();try{const payload={...form};for(const f of selected.fields||[]){if((f.type==='number'||f.type==='school-select')&&payload[f.key]!==''&&payload[f.key]!=null)payload[f.key]=Number(payload[f.key]);if(f.type==='checkbox')payload[f.key]=Boolean(payload[f.key]);if(payload[f.key]==='')delete payload[f.key]}if(active==='student-fees'){if(!selectedStudent)throw new Error('Search and select a student before adding a fee.');payload.student_id=selectedStudent.id;payload.category='tuition';payload.academic_year=`${new Date().getFullYear()}-${String(new Date().getFullYear()+1).slice(-2)}`;payload.term='annual';payload.discount=0;payload.description='Tuition fee'}const created=await request(selected.endpoint!+(editingRecordId?'/'+editingRecordId:''),{method:editingRecordId?'PUT':'POST',body:JSON.stringify(payload)});if(active==='students')setSelectedStudent(created);setShowForm(false);setForm({});setEditingRecordId(null);setNotice(editingRecordId?'Record updated successfully':(active==='staff'&&payload.create_account?'Staff record and login account created successfully':'Record created successfully'));if(active==='schools')setSchools(await request('/api/schools'));await load()}catch(e:any){setError(e.message)}}
  async function deleteStaff(row:any){if(!window.confirm('Delete staff record '+row.employee_no+' — '+row.full_name+'? This cannot be undone.'))return;try{await request('/api/staff/'+row.id,{method:'DELETE'});setNotice('Staff record deleted successfully');await load()}catch(e:any){setError(e.message)}}
  if(!token||!user)return <Login onLogin={handleLogin}/>
+ function refreshCurrentView(){if(active==='parent-portal'){setLoading(true);setRefreshVersion(version=>version+1)}else{load()}}
  const dashboardNow=new Date()
  const dashboardYear=dashboardNow.getFullYear()
  const dashboardMonth=dashboardNow.getMonth()+1
