@@ -884,6 +884,9 @@ def register_crud(path, model, schema_in, schema_out, roles):
             validate_related_records(values, user, db)
         obj = model(**values)
         db.add(obj)
+        if model is models.LibraryLoan:
+            db.flush()
+            write_audit_log(db, user, "library.book.issued", "library_loan", str(obj.id), {"book_id": obj.book_id, "student_id": obj.student_id, "due_date": obj.due_date.isoformat()})
         try:
             if create_staff_account:
                 db.add(models.User(
