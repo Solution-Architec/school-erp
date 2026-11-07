@@ -773,7 +773,8 @@ def send_parent_teacher_message(payload: schemas.ParentTeacherMessageIn, db: Ses
     db.add(obj); db.commit(); db.refresh(obj)
     return obj
 
-\ndef register_crud(path, model, schema_in, schema_out, roles):
+
+def register_crud(path, model, schema_in, schema_out, roles):
     def validate_related_records(values, user, db):
         if model is models.StudentFee:
             student = db.get(models.Student, values.get("student_id"))
