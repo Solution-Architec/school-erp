@@ -288,4 +288,70 @@ class StudentFeeOut(StudentFeeIn):
     status: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
-\n\nclass AttendanceIn(BaseModel):\n    student_id: int = Field(gt=0)\n    attendance_date: date\n    status: Literal["present", "absent", "late", "leave"] = "present"\n    remarks: str = Field(default="", max_length=300)\n\nclass AttendanceOut(AttendanceIn):\n    id: int\n    marked_by: int\n    created_at: datetime\n    model_config = ConfigDict(from_attributes=True)\n\nclass TimetableIn(BaseModel):\n    class_name: str = Field(min_length=1, max_length=80)\n    section: str = Field(default="A", max_length=40)\n    day_of_week: Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]\n    period: int = Field(ge=1, le=16)\n    subject: str = Field(min_length=1, max_length=100)\n    teacher_name: str = Field(default="", max_length=180)\n    room: str = Field(default="", max_length=40)\n    start_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")\n    end_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")\n\n    @model_validator(mode="after")\n    def validate_period_times(self):\n        if self.end_time <= self.start_time:\n            raise ValueError("Period end time must be after its start time")\n        return self\n\nclass TimetableOut(TimetableIn):\n    id: int\n    created_at: datetime\n    model_config = ConfigDict(from_attributes=True)\n\nclass ExamIn(BaseModel):\n    name: str = Field(min_length=1, max_length=120)\n    class_name: str = Field(min_length=1, max_length=80)\n    section: str = Field(default="", max_length=40)\n    subject: str = Field(min_length=1, max_length=100)\n    exam_date: date\n    max_marks: Decimal = Field(gt=0, max_digits=8, decimal_places=2)\n    pass_marks: Decimal = Field(ge=0, max_digits=8, decimal_places=2)\n    academic_year: str = Field(default="", max_length=20)\n\n    @model_validator(mode="after")\n    def validate_pass_marks(self):\n        if self.pass_marks > self.max_marks:\n            raise ValueError("Pass marks cannot exceed maximum marks")\n        return self\n\nclass ExamOut(ExamIn):\n    id: int\n    created_at: datetime\n    model_config = ConfigDict(from_attributes=True)\n\nclass ReportCardIn(BaseModel):\n    student_id: int = Field(gt=0)\n    exam_id: int = Field(gt=0)\n    marks_obtained: Decimal = Field(ge=0, max_digits=8, decimal_places=2)\n    remarks: str = Field(default="", max_length=500)\n\nclass ReportCardOut(ReportCardIn):\n    id: int\n    created_at: datetime\n    model_config = ConfigDict(from_attributes=True)\n
+
+
+class AttendanceIn(BaseModel):
+    student_id: int = Field(gt=0)
+    attendance_date: date
+    status: Literal["present", "absent", "late", "leave"] = "present"
+    remarks: str = Field(default="", max_length=300)
+
+class AttendanceOut(AttendanceIn):
+    id: int
+    marked_by: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class TimetableIn(BaseModel):
+    class_name: str = Field(min_length=1, max_length=80)
+    section: str = Field(default="A", max_length=40)
+    day_of_week: Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    period: int = Field(ge=1, le=16)
+    subject: str = Field(min_length=1, max_length=100)
+    teacher_name: str = Field(default="", max_length=180)
+    room: str = Field(default="", max_length=40)
+    start_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    end_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+    @model_validator(mode="after")
+    def validate_period_times(self):
+        if self.end_time <= self.start_time:
+            raise ValueError("Period end time must be after its start time")
+        return self
+
+class TimetableOut(TimetableIn):
+    id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class ExamIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    class_name: str = Field(min_length=1, max_length=80)
+    section: str = Field(default="", max_length=40)
+    subject: str = Field(min_length=1, max_length=100)
+    exam_date: date
+    max_marks: Decimal = Field(gt=0, max_digits=8, decimal_places=2)
+    pass_marks: Decimal = Field(ge=0, max_digits=8, decimal_places=2)
+    academic_year: str = Field(default="", max_length=20)
+
+    @model_validator(mode="after")
+    def validate_pass_marks(self):
+        if self.pass_marks > self.max_marks:
+            raise ValueError("Pass marks cannot exceed maximum marks")
+        return self
+
+class ExamOut(ExamIn):
+    id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class ReportCardIn(BaseModel):
+    student_id: int = Field(gt=0)
+    exam_id: int = Field(gt=0)
+    marks_obtained: Decimal = Field(ge=0, max_digits=8, decimal_places=2)
+    remarks: str = Field(default="", max_length=500)
+
+class ReportCardOut(ReportCardIn):
+    id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
