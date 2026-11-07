@@ -425,3 +425,37 @@ class ParentTeacherMessageOut(BaseModel):
 class StudentLeaveReviewIn(BaseModel):
     status: Literal["approved", "rejected"]
     reviewer_note: str = Field(default="", max_length=500)
+
+
+class LibraryBookIn(BaseModel):
+    school_id: int | None = Field(default=None, gt=0)
+    title: str = Field(min_length=1, max_length=180)
+    author: str = Field(default="", max_length=180)
+    isbn: str = Field(default="", max_length=32)
+    publisher: str = Field(default="", max_length=180)
+    category: str = Field(default="", max_length=100)
+    total_copies: int = Field(default=1, ge=1, le=10000)
+    shelf_location: str = Field(default="", max_length=80)
+
+
+class LibraryBookOut(LibraryBookIn):
+    id: int
+    available_copies: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LibraryLoanIn(BaseModel):
+    school_id: int | None = Field(default=None, gt=0)
+    book_id: int = Field(gt=0)
+    student_id: int = Field(gt=0)
+    due_date: date
+
+
+class LibraryLoanOut(LibraryLoanIn):
+    id: int
+    issued_by: int
+    issued_at: datetime
+    returned_at: datetime | None
+    status: Literal["issued", "returned"]
+    model_config = ConfigDict(from_attributes=True)
