@@ -743,3 +743,75 @@
 .dashboard-finance-insights+.fee-chart{margin-top:15px}
 @media(max-width:900px){.platform-alert-grid{grid-template-columns:1fr}.platform-alert-item{min-height:62px}}
 @media(max-width:720px){.dashboard-finance-insights{grid-template-columns:1fr}.platform-alert-item{padding:11px}}
+
+
+/* Developer role-permissions panel: consistent controls, spacing and responsive layout */
+.developer-permissions-panel{padding:24px;overflow:hidden}
+.developer-permissions-panel>.panel-heading{align-items:flex-start;padding-bottom:18px;border-bottom:1px solid #edf1f4}
+.developer-permissions-panel>.panel-heading h3{font-size:16px;letter-spacing:-.25px}
+.developer-permissions-panel>.panel-heading p{font-size:12px;line-height:1.6;max-width:620px}
+.developer-permissions-panel>.panel-heading>svg{width:22px;height:22px;color:#0f766e;background:#e8f6f2;border-radius:9px;box-sizing:content-box;padding:10px}
+.developer-permissions-panel .permission-toolbar{display:flex;align-items:flex-end;gap:14px;padding:20px 0;border-bottom:1px solid #edf1f4}
+.developer-permissions-panel .permission-toolbar .auth-field{display:flex;flex:1 1 190px;flex-direction:column;gap:8px;min-width:180px;margin:0;color:#405966;font-size:11px;font-weight:700}
+.developer-permissions-panel .permission-toolbar .auth-field select{width:100%;height:42px;border:1px solid #dbe5e9;border-radius:9px;padding:0 34px 0 12px;background:#fff;color:#294452;font:500 12px 'DM Sans',sans-serif;outline:0}
+.developer-permissions-panel .permission-toolbar .auth-field select:focus{border-color:#53a99c;box-shadow:0 0 0 3px #0f766e12}
+.developer-permissions-panel .permission-summary{min-width:148px;min-height:64px;justify-content:center;padding:9px 14px;background:#f7fbfa;border-color:#e1eeea}
+.developer-permissions-panel .permission-summary strong{font:800 21px Manrope,sans-serif;color:#176e64;letter-spacing:-.5px}
+.developer-permissions-panel .permission-summary span{font-size:10px;line-height:1.35}
+.developer-permissions-panel .permission-bulk-actions{display:flex;align-items:center;gap:8px}
+.developer-permissions-panel button.primary,.developer-permissions-panel button.secondary{min-height:40px;padding:0 16px;border-radius:9px;font-size:11px;font-weight:700;letter-spacing:.05px;transition:background .15s ease,border-color .15s ease,transform .15s ease}
+.developer-permissions-panel button.primary{background:#0f766e;border-color:#0f766e;box-shadow:0 2px 5px #0f766e20}
+.developer-permissions-panel button.primary:hover:not(:disabled){background:#0b625c;border-color:#0b625c;transform:translateY(-1px)}
+.developer-permissions-panel button.secondary{background:#fff;border-color:#dce6ea;color:#48606d}
+.developer-permissions-panel button.secondary:hover:not(:disabled){background:#f4f9f8;border-color:#b9d8d1;color:#176e64}
+.developer-permissions-panel button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.developer-permissions-panel .permission-toolbar .permission-bulk-actions{padding-bottom:1px}
+.developer-permissions-panel .permission-toolbar .permission-bulk-actions button{min-height:38px;padding:0 13px}
+.developer-permissions-panel .permission-table-wrap{border:1px solid #e8eef1;border-radius:11px;margin-top:18px;max-height:560px}
+.developer-permissions-panel .permission-table{min-width:790px;white-space:normal}
+.developer-permissions-panel .permission-table thead{position:sticky;top:0;z-index:2;background:#f6f9fa}
+.developer-permissions-panel .permission-table th{padding:13px 12px;background:#f6f9fa;color:#637985;font-size:10px;letter-spacing:.2px;text-transform:uppercase}
+.developer-permissions-panel .permission-table th:first-child{min-width:230px;text-align:left}
+.developer-permissions-panel .permission-table th:not(:first-child),.developer-permissions-panel .permission-table td:not(:first-child){width:78px;text-align:center}
+.developer-permissions-panel .permission-table td{height:58px;padding:10px 12px}
+.developer-permissions-panel .permission-table td:first-child{min-width:230px}
+.developer-permissions-panel .permission-table td:first-child strong{display:block;color:#304a58;font-size:11px;font-weight:700}
+.developer-permissions-panel .permission-table td small{max-width:330px;margin-top:4px;color:#8a9aa4;font-size:10px;line-height:1.4}
+.developer-permissions-panel .permission-table tbody tr:nth-child(even){background:#fcfdfd}
+.developer-permissions-panel .permission-table tbody tr:hover{background:#f5faf8}
+.developer-permissions-panel .permission-table input[type=checkbox]{width:18px;height:18px;vertical-align:middle;accent-color:#0f766e}
+.developer-permissions-panel .permission-footer{padding:18px 0 8px}
+.developer-permissions-panel .permission-footer>span{color:#728590;font-size:11px;font-weight:600;text-transform:capitalize}
+.developer-permissions-panel .permission-footer .permission-bulk-actions{justify-content:flex-end}
+.developer-permissions-panel .permission-footer button.primary{min-width:190px;min-height:42px}
+.developer-permissions-panel .status-note{border:1px solid #e4efeb;background:#f6faf8;color:#607d75;font-size:11px;line-height:1.65}
+.developer-permissions-panel .auth-message{margin-top:14px;padding:11px 13px;border-radius:9px;font-size:11px}
+.developer-permissions-panel .permission-audit{margin-top:22px;padding-top:19px;border-top:1px solid #edf1f4}
+.developer-permissions-panel .permission-audit .panel-heading h3{font-size:13px}
+.developer-permissions-panel .permission-audit .panel-heading p{font-size:10px}
+.developer-permissions-panel .permission-audit .table-wrap{margin-top:12px;border:1px solid #edf1f4;border-radius:9px}
+.developer-permissions-panel .permission-audit table{font-size:10px}
+.developer-permissions-panel .permission-audit th,.developer-permissions-panel .permission-audit td{padding:11px 13px}
+.developer-permissions-panel .permission-audit td{color:#5d727e}
+@media(max-width:900px){
+ .developer-permissions-panel{padding:19px}
+ .developer-permissions-panel .permission-toolbar{align-items:stretch}
+ .developer-permissions-panel .permission-toolbar .auth-field{flex:1 1 calc(50% - 10px)}
+ .developer-permissions-panel .permission-summary{flex:1 1 130px}
+ .developer-permissions-panel .permission-toolbar .permission-bulk-actions{flex:1 1 100%;padding-top:2px}
+}
+@media(max-width:600px){
+ .developer-permissions-panel{padding:15px;border-radius:11px}
+ .developer-permissions-panel>.panel-heading h3{font-size:15px}
+ .developer-permissions-panel .permission-toolbar{gap:11px;padding:16px 0}
+ .developer-permissions-panel .permission-toolbar .auth-field{flex:1 1 100%;min-width:100%}
+ .developer-permissions-panel .permission-summary{flex:1 1 100%;min-height:58px}
+ .developer-permissions-panel .permission-toolbar .permission-bulk-actions{display:grid;grid-template-columns:1fr 1fr}
+ .developer-permissions-panel .permission-toolbar .permission-bulk-actions button{width:100%;min-height:40px}
+ .developer-permissions-panel .permission-table-wrap{max-height:460px;margin-top:14px}
+ .developer-permissions-panel .permission-footer{align-items:stretch;gap:12px}
+ .developer-permissions-panel .permission-footer .permission-bulk-actions{display:flex;flex-direction:column;width:100%}
+ .developer-permissions-panel .permission-footer .permission-bulk-actions button{width:100%;min-height:42px}
+ .developer-permissions-panel .permission-footer button.primary{min-width:0}
+ .developer-permissions-panel .permission-audit .panel-heading{align-items:flex-start}
+}
