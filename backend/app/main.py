@@ -32,11 +32,16 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_school_owner BOOLEAN NOT NULL DEFAULT FALSE"))
         conn.execute(text("""
-            UPDATE users SET is_school_owner = TRUE
-            WHERE id IN (
-                SELECT DISTINCT ON (school_id) id FROM users
-                WHERE school_id IS NOT NULL AND role IN ('admin', 'principal')
-                ORDER BY school_id, CASE WHEN role = 'admin' THEN 0 ELSE 1 END, id ASC
+            UPDATE users AS candidate SET is_school_owner = TRUE
+            WHERE candidate.id IN (
+                SELECT DISTINCT ON (u.school_id) u.id FROM users AS u
+                WHERE u.school_id IS NOT NULL AND u.role IN ('admin', 'principal')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM users AS existing_owner
+                      WHERE existing_owner.school_id = u.school_id
+                        AND existing_owner.is_school_owner IS TRUE
+                  )
+                ORDER BY u.school_id, CASE WHEN u.role = 'admin' THEN 0 ELSE 1 END, u.id ASC
             )
         """))
         conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
