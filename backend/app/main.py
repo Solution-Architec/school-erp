@@ -129,7 +129,7 @@ DEFAULT_ROLE_MODULES = {
     "hostel_warden": ["dashboard", "chatbot", "students", "hostels", "documents", "maintenance"],
     "security_guard": ["dashboard", "chatbot", "students"],
     "others": ["dashboard", "chatbot"],
-    "parent": ["parent-portal", "chatbot"],
+    "parent": ["parent-portal", "chatbot", "student-leave", "parent-messages"],
 }
 
 
