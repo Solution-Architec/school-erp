@@ -999,3 +999,43 @@ button:disabled{
 @media(max-width:1050px){.roles-auth-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.dashboard-roles-panel{padding:15px}.roles-auth-grid{grid-template-columns:minmax(0,1fr);gap:9px}.role-auth-description{min-height:0}.roles-auth-heading{align-items:flex-start}.roles-auth-total{min-width:72px;padding:8px 10px}.role-auth-card{padding:12px}}
 @media(prefers-reduced-motion:reduce){.role-auth-card{transition:none}}
+
+
+/* Compact dashboard highlights: keep role cards focused and the project list dense */
+.dashboard-roles-panel{padding:16px;margin-top:16px;border-radius:12px;box-shadow:0 3px 12px rgba(23,48,63,.035)}
+.roles-auth-heading{margin-bottom:12px}
+.roles-auth-heading .section-eyebrow{margin-bottom:4px;font-size:8px}
+.roles-auth-heading h3{font-size:14px}
+.roles-auth-heading p{font-size:10px}
+.roles-auth-total{min-width:66px;padding:6px 10px;border-radius:9px}
+.roles-auth-total strong{font-size:17px}
+.roles-auth-total span{font-size:8px}
+.roles-auth-grid{gap:8px}
+.role-auth-card{padding:10px;border-radius:9px}
+.role-auth-card-top{gap:8px}
+.role-auth-avatar{width:28px;height:28px;min-width:28px;border-radius:8px;font-size:9px}
+.role-auth-title h4{font-size:10px}
+.role-auth-title>span{margin-top:2px;font-size:8px}
+.role-current-badge{padding:4px 6px;font-size:7px}
+.role-auth-description,.role-auth-state,.roles-auth-note{display:none}
+.role-auth-card-footer{padding-top:7px;border-top:0}
+.role-access-badge{padding:4px 7px;font-size:7px}
+.compact-project-overview{margin-top:14px;padding:16px;border-radius:12px}
+.compact-project-overview>.panel-heading{margin-bottom:10px}
+.compact-project-overview>.panel-heading h3{font-size:14px}
+.compact-project-overview>.panel-heading p{margin-top:3px;font-size:10px}
+.compact-project-overview>.panel-heading>svg{width:17px;height:17px}
+.compact-project-overview .table-wrap{margin-top:8px;max-height:360px;overflow:auto}
+.compact-project-overview table{font-size:10px;line-height:1.35}
+.compact-project-overview th{padding:8px 10px;font-size:9px}
+.compact-project-overview td{padding:7px 10px}
+.compact-project-overview td strong{font-size:10px}
+.compact-project-overview button.secondary{min-height:30px;padding:0 10px;font-size:9px;border-radius:7px}
+.compact-project-overview .table-footer{padding:9px 10px;font-size:9px}
+@media(max-width:620px){
+ .dashboard-roles-panel,.compact-project-overview{padding:12px}
+ .roles-auth-grid{gap:7px}
+ .role-auth-card{padding:9px}
+ .compact-project-overview .table-wrap{max-height:300px}
+ .compact-project-overview th,.compact-project-overview td{padding:7px 8px}
+}
