@@ -1223,6 +1223,18 @@ def developer_user_account_overview(
     table_rows.append({"table": "audit_logs (actor_user_id)", "module": "account-activity", "count": audit_count})
     module_counts["account-activity"] = audit_count
 
+    document_upload_count = 0
+    payment_received_count = 0
+    if account.school_id is not None:
+        document_upload_count = db.scalar(select(func.count()).select_from(models.Document).where(
+            models.Document.school_id == account.school_id,
+            models.Document.uploaded_by == account.id
+        )) or 0
+        payment_received_count = db.scalar(select(func.count()).select_from(models.FeePayment).where(
+            models.FeePayment.school_id == account.school_id,
+            models.FeePayment.received_by == account.id
+        )) or 0
+
     staff_matches = []
     if account.school_id is not None:
         staff_matches = [{
@@ -1271,6 +1283,13 @@ def developer_user_account_overview(
         },
         "module_counts": module_counts,
         "linked_tables": sorted(table_rows, key=lambda item: (item["module"], item["table"])),
+        "direct_relationships": {
+            "staff_records_matched_by_email": len(staff_matches),
+            "parent_student_links": len(parent_links),
+            "documents_uploaded_by_user": document_upload_count,
+            "payments_received_by_user": payment_received_count,
+            "audit_events_by_user": audit_count,
+        },
         "staff_records": staff_matches,
         "parent_student_links": parent_links,
     }
