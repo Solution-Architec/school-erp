@@ -51,3 +51,25 @@ The first four academic workflows have now been added to the application code an
 - Report cards: student/exam marks and remarks, with school-consistent references and maximum-mark validation
 
 The UI and API changes are committed. Runtime database migration, deployment, and end-to-end verification still need to run in the target environment before these features should be considered production-verified.
+
+
+## Phase 2 implementation — homework, leave, and parent communication
+
+### Homework
+- School-scoped class/section/subject homework assignments with title, instructions, due date, optional attachment URL, and assigning user.
+- List/create/update/delete API under `/api/homework`; tenant scoping follows the existing generic CRUD policy.
+
+### Student leave
+- School-scoped student leave applications with date-range validation and pending/approved/rejected status.
+- Staff CRUD under `/api/student-leave`; approval/rejection through `POST /api/student-leave/{id}/review` with reviewer attribution.
+- Parent accounts can submit and view leave requests only for students connected by an active `ParentStudentLink`, through `/api/parent-portal/leave`.
+
+### Parent–teacher communication
+- Private school-scoped messages with explicit student, sender, recipient, subject, body, and timestamps.
+- `GET/POST /api/parent-messages` returns only messages where the authenticated user is sender or recipient. Parents must have an active link to the student; staff recipients and parent recipients are validated against the same school and student link.
+
+### Schema and deployment
+- New tables are created by the existing SQLAlchemy `Base.metadata.create_all` startup mechanism: `homework`, `student_leave_requests`, and `parent_teacher_messages`.
+- No Alembic migration system exists in this repository. Back up the database and restart the backend so the startup table creation runs before using the new endpoints.
+- Parent messaging currently uses user IDs for the recipient selector; a staff directory/teacher assignment picker and message threading/read receipts are follow-up improvements.
+- Run backend tests with `cd backend && pytest`; frontend validation with `cd frontend && npm ci && npm run build`.
