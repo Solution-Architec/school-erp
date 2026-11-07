@@ -306,7 +306,12 @@ def _notify_support(event: str, details: str, throttle_seconds: int = 900) -> No
     msg["Subject"] = f"SchoolOS support alert: {event}"
     msg["From"] = sender
     msg["To"] = support_email
-    msg.set_content(f"SchoolOS authentication alert\\n\\nEvent: {event}\\nDetails: {details}\\nTime (UTC): {now.isoformat()}\\n")
+    msg.set_content(f"SchoolOS authentication alert\
+\
+Event: {event}\
+Details: {details}\
+Time (UTC): {now.isoformat()}\
+")
     try:
         _smtp_send_message(msg)
     except Exception as exc:
@@ -324,7 +329,9 @@ def _send_auth_code(email: str, code: str, purpose: str) -> None:
     msg["From"] = sender
     msg["To"] = email
     action = {"verify": "verify your SchoolOS account", "reset": "reset your SchoolOS password", "login_mfa": "complete your SchoolOS sign-in"}.get(purpose, "verify your SchoolOS identity")
-    msg.set_content(f"Your SchoolOS code to {action} is: {code}\\n\\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
+    msg.set_content(f"Your SchoolOS code to {action} is: {code}\
+\
+This code expires in 10 minutes. If you did not request this, ignore this email.")
     _smtp_send_message(msg)
 
 def _issue_auth_code(db: Session, email: str, purpose: str) -> None:
@@ -789,7 +796,12 @@ def register_crud(path, model, schema_in, schema_out, roles):
             student = db.get(models.Student, values.get("owner_id"))
             if not student or (user.role != "super_admin" and student.school_id != user.school_id):
                 raise HTTPException(status_code=404, detail="Document owner not found in your school")
-        if model is models.StudentLeaveRequest:\n            student = db.get(models.Student, values.get("student_id"))\n            target_school = values.get("school_id") or user.school_id\n            if not student or (target_school and student.school_id != target_school):\n                raise HTTPException(status_code=404, detail="Student not found in the selected school")\n        if model in (models.AttendanceRecord, models.ReportCard):
+        if model is models.StudentLeaveRequest:
+            student = db.get(models.Student, values.get("student_id"))
+            target_school = values.get("school_id") or user.school_id
+            if not student or (target_school and student.school_id != target_school):
+                raise HTTPException(status_code=404, detail="Student not found in the selected school")
+        if model in (models.AttendanceRecord, models.ReportCard):
             student = db.get(models.Student, values.get("student_id"))
             target_school = values.get("school_id") or user.school_id
             if not student or (target_school and student.school_id != target_school):
