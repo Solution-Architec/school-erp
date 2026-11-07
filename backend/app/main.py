@@ -217,7 +217,7 @@ def save_role_permissions(role: str, payload: dict, school_id: int | None = Quer
         else:
             grant.enabled = enabled
     scope_name = "school" if school_id is not None else "global"
-    target = f"{role}:{scope_name}:{school_id if school_id is not None else str(\"all\")}"
+    target = f"{role}:{scope_name}:{school_id or 0}"
     write_audit_log(db, user, "rbac.permissions.updated", "role", target,
                     {"role": role, "scope": scope_name, "school_id": school_id, "enabled_count": sum(1 for value in permissions.values() if value), "module_count": len(RBAC_MODULES)})
     db.commit()
