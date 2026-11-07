@@ -73,3 +73,24 @@ The UI and API changes are committed. Runtime database migration, deployment, an
 - No Alembic migration system exists in this repository. Back up the database and restart the backend so the startup table creation runs before using the new endpoints.
 - Parent messaging currently uses user IDs for the recipient selector; a staff directory/teacher assignment picker and message threading/read receipts are follow-up improvements.
 - Run backend tests with `cd backend && pytest`; frontend validation with `cd frontend && npm ci && npm run build`.
+
+
+## Phase 3 implementation — library management
+
+### Library catalog
+- Added school-scoped book records with title, author, ISBN, publisher, category, total copies, available copies, and shelf location.
+- Book creation initializes available copies from the total copy count.
+- Book edits adjust available copies by the total-copy delta and reject reductions below the number currently issued.
+- Book records cannot be moved between schools or deleted after loan history exists.
+
+### Issue and return workflow
+- Added school-scoped loan records linking one library book and one student in the same school.
+- Issuing a book locks the book row, checks availability, decrements available copies, and records the issuing user and due date.
+- Returning a book uses an explicit API state transition, restores one available copy, records the return timestamp, and writes an audit event.
+- Loan history is retained; returned loans cannot be edited or deleted.
+- All book and loan list/create/update operations use the existing module permission guard and tenant-scoping mechanism.
+
+### Verification still required
+- Run backend tests and frontend production build in CI.
+- Exercise issue/return flows against PostgreSQL, including no-stock, duplicate-return, cross-school book/student, and book-delete-with-history cases.
+- Apply the startup table creation on a backed-up staging database before production use.
