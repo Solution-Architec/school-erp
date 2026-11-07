@@ -1039,3 +1039,13 @@ button:disabled{
  .compact-project-overview .table-wrap{max-height:300px}
  .compact-project-overview th,.compact-project-overview td{padding:7px 8px}
 }
+
+/* Visible, non-disruptive feedback while workspace data is reloading. */
+.content{position:relative}
+.workspace-refresh-overlay{position:absolute;inset:0;z-index:12;display:grid;place-items:start center;padding-top:clamp(105px,18vh,190px);background:rgba(245,248,251,.62);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);animation:workspace-refresh-fade-in .18s ease-out both}
+.workspace-refresh-indicator{position:sticky;top:22px;display:flex;align-items:center;gap:11px;padding:15px 20px;border:1px solid #cfe5e0;border-radius:12px;background:#fff;color:#176f66;box-shadow:0 10px 32px rgba(20,65,72,.13);font-size:12px;font-weight:700;animation:workspace-refresh-pulse 1.25s ease-in-out infinite}
+.workspace-refresh-indicator svg{animation:workspace-refresh-spin .9s linear infinite}
+@keyframes workspace-refresh-spin{to{transform:rotate(360deg)}}
+@keyframes workspace-refresh-pulse{0%,100%{box-shadow:0 10px 32px rgba(20,65,72,.10)}50%{box-shadow:0 12px 38px rgba(15,118,110,.22)}}
+@keyframes workspace-refresh-fade-in{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.workspace-refresh-overlay,.workspace-refresh-indicator,.workspace-refresh-indicator svg{animation:none}}
