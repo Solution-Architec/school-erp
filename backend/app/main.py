@@ -696,6 +696,19 @@ def _linked_parent_student(db: Session, user: models.User, student_id: int):
     ))
     return link
 
+@app.get("/api/parent-portal/leave", response_model=list[schemas.StudentLeaveOut], tags=["student-leave"])
+def parent_list_leave(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
+    linked_ids = select(models.ParentStudentLink.student_id).where(
+        models.ParentStudentLink.parent_user_id == user.id,
+        models.ParentStudentLink.school_id == user.school_id,
+        models.ParentStudentLink.is_active.is_(True))
+    return list(db.scalars(select(models.StudentLeaveRequest).where(
+        models.StudentLeaveRequest.school_id == user.school_id,
+        models.StudentLeaveRequest.student_id.in_(linked_ids)
+    ).order_by(models.StudentLeaveRequest.created_at.desc()).limit(200)).all())
+
 @app.post("/api/parent-portal/leave", response_model=schemas.StudentLeaveOut, tags=["student-leave"])
 def parent_submit_leave(payload: schemas.StudentLeaveIn, db: Session = Depends(get_db),
                         user: models.User = Depends(current_user)):
