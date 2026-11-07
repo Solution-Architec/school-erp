@@ -304,7 +304,7 @@ function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers
    <div className="developer-account-list-footer"><span>{listBusy?'Refreshing account directory…':'Showing '+accounts.length+' of '+total+' matching accounts'}</span><div className="developer-account-pagination"><button className="secondary" disabled={page===0||listBusy} onClick={()=>setPage(p=>Math.max(0,p-1))}>Previous</button><span>Page {page+1} of {Math.max(1,Math.ceil(total/100))}</span><button className="secondary" disabled={(page+1)*100>=total||listBusy} onClick={()=>setPage(p=>p+1)}>Next</button></div></div>
   </section>
   {selectedId!==null&&<section className="panel developer-account-overview">
-   <div className="panel-heading"><div><h3>Account details &amp; linked module data</h3><p>Counts are read from every mapped database table carrying this account’s school_id.</p></div><button className="secondary" onClick={()=>setSelectedId(null)}>Close details</button></div>
+   <div className="panel-heading"><div><h3>Account details &amp; linked module data</h3><p>School-wide counts cover every mapped database table carrying this account’s school_id; direct links below are account-specific.</p></div><button className="secondary" onClick={()=>setSelectedId(null)}>Close details</button></div>
    {detailBusy&&!overview?<p className="muted">Loading linked account data…</p>:overview&&<>
     <div className="developer-account-identity">
      <div><span>USER ACCOUNT</span><strong>{overview.account.name}</strong><small>{overview.account.email} · {roleLabels[overview.account.role]||overview.account.role}</small></div>
