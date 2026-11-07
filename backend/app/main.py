@@ -30,6 +30,15 @@ async def lifespan(app: FastAPI):
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_school_owner BOOLEAN NOT NULL DEFAULT FALSE"))
+        conn.execute(text("""
+            UPDATE users SET is_school_owner = TRUE
+            WHERE id IN (
+                SELECT DISTINCT ON (school_id) id FROM users
+                WHERE school_id IS NOT NULL AND role IN ('admin', 'principal')
+                ORDER BY school_id, CASE WHEN role = 'admin' THEN 0 ELSE 1 END, id ASC
+            )
+        """))
         conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
         conn.execute(text("ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_role_permissions_school_id ON role_permissions (school_id)"))
@@ -450,19 +459,39 @@ def reset_password(payload: dict, db: Session = Depends(get_db)):
 
 @app.get("/api/auth/pending-users", tags=["auth"])
 def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "View", "admin"))):
-    return list(db.scalars(select(models.User).where(models.User.school_id == user.school_id,
-        models.User.approval_status == "pending", models.User.email_verified.is_(True)).order_by(models.User.created_at)).all())
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
+    pending = db.scalars(select(models.User).where(
+        models.User.school_id == user.school_id,
+        models.User.approval_status == "pending",
+        models.User.role != "super_admin"
+    ).order_by(models.User.created_at.asc())).all()
+    # Explicit safe projection: do not serialize password hashes or authentication fields.
+    return [{
+        "id": item.id, "name": item.name, "email": item.email, "role": item.role,
+        "created_at": item.created_at, "email_verified": item.email_verified,
+        "approval_status": item.approval_status,
+    } for item in pending]
 
 @app.post("/api/auth/users/{user_id}/approval", tags=["auth"])
 def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "Approve", "admin"))):
     target = db.get(models.User, user_id)
-    decision = str(payload.get("decision", "")).lower()
+    decision = str(payload.get("decision", "")).strip().lower()
     if not target or target.school_id != user.school_id or target.role == "super_admin":
         raise HTTPException(status_code=404, detail="Pending staff account not found")
-    if decision not in ("approve", "reject") or not target.email_verified:
-        raise HTTPException(status_code=422, detail="A verified account and approve/reject decision are required")
+    if target.approval_status != "pending":
+        raise HTTPException(status_code=409, detail="This account has already been reviewed")
+    if decision not in ("approve", "reject"):
+        raise HTTPException(status_code=422, detail="Decision must be approve or reject")
+    if not target.email_verified:
+        raise HTTPException(status_code=409, detail="The staff member must verify their email before approval")
+    school = db.get(models.School, target.school_id) if target.school_id else None
+    if decision == "approve" and (not school or not school.is_active or school.approval_status != "approved"):
+        raise HTTPException(status_code=409, detail="This school is not active and approved yet")
     target.approval_status = "approved" if decision == "approve" else "rejected"
     target.is_active = decision == "approve"
+    write_audit_log(db, user, "staff.account." + decision, "user", str(target.id),
+                    {"school_id": target.school_id, "email": target.email, "role": target.role})
     db.commit()
     return {"message": "Account " + ("approved" if decision == "approve" else "rejected")}
 
@@ -1004,7 +1033,23 @@ def list_schools(q: str = Query(default="", max_length=120), db: Session = Depen
         stmt = stmt.where(models.School.id == user.school_id)
     if q:
         stmt = stmt.where(models.School.name.ilike("%" + q + "%"))
-    return list(db.scalars(stmt).all())
+    result = []
+    for school in db.scalars(stmt).all():
+        owner = db.scalar(select(models.User).where(
+            models.User.school_id == school.id,
+            models.User.is_school_owner.is_(True),
+            models.User.role != "super_admin"
+        ).order_by(models.User.id.asc()))
+        result.append({
+            "id": school.id, "name": school.name, "code": school.code,
+            "approval_status": school.approval_status, "is_active": school.is_active,
+            "created_at": school.created_at,
+            "owner_user_id": owner.id if owner else None,
+            "owner_name": owner.name if owner else None,
+            "owner_email": owner.email if owner else None,
+            "owner_role": owner.role if owner else None,
+        })
+    return result
 
 
 @app.post("/api/schools", response_model=schemas.SchoolOut, tags=["schools"])
@@ -1191,12 +1236,21 @@ def record_payment(fee_id: int, payload: schemas.PaymentIn, db: Session = Depend
 def assign_user_school(user_id: int, payload: dict, db: Session = Depends(get_db),
                        user: models.User = Depends(require_roles("super_admin"))):
     target = db.get(models.User, user_id)
-    school_id = payload.get("school_id")
-    if not target or target.role == "super_admin":
-        raise HTTPException(status_code=404, detail="School owner account not found")
-    if not school_id or not db.get(models.School, int(school_id)):
-        raise HTTPException(status_code=404, detail="School not found")
-    target.school_id = int(school_id)
+    try:
+        school_id = int(payload.get("school_id"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="A valid school_id is required")
+    school = db.get(models.School, school_id)
+    if not target or target.role in ("super_admin", "parent"):
+        raise HTTPException(status_code=404, detail="Eligible school owner account not found")
+    if not school or not school.is_active or school.approval_status != "approved":
+        raise HTTPException(status_code=404, detail="An active, developer-approved school is required")
+    db.query(models.User).filter(
+        models.User.school_id == school_id,
+        models.User.is_school_owner.is_(True)
+    ).update({models.User.is_school_owner: False}, synchronize_session=False)
+    target.school_id = school_id
+    target.is_school_owner = True
     db.commit()
     db.refresh(target)
     return target
