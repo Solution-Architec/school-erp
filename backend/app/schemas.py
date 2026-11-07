@@ -359,3 +359,58 @@ class ReportCardOut(ReportCardIn):
     id: int
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+class HomeworkIn(BaseModel):
+    school_id: int | None = Field(default=None, gt=0)
+    class_name: str = Field(min_length=1, max_length=80)
+    section: str = Field(default="", max_length=40)
+    subject: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=180)
+    description: str = Field(default="", max_length=10000)
+    due_date: date
+    attachment_url: str = Field(default="", max_length=500)
+
+class HomeworkOut(HomeworkIn):
+    id: int
+    assigned_by: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class StudentLeaveIn(BaseModel):
+    school_id: int | None = Field(default=None, gt=0)
+    student_id: int = Field(gt=0)
+    start_date: date
+    end_date: date
+    reason: str = Field(min_length=3, max_length=500)
+
+    @model_validator(mode="after")
+    def valid_leave_range(self):
+        if self.end_date < self.start_date:
+            raise ValueError("Leave end date cannot be before start date")
+        return self
+
+class StudentLeaveOut(StudentLeaveIn):
+    id: int
+    status: str
+    reviewed_by: int | None
+    reviewer_note: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class ParentTeacherMessageIn(BaseModel):
+    student_id: int = Field(gt=0)
+    recipient_user_id: int = Field(gt=0)
+    subject: str = Field(default="", max_length=180)
+    body: str = Field(min_length=1, max_length=10000)
+
+class ParentTeacherMessageOut(BaseModel):
+    id: int
+    school_id: int
+    student_id: int
+    sender_user_id: int
+    recipient_user_id: int
+    subject: str
+    body: str
+    created_at: datetime
+    read_at: datetime | None
+    model_config = ConfigDict(from_attributes=True)
