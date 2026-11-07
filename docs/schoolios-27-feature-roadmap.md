@@ -90,7 +90,7 @@ The UI and API changes are committed. Runtime database migration, deployment, an
 - Loan history is retained; returned loans cannot be edited or deleted.
 - All book and loan list/create/update operations use the existing module permission guard and tenant-scoping mechanism.
 
-### Verification still required
-- Run backend tests and frontend production build in CI.
-- Exercise issue/return flows against PostgreSQL, including no-stock, duplicate-return, cross-school book/student, and book-delete-with-history cases.
+### Validation
+- GitHub Actions CI run 42361284006 passed: backend syntax checks, backend test suite, frontend dependency installation, and production build.
+- PostgreSQL staging verification remains required for issue/return concurrency, no-stock and duplicate-return behavior, cross-school book/student rejection, and book-delete-with-history protection.
 - Apply the startup table creation on a backed-up staging database before production use.
