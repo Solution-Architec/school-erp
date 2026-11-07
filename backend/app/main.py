@@ -31,6 +31,11 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
         conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
+        # Role permissions support ERP-wide defaults (school_id NULL) and per-school overrides.
+        conn.execute(text("ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)"))
+        conn.execute(text("ALTER TABLE role_permissions DROP CONSTRAINT IF EXISTS uq_role_permission_scope"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_global ON role_permissions (role, module_key, action) WHERE school_id IS NULL"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_school ON role_permissions (school_id, role, module_key, action) WHERE school_id IS NOT NULL"))
         tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments")
         all_school_tables = ("users",) + tenant_tables
         for table in all_school_tables:
@@ -138,64 +143,107 @@ def write_audit_log(db: Session, actor: models.User, event_type: str, target_typ
     ))
 
 
-@app.get("/api/rbac/roles/{role}/permissions", tags=["rbac"])
-def get_role_permissions(role: str, db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
-    role = role.strip().lower()
-    if role not in RBAC_ROLES:
-        raise HTTPException(status_code=404, detail="Role not found")
-    grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role)).all()
-    if grants:
-        return {"role": role, "configured": True, "permissions": {f"{g.module_key}:{g.action}": g.enabled for g in grants}}
+def _default_permission_matrix(role: str) -> dict[str, bool]:
     allowed_modules = set(DEFAULT_ROLE_MODULES.get(role, ["dashboard", "chatbot"]))
-    defaults = {
+    return {
         f"{module}:{action}": (
             module in allowed_modules and action in {"View", "Create", "Edit", "Delete"}
         ) or (module == "approvals" and action == "Approve" and module in allowed_modules)
         for module in RBAC_MODULES for action in RBAC_ACTIONS
     }
-    return {"role": role, "configured": False, "permissions": defaults}
 
 
-@app.put("/api/rbac/roles/{role}/permissions", tags=["rbac"])
-def save_role_permissions(role: str, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
-    role = role.strip().lower()
-    if role not in RBAC_ROLES:
-        raise HTTPException(status_code=404, detail="Role not found")
-    permissions = payload.get("permissions")
+def _permission_scope_matrix(db: Session, role: str, school_id: int | None = None) -> dict:
+    global_grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role, models.RolePermission.school_id.is_(None))).all()
+    school_grants = []
+    if school_id is not None:
+        school_grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role, models.RolePermission.school_id == school_id)).all()
+    effective = _default_permission_matrix(role)
+    if global_grants:
+        effective.update({f"{g.module_key}:{g.action}": g.enabled for g in global_grants})
+    inherited = dict(effective)
+    if school_grants:
+        effective.update({f"{g.module_key}:{g.action}": g.enabled for g in school_grants})
+    return {"permissions": effective, "configured": bool(school_grants) if school_id is not None else bool(global_grants),
+            "global_configured": bool(global_grants), "school_configured": bool(school_grants), "inherited_permissions": inherited}
+
+
+def _validate_permission_payload(permissions: Any) -> set[str]:
     if not isinstance(permissions, dict):
         raise HTTPException(status_code=422, detail="A permissions object is required")
     expected = {f"{module}:{action}" for module in RBAC_MODULES for action in RBAC_ACTIONS}
     unknown = set(permissions) - expected
     if unknown:
-        raise HTTPException(status_code=422, detail=f"Unknown permission keys: {', '.join(sorted(unknown)[:8])}")
+        raise HTTPException(status_code=422, detail=f"Unknown permission keys: {sorted(unknown)[:8]}")
     if any(not isinstance(value, bool) for value in permissions.values()):
         raise HTTPException(status_code=422, detail="Permission values must be true or false")
-    existing = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role)).all()
+    return expected
+
+
+def _validate_permission_school(db: Session, school_id: int | None) -> None:
+    if school_id is not None and db.get(models.School, school_id) is None:
+        raise HTTPException(status_code=404, detail="School not found")
+
+
+@app.get("/api/rbac/roles/{role}/permissions", tags=["rbac"])
+def get_role_permissions(role: str, school_id: int | None = Query(default=None, gt=0), db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
+    role = role.strip().lower()
+    if role not in RBAC_ROLES:
+        raise HTTPException(status_code=404, detail="Role not found")
+    _validate_permission_school(db, school_id)
+    scope = _permission_scope_matrix(db, role, school_id)
+    return {"role": role, "school_id": school_id, "scope": "school" if school_id is not None else "global",
+            "configured": scope["configured"], "global_configured": scope["global_configured"], "school_configured": scope["school_configured"],
+            "permissions": scope["permissions"]}
+
+
+@app.put("/api/rbac/roles/{role}/permissions", tags=["rbac"])
+def save_role_permissions(role: str, payload: dict, school_id: int | None = Query(default=None, gt=0), db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
+    role = role.strip().lower()
+    if role not in RBAC_ROLES:
+        raise HTTPException(status_code=404, detail="Role not found")
+    _validate_permission_school(db, school_id)
+    permissions = payload.get("permissions")
+    expected = _validate_permission_payload(permissions)
+    scope_filter = models.RolePermission.school_id == school_id if school_id is not None else models.RolePermission.school_id.is_(None)
+    existing = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role, scope_filter)).all()
     by_key = {(g.module_key, g.action): g for g in existing}
     for key in expected:
         module_key, action = key.rsplit(":", 1)
         enabled = permissions.get(key, False)
         grant = by_key.get((module_key, action))
         if grant is None:
-            db.add(models.RolePermission(role=role, module_key=module_key, action=action, enabled=enabled))
+            db.add(models.RolePermission(role=role, module_key=module_key, action=action, enabled=enabled, school_id=school_id))
         else:
             grant.enabled = enabled
-    write_audit_log(db, user, "rbac.permissions.updated", "role", role,
-                    {"enabled_count": sum(1 for value in permissions.values() if value), "module_count": len(RBAC_MODULES)})
+    scope_name = "school" if school_id is not None else "global"
+    target = f"{role}:{scope_name}:{school_id or 0}"
+    write_audit_log(db, user, "rbac.permissions.updated", "role", target,
+                    {"role": role, "scope": scope_name, "school_id": school_id, "enabled_count": sum(1 for value in permissions.values() if value), "module_count": len(RBAC_MODULES)})
     db.commit()
-    return {"message": "Role permissions saved", "role": role, "saved": len(expected)}
+    return {"message": "School-specific permissions saved" if school_id is not None else "ERP-wide permissions saved",
+            "role": role, "school_id": school_id, "scope": scope_name, "saved": len(expected)}
 
+
+@app.delete("/api/rbac/roles/{role}/permissions", tags=["rbac"])
+def reset_school_role_permissions(role: str, school_id: int = Query(..., gt=0), db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
+    role = role.strip().lower()
+    if role not in RBAC_ROLES:
+        raise HTTPException(status_code=404, detail="Role not found")
+    _validate_permission_school(db, school_id)
+    db.query(models.RolePermission).filter(models.RolePermission.role == role, models.RolePermission.school_id == school_id).delete(synchronize_session=False)
+    write_audit_log(db, user, "rbac.permissions.reset", "role", f"{role}:school:{school_id}", {"role": role, "scope": "school", "school_id": school_id})
+    db.commit()
+    return {"message": "School override removed; ERP-wide permissions now apply", "role": role, "school_id": school_id}
 
 
 @app.get("/api/rbac/me", tags=["rbac"])
 def my_module_permissions(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
     if user.role == "super_admin":
         return {"role": user.role, "configured": True, "permissions": {"*": True}}
-    grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == user.role)).all()
-    if not grants:
-        return {"role": user.role, "configured": False, "permissions": {}}
-    return {"role": user.role, "configured": True,
-            "permissions": {f"{g.module_key}:{g.action}": g.enabled for g in grants}}
+    scope = _permission_scope_matrix(db, user.role, user.school_id)
+    return {"role": user.role, "school_id": user.school_id, "configured": scope["school_configured"] or scope["global_configured"], "permissions": scope["permissions"]}
+
 
 @app.get("/api/rbac/audit-logs", tags=["rbac"])
 def get_rbac_audit_logs(limit: int = Query(default=50, ge=1, le=200), db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):

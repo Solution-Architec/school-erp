@@ -69,8 +69,17 @@ def require_module_permission(module_key: str, action: str, *fallback_roles: str
     def checker(user: User = Depends(current_user), db: Session = Depends(get_db)) -> User:
         if user.role == "super_admin":
             return user
-        grant = db.scalar(select(RolePermission).where(
+        school_grant = None
+        if user.school_id is not None:
+            school_grant = db.scalar(select(RolePermission).where(
+                RolePermission.role == user.role,
+                RolePermission.school_id == user.school_id,
+                RolePermission.module_key == module_key,
+                RolePermission.action == action,
+            ))
+        grant = school_grant or db.scalar(select(RolePermission).where(
             RolePermission.role == user.role,
+            RolePermission.school_id.is_(None),
             RolePermission.module_key == module_key,
             RolePermission.action == action,
         ))

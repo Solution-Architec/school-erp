@@ -33,6 +33,7 @@ class SchoolOut(BaseModel):
     name: str
     code: str
     is_active: bool
+    approval_status: str = "approved"
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
