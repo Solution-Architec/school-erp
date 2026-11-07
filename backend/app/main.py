@@ -931,6 +931,8 @@ def register_crud(path, model, schema_in, schema_out, roles):
                 raise HTTPException(status_code=422, detail="A loan's book, student, and school cannot be changed after issue")
             values = {"due_date": values["due_date"]}
         if model is models.LibraryBook:
+            if values.get("school_id") != obj.school_id:
+                raise HTTPException(status_code=422, detail="A library book cannot be moved between schools")
             copy_delta = values["total_copies"] - obj.total_copies
             if obj.available_copies + copy_delta < 0:
                 raise HTTPException(status_code=409, detail="Total copies cannot be lower than the number currently issued")
@@ -952,8 +954,8 @@ def register_crud(path, model, schema_in, schema_out, roles):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
-        if model is models.LibraryBook and db.scalar(select(models.LibraryLoan.id).where(models.LibraryLoan.book_id == obj.id, models.LibraryLoan.status == "issued")):
-            raise HTTPException(status_code=409, detail="This book has an active loan and cannot be deleted")
+        if model is models.LibraryBook and db.scalar(select(models.LibraryLoan.id).where(models.LibraryLoan.book_id == obj.id)):
+            raise HTTPException(status_code=409, detail="A book with loan history cannot be deleted")
         if model is models.LibraryLoan:
             raise HTTPException(status_code=409, detail="Library loan history cannot be deleted")
         db.delete(obj)
