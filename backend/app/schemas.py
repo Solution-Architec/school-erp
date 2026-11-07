@@ -21,6 +21,7 @@ class UserOut(BaseModel):
     name: str
     email: EmailStr
     role: str
+    is_school_owner: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 class SchoolIn(BaseModel):
@@ -35,6 +36,10 @@ class SchoolOut(BaseModel):
     approval_status: str = "approved"
     is_active: bool
     created_at: datetime
+    owner_user_id: int | None = None
+    owner_name: str | None = None
+    owner_email: EmailStr | None = None
+    owner_role: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
