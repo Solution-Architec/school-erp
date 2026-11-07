@@ -935,7 +935,8 @@ def register_crud(path, model, schema_in, schema_out, roles):
             if obj.available_copies + copy_delta < 0:
                 raise HTTPException(status_code=409, detail="Total copies cannot be lower than the number currently issued")
             obj.available_copies += copy_delta
-        validate_related_records(values, user, db)
+        if model is not models.LibraryLoan:
+            validate_related_records(values, user, db)
         for key, value in values.items():
             setattr(obj, key, value)
         try:
