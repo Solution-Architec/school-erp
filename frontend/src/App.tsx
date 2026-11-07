@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Activity, ArrowLeft, ArrowRight, Bus, Building2, ChevronDown, Eye, EyeOff, FileText, GraduationCap, LayoutDashboard, LockKeyhole, LogOut, Mail, Menu, Search, Settings, ShieldCheck, Users, Wallet, Wrench, BookOpen, Bell, Plus, RefreshCw, X, Upload, Download } from 'lucide-react'
 
@@ -58,6 +58,11 @@ const modules: ModuleDef[] = [
   description: 'View collections, outstanding balances and overdue fees',
  },
 ]
+
+const developerAccountModule: ModuleDef = {
+ key: 'user-accounts', label: 'User Accounts', icon: ShieldCheck,
+ description: 'Global account directory, linked school data and effective role permissions',
+}
 
 const roleLabels:Record<string,string> = {
  super_admin:'Developer', user:'Principal', admin:'Principal', principal:'Principal',
@@ -206,6 +211,118 @@ function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Pro
  async function ask(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!question.trim()||busy)return;const q=question.trim();setQuestion('');setBusy(true);setError('');try{const result=await request('/api/chatbot/faq',{method:'POST',body:JSON.stringify({question:q})});setMessages(old=>[...old,{q,a:result.answer}])}catch(err:any){setError(err.message)}finally{setBusy(false)}}
  return <div className="panel"><div className="panel-heading"><div><h3>SchoolOS Help Assistant</h3><p>Ask common questions about school workflows. Answers are from approved FAQ content.</p></div><Activity size={20}/></div><div className="chat-faq-list">{messages.map((m,i)=><div className="chat-faq-item" key={i}><div className="chat-user-question">{m.q}</div><div className="chat-assistant-answer">{m.a}</div></div>)}{!messages.length&&<div className="empty-state"><strong>How can I help?</strong><p>Try “How do I pay fees?”, “How do I reset my password?”, or “Where is transport information?”</p></div>}</div>{error&&<div className="error">{error}</div>}<form className="chat-faq-form" onSubmit={ask}><input value={question} maxLength={500} onChange={e=>setQuestion(e.target.value)} placeholder="Ask SchoolOS…" /><button className="primary" disabled={busy||!question.trim()}>{busy?'Thinking…':'Ask'}</button></form></div>
 }
+function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers,onSwitchDemo}:{request:(url:string,options?:RequestInit)=>Promise<any>;schools:any[];demoEnabled:boolean;demoActive:boolean;demoUsers:{label:string;email:string;schoolCode:string}[];onSwitchDemo:(email:string,password:string)=>Promise<boolean>}) {
+ const requestRef=useRef(request);
+ requestRef.current=request;
+ const [accounts,setAccounts]=useState<any[]>([]);
+ const [total,setTotal]=useState(0);
+ const [search,setSearch]=useState('');
+ const [roleFilter,setRoleFilter]=useState('');
+ const [schoolFilter,setSchoolFilter]=useState('');
+ const [statusFilter,setStatusFilter]=useState('all');
+ const [page,setPage]=useState(0);
+ const [selectedId,setSelectedId]=useState<number|null>(null);
+ const [overview,setOverview]=useState<any|null>(null);
+ const [listBusy,setListBusy]=useState(false);
+ const [detailBusy,setDetailBusy]=useState(false);
+ const [pageError,setPageError]=useState('');
+ const [demoEmail,setDemoEmail]=useState('');
+ const [demoPassword,setDemoPassword]=useState('');
+ const [demoBusy,setDemoBusy]=useState(false);
+ const [demoError,setDemoError]=useState('');
+
+ useEffect(()=>{
+  let cancelled=false;
+  const loadAccounts=async()=>{
+   setListBusy(true);setPageError('');
+   try{
+    const params=new URLSearchParams({limit:'100',offset:String(page*100),status:statusFilter});
+    if(search.trim())params.set('q',search.trim());
+    if(roleFilter)params.set('role',roleFilter);
+    if(schoolFilter)params.set('school_id',schoolFilter);
+    const data=await requestRef.current('/api/developer/user-accounts?'+params.toString());
+    if(!cancelled){setAccounts(data.users||[]);setTotal(Number(data.total||0));}
+   }catch(err:any){if(!cancelled)setPageError(err.message||'Unable to load user accounts');}
+   finally{if(!cancelled)setListBusy(false);}
+  };
+  const timer=window.setTimeout(loadAccounts,search.trim()?250:0);
+  return()=>{cancelled=true;window.clearTimeout(timer)};
+ },[search,roleFilter,schoolFilter,statusFilter,page]);
+
+ useEffect(()=>{
+  if(selectedId===null){setOverview(null);return}
+  let cancelled=false;
+  setDetailBusy(true);setPageError('');
+  requestRef.current('/api/developer/user-accounts/'+selectedId+'/overview')
+   .then(data=>{if(!cancelled)setOverview(data)})
+   .catch((err:any)=>{if(!cancelled){setOverview(null);setPageError(err.message||'Unable to load account overview')}})
+   .finally(()=>{if(!cancelled)setDetailBusy(false)});
+  return()=>{cancelled=true};
+ },[selectedId]);
+
+ const permissionKeys=overview?.permissions?Object.keys(overview.permissions).filter((key:string)=>key!=='*'):[];
+ const permissionModules=Array.from(new Set(permissionKeys.map((key:string)=>key.split(':')[0]))).sort();
+ const actions=['View','Create','Edit','Delete','Approve','Export'];
+ const openDemo=async()=>{
+  if(!demoEmail||!demoPassword){setDemoError('Choose a demo role and enter the demo password.');return}
+  setDemoBusy(true);setDemoError('');
+  try{const opened=await onSwitchDemo(demoEmail,demoPassword);if(opened)setDemoPassword('');else setDemoError('Demo login was not completed. Check the credentials and try again.')}
+  catch(err:any){setDemoError(err.message||'Unable to open demo account')}
+  finally{setDemoBusy(false)}
+ };
+ return <div className="developer-account-workspace">
+  {demoEnabled&&demoActive&&<section className="panel developer-demo-panel">
+   <div className="panel-heading"><div><h3>Demo account login &amp; role testing</h3><p>Open a demo user with its own login session, inspect its workspace, then use “Return to Developer” in the top bar.</p></div><ShieldCheck size={20}/></div>
+   <div className="developer-demo-controls">
+    <label>Demo account<select value={demoEmail} onChange={e=>setDemoEmail(e.target.value)}><option value="">Select demo role</option>{demoUsers.filter(item=>item.email!=='demo.developer@jovoo.in').map(item=><option key={item.email} value={item.email}>{item.label} · {item.email}</option>)}</select></label>
+    <label>Demo password<input type="password" autoComplete="current-password" value={demoPassword} onChange={e=>setDemoPassword(e.target.value)} placeholder="Enter shared demo password"/></label>
+    <button className="primary" disabled={demoBusy||!demoEmail||!demoPassword} onClick={openDemo}>{demoBusy?'Opening…':'Login as demo user'}</button>
+   </div>
+   {demoError&&<div className="error">{demoError}</div>}
+  </section>}
+  <section className="panel developer-account-list">
+   <div className="panel-heading"><div><h3>All registered user accounts</h3><p>Platform-wide directory. Select an account to inspect its school links, module data counts and effective permissions.</p></div><span className="record-count">{total} accounts</span></div>
+   <div className="developer-account-filters">
+    <label className="developer-account-search">Search name or email<input value={search} onChange={e=>{setPage(0);setSearch(e.target.value)}} placeholder="Search all accounts…"/></label>
+    <label>Role<select value={roleFilter} onChange={e=>{setPage(0);setRoleFilter(e.target.value)}}><option value="">All roles</option>{Object.entries(roleLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+    <label>School<select value={schoolFilter} onChange={e=>{setPage(0);setSchoolFilter(e.target.value)}}><option value="">All schools</option>{schools.map(s=><option key={s.id} value={String(s.id)}>{s.name}</option>)}</select></label>
+    <label>Status<select value={statusFilter} onChange={e=>{setPage(0);setStatusFilter(e.target.value)}}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="pending">Pending approval</option></select></label>
+   </div>
+   {pageError&&<div className="error banner">{pageError}</div>}
+   <div className="table-wrap developer-account-table-wrap"><table className="developer-account-table"><thead><tr><th>Account</th><th>Role</th><th>School</th><th>Owner</th><th>Account status</th><th>Email</th><th>Action</th></tr></thead><tbody>
+    {accounts.map(account=><tr key={account.id} className={selectedId===account.id?'developer-account-selected':''}>
+     <td><strong>{account.name}</strong><small>#{account.id} · {account.email}</small></td>
+     <td><span className="status-badge">{roleLabels[account.role]||account.role}</span></td>
+     <td>{account.school_name||'Platform account'}{account.school_code&&<small>{account.school_code}</small>}</td>
+     <td>{account.is_school_owner?'Yes':'—'}</td>
+     <td><span className={account.is_active&&account.approval_status==='approved'?'status-badge active':'status-badge'}>{!account.is_active?'Inactive':account.approval_status==='pending'?'Pending':account.approval_status||'Approved'}</span></td>
+     <td>{account.email_verified?'Verified':'Unverified'}</td>
+     <td><button className="secondary" onClick={()=>setSelectedId(account.id)}>{selectedId===account.id?'Selected':'View details'}</button></td>
+    </tr>)}
+    {!accounts.length&&<tr><td colSpan={7}><div className="empty-state"><strong>{listBusy?'Loading accounts…':'No matching accounts'}</strong><p>Change the filters or clear the search to see more accounts.</p></div></td></tr>}
+   </tbody></table></div>
+   <div className="developer-account-list-footer"><span>{listBusy?'Refreshing account directory…':'Showing '+accounts.length+' of '+total+' matching accounts'}</span><div className="developer-account-pagination"><button className="secondary" disabled={page===0||listBusy} onClick={()=>setPage(p=>Math.max(0,p-1))}>Previous</button><span>Page {page+1} of {Math.max(1,Math.ceil(total/100))}</span><button className="secondary" disabled={(page+1)*100>=total||listBusy} onClick={()=>setPage(p=>p+1)}>Next</button></div></div>
+  </section>
+  {selectedId!==null&&<section className="panel developer-account-overview">
+   <div className="panel-heading"><div><h3>Account details &amp; linked module data</h3><p>School-wide counts cover every mapped database table carrying this account’s school_id; direct links below are account-specific.</p></div><button className="secondary" onClick={()=>setSelectedId(null)}>Close details</button></div>
+   {detailBusy&&!overview?<p className="muted">Loading linked account data…</p>:overview&&<>
+    <div className="developer-account-identity">
+     <div><span>USER ACCOUNT</span><strong>{overview.account.name}</strong><small>{overview.account.email} · {roleLabels[overview.account.role]||overview.account.role}</small></div>
+     <div><span>SCHOOL</span><strong>{overview.school?.name||'Platform-wide account'}</strong><small>{overview.school?overview.school.code+' · '+(overview.school.is_active?'Active school':'Inactive school')+' · '+overview.school.approval_status:'No school assigned'}</small></div>
+     <div><span>ACCOUNT FLAGS</span><strong>{overview.account.is_active?'Active':'Inactive'} · {overview.account.approval_status}</strong><small>{overview.account.is_school_owner?'Main school owner':'Not marked as school owner'} · {overview.account.email_verified?'Email verified':'Email not verified'}</small></div>
+    </div>
+    <div className="developer-module-count-grid">{Object.entries(overview.module_counts||{}).map(([module,count]:any)=><div key={module}><span>{module.replaceAll('-',' ')}</span><strong>{count}</strong></div>)}{!Object.keys(overview.module_counts||{}).length&&<p className="muted">No school-linked module records are associated with this account.</p>}</div>
+    <div className="developer-direct-links-grid">{Object.entries(overview.direct_relationships||{}).map(([label,count]:any)=><div key={label}><span>{label.replaceAll('_',' ')}</span><strong>{count}</strong></div>)}</div>
+
+    <div className="developer-linked-tables"><h4>Database tables checked</h4><div className="table-wrap"><table><thead><tr><th>Module</th><th>Database table</th><th>Records in this school</th></tr></thead><tbody>{(overview.linked_tables||[]).map((item:any)=><tr key={item.table}><td>{item.module.replaceAll('-',' ')}</td><td><code>{item.table}</code></td><td><strong>{item.count}</strong></td></tr>)}</tbody></table></div></div>
+    {!!overview.staff_records?.length&&<div className="developer-linked-tables"><h4>Staff records linked by login email</h4><div className="table-wrap"><table><thead><tr><th>Employee no.</th><th>Name</th><th>Designation</th><th>Status</th></tr></thead><tbody>{overview.staff_records.map((item:any)=><tr key={item.id}><td>{item.employee_no}</td><td>{item.full_name}</td><td>{item.designation}</td><td>{item.status}</td></tr>)}</tbody></table></div></div>}
+    {!!overview.parent_student_links?.length&&<div className="developer-linked-tables"><h4>Parent-to-student links</h4><div className="table-wrap"><table><thead><tr><th>Admission no.</th><th>Student</th><th>Class / section</th><th>Relationship</th></tr></thead><tbody>{overview.parent_student_links.map((item:any)=><tr key={item.link_id}><td>{item.admission_no}</td><td>{item.student_name}</td><td>{item.class_name} {item.section}</td><td>{item.relationship}</td></tr>)}</tbody></table></div></div>}
+    <div className="developer-linked-tables"><h4>Effective role permissions</h4><p className="muted">{overview.permission_configuration?.effective_scope||'Resolved from role defaults'} · View-only inspection; change permissions in the Role Permissions panel.</p><div className="table-wrap"><table className="developer-permission-table"><thead><tr><th>Module</th>{actions.map(action=><th key={action}>{action}</th>)}</tr></thead><tbody>{overview.permissions?.['*']?<tr><td colSpan={7}>Developer platform account — unrestricted role access</td></tr>:permissionModules.map((module:string)=><tr key={module}><td>{modules.find(item=>item.key===module)?.label||module}</td>{actions.map(action=><td key={action}>{overview.permissions?.[module+':'+action]?'✓':'—'}</td>)}</tr>)}</tbody></table></div></div>
+   </>}
+  </section>}
+ </div>
+}
+
 function App(){
  const [token,setToken]=useState(localStorage.getItem('erp_token')||'')
  const [user,setUser]=useState<User|null>(null)
@@ -245,29 +362,30 @@ function App(){
  const [paymentFeeId,setPaymentFeeId]=useState('')
  const [paymentAmount,setPaymentAmount]=useState('')
  const [paymentMethod,setPaymentMethod]=useState('cash')
- const allowedModuleKeys=user?.role==='super_admin'?modules.map(m=>m.key):rbacPermissions?.role===user?.role?modules.filter(m=>Boolean(rbacPermissions.permissions?.[m.key+':View'])).map(m=>m.key):[]
- const availableModules=modules.filter(m=>allowedModuleKeys.includes(m.key))
- const selected=modules.find(m=>m.key===active)||modules[0]
+ const allowedModuleKeys=user?.role==='super_admin'?modules.map(m=>m.key):rbacPermissions&&rbacPermissions.role===user?.role?modules.filter(m=>Boolean(rbacPermissions.permissions?.[m.key+':View'])).map(m=>m.key):[]
+ const availableModules=[...modules.filter(m=>allowedModuleKeys.includes(m.key)),...(user?.role==='super_admin'?[developerAccountModule]:[])]
+ const selected=([...modules,developerAccountModule].find(m=>m.key===active))||modules[0]
  const roleLabel=roleLabels[user?.role||'user']||'School User'
  const hasModule=(key:string)=>allowedModuleKeys.includes(key)
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
- useEffect(()=>{if(user){const first=allowedModuleKeys[0]||'dashboard';if(!allowedModuleKeys.includes(active))setActive(first)}},[user,rbacPermissions])
+ useEffect(()=>{if(user){const first=allowedModuleKeys[0]||'dashboard';const developerOnlyPage=user.role==='super_admin'&&active==='user-accounts';if(!allowedModuleKeys.includes(active)&&!developerOnlyPage)setActive(first)}},[user,rbacPermissions])
  useEffect(()=>{if(!token){setRbacPermissions(null);return}fetch(`${API}/api/rbac/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setRbacPermissions).catch(()=>setRbacPermissions(null))},[token,authHeaders])
  useEffect(()=>{if(!token)return;fetch(`${API}/api/auth/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setUser).catch(()=>{localStorage.removeItem('erp_token');setToken('');setUser(null)})},[token,authHeaders])
  async function request(url:string,options:RequestInit={}){const r=await fetch(`${API}${url}`,{...options,headers:{...authHeaders,...options.headers}});if(r.status===401){logout();throw new Error('Session expired. Please sign in again.')}const raw=await r.text();let data:any={};try{data=raw?JSON.parse(raw):{}}catch{data={}}if(!r.ok){const detail=data.detail||data.message||raw.slice(0,240);throw new Error((detail||'API request failed')+` (HTTP ${r.status}: ${options.method||'GET'} ${url})`)}return data}
  function logout(){localStorage.removeItem('erp_token');setToken('');setUser(null);setRbacPermissions(null);setRows([]);setDemoTestingActive(false);setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('');sessionStorage.removeItem('demo_testing_active')}
- function handleLogin(t:string,u:User){localStorage.setItem('erp_token',t);setToken(t);setUser(u);const canTest=DEMO_MODE&&u.role==='super_admin'&&u.email==='demo.developer@jovoo.in';setDemoTestingActive(canTest);if(canTest)sessionStorage.setItem('demo_testing_active','true');else sessionStorage.removeItem('demo_testing_active');setActive('dashboard')}
- async function switchDemoAccount(email:string,passwordOverride?:string){
+ function handleLogin(t:string,u:User){localStorage.setItem('erp_token',t);setToken(t);setUser(u);const canTest=DEMO_MODE&&u.role==='super_admin';setDemoTestingActive(canTest);if(canTest)sessionStorage.setItem('demo_testing_active','true');else sessionStorage.removeItem('demo_testing_active');setActive('dashboard')}
+ async function switchDemoAccount(email:string,passwordOverride?:string):Promise<boolean>{
   const demo=DEMO_USERS.find(item=>item.email===email)
   const password=passwordOverride||demoSwitchPassword
-  if(!demo||!password){setDemoSwitchError('Choose a demo role and enter the shared demo password.');return}
+  if(!demo||!password){setDemoSwitchError('Choose a demo role and enter the shared demo password.');return false}
   setDemoSwitchBusy(true);setDemoSwitchError('')
   try{
    const response=await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:demo.email,password:password,...(demo.schoolCode?{school_code:demo.schoolCode}:{})})})
    const data=await response.json().catch(()=>null)
    if(!response.ok||!data?.access_token||!data?.user)throw new Error(data?.detail||'Unable to open that demo role.')
    localStorage.setItem('erp_token',data.access_token);setToken(data.access_token);setUser(data.user);setActive('dashboard');setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('')
-  }catch(err:any){setDemoSwitchError(err.message||'Unable to switch demo role.')}finally{setDemoSwitchBusy(false)}
+   return true
+  }catch(err:any){setDemoSwitchError(err.message||'Unable to switch demo role.');return false}finally{setDemoSwitchBusy(false)}
  }
  async function recordFeePayment(){if(!paymentFeeId||!paymentAmount)return;try{await request('/api/student-fees/'+paymentFeeId+'/payments',{method:'POST',body:JSON.stringify({amount:Number(paymentAmount),payment_method:paymentMethod})});setNotice('Fee payment recorded successfully');setPaymentAmount('');await load()}catch(e:any){setError(e.message)}}
  async function assignSchoolOwner(){if(!ownerUserId||!ownerSchoolId)return;try{await request('/api/users/'+ownerUserId+'/school',{method:'PATCH',body:JSON.stringify({school_id:Number(ownerSchoolId)})});setNotice('Main school owner assigned successfully');const [updatedUsers,updatedSchools]=await Promise.all([request('/api/users'),request('/api/schools')]);setOwnerUsers(updatedUsers);setSchools(updatedSchools);await load()}catch(e:any){setError(e.message)}}
@@ -306,7 +424,7 @@ function App(){
   <main className="main"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileNav(true)}><Menu/></button><div className="crumb">Workspace <span>/</span> <strong>{selected.label}</strong></div><span className="role-chip">{roleLabel}</span>{DEMO_MODE&&demoTestingActive&&user.role!=="super_admin"&&<button className="secondary" onClick={()=>{const password=window.prompt("Enter the shared demo password to return to Developer");if(password)switchDemoAccount("demo.developer@jovoo.in",password)}}>Return to Developer</button>}<div className="top-actions">{user.role!=='parent'&&<div className="student-global-search"><Search size={16}/><input aria-label="Find student across modules" placeholder="Find student by name / admission no." value={studentSearch} onChange={e=>setStudentSearch(e.target.value)}/>{studentResults.length>0&&<div className="student-search-results">{studentResults.map(s=><button type="button" key={s.id} onClick={()=>chooseStudent(s)}><strong>{s.full_name}</strong><span>{s.admission_no} · {s.class_name||'Class not set'} {s.section||''}</span></button>)}</div>}</div>}<div className="online-pill"><span/> System online</div><button className="icon-button" title="Notifications"><Bell size={19}/></button><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div></div></header>
   <div className="content">{selectedStudent&&<div className="selected-student-context"><div><strong>Selected student: {selectedStudent.full_name}</strong><span>{selectedStudent.admission_no} · {selectedStudent.class_name||'Class not set'} {selectedStudent.section||''} · Guardian: {selectedStudent.guardian_name||'—'} · Phone: {selectedStudent.guardian_phone||'—'}</span></div><button type="button" className="secondary" onClick={()=>setSelectedStudent(null)}>Clear student</button></div>}<div className="page-heading"><div><p className="eyebrow">SCHOOL ERP / {selected.key.toUpperCase()}</p><h1>{selected.label}</h1><p className="muted">{selected.description}</p></div><div className="heading-actions"><button className="secondary" onClick={load}><RefreshCw size={16}/> Refresh</button>{active==='students'&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<button className="secondary" onClick={downloadStudentTemplate}><Download size={16}/> Template</button><input id="student-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importStudents}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('student-bulk-file')?.click()}><Upload size={16}/> {importing?'Uploading…':'Bulk upload'}</button></>}{['staff','classes','vehicles','hostels','maintenance','fee-structures'].includes(active)&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<input id="module-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importModule}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('module-bulk-file')?.click()}><Upload size={16}/> {importing?'Importing…':'Import CSV / Excel'}</button></>}{selected.endpoint&&(user.role!=='super_admin'||active==='schools'||active==='staff')&&<button className="primary" onClick={()=>{setEditingRecordId(null);setForm(active==='student-fees'&&selectedStudent?{student_id:selectedStudent.id,term:'annual',discount:0}:{});setShowForm(true)}}><Plus size={17}/> Add record</button>}</div></div>
   {error&&<div className="error banner"><span>{error}</span><button onClick={()=>setError('')}><X size={16}/></button></div>}{notice&&<div className="success banner">{notice}<button onClick={()=>setNotice('')}><X size={16}/></button></div>}
-  {active==='parent-portal'?<ParentPortal request={request}/>:active==='chatbot'?<HelpAssistant request={request}/>:active==='dashboard'?<>
+  {active==='user-accounts'&&user.role==='super_admin'?<DeveloperUserAccounts request={request} schools={schools} demoEnabled={DEMO_MODE} demoActive={demoTestingActive} demoUsers={DEMO_USERS} onSwitchDemo={switchDemoAccount}/>:active==='parent-portal'?<ParentPortal request={request}/>:active==='chatbot'?<HelpAssistant request={request}/>:active==='dashboard'?<>
     {DEMO_MODE&&demoTestingActive&&user.role==='super_admin'&&<div className="panel demo-role-testing-panel"><div className="panel-heading"><div><h3>Role testing workspace</h3><p>Open a real demo account to verify its dashboard and navigation. This does not change normal user access.</p></div><ShieldCheck size={20}/></div><div className="quick-grid"><label className="auth-field">Demo role<select value={demoTargetEmail} onChange={e=>setDemoTargetEmail(e.target.value)}><option value="">Choose a role to test…</option>{DEMO_USERS.filter(demo=>demo.email!=='demo.developer@jovoo.in').map(demo=><option key={demo.email} value={demo.email}>{demo.label}</option>)}</select></label><label className="auth-field">Shared demo password<input type="password" autoComplete="off" value={demoSwitchPassword} onChange={e=>setDemoSwitchPassword(e.target.value)} placeholder="Enter the password printed by the seeder"/></label><div><button className="primary" disabled={demoSwitchBusy||!demoTargetEmail||!demoSwitchPassword} onClick={()=>switchDemoAccount(demoTargetEmail)}>{demoSwitchBusy?'Opening workspace…':'Open selected role'}</button></div></div>{demoSwitchError&&<div className="error auth-message" role="alert">{demoSwitchError}</div>}</div>}
     <div className="welcome-panel"><div><span className="welcome-tag">{roleLabel.toUpperCase()} WORKSPACE</span><h2>Good to see you, {user.name.split(' ')[0]}</h2><p>{roleDescriptions[user.role]||'Your school workspace and assigned daily tasks.'} Use the options on the left to get started.</p></div><div className="welcome-icon"><GraduationCap size={44}/></div></div>
     <div className="stat-grid">{[{label:'Total students',key:'students',target:'students',icon:GraduationCap,tone:'teal'},{label:'Staff members',key:'staff',target:'staff',icon:Users,tone:'blue'},{label:'Classes & sections',key:'classes',target:'classes',icon:BookOpen,tone:'purple'},{label:'Transport vehicles',key:'vehicles',target:'vehicles',icon:Bus,tone:'orange'},{label:'Hostel rooms',key:'hostel_rooms',target:'hostels',icon:Building2,tone:'pink'},{label:'Open maintenance',key:'open_maintenance',target:'maintenance',icon:Wrench,tone:'red'},...(user.role==='super_admin'?[{label:'Schools',key:'schools',target:'schools',icon:Building2,tone:'purple'},{label:'Active accounts',key:'active_users',target:'schools',icon:Users,tone:'blue'}]:[])].filter(s=>hasModule(s.target)).map(s=>{const I=s.icon;return <div className="stat-card dashboard-link-card" key={s.key} role="link" tabIndex={0} onClick={()=>setActive(s.target)} onKeyDown={e=>{if(e.key==='Enter'){setActive(s.target)}}}><div className={`stat-icon ${s.tone}`}><I size={20}/></div><p>{s.label}</p><strong>{stats[s.key]??'—'}</strong><span className="stat-foot">{user.role==='super_admin'&&s.key==='schools'?stats.active_schools+' active · '+stats.inactive_schools+' inactive':'Current records · Click to open'}</span></div>})}</div>
