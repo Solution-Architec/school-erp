@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_school_owner BOOLEAN NOT NULL DEFAULT FALSE"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0"))
         conn.execute(text("""
             UPDATE users AS candidate SET is_school_owner = TRUE
             WHERE candidate.id IN (
@@ -95,8 +96,10 @@ async def lifespan(app: FastAPI):
             conn.execute(text('ALTER TABLE "' + table + '" DROP CONSTRAINT IF EXISTS "' + constraint + '"'))
             conn.execute(text('ALTER TABLE "' + table + '" ADD CONSTRAINT "' + constraint + '" UNIQUE (' + columns + ')'))
 
-    email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
-    password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "ChangeMe123!")
+    email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "").strip().lower()
+    password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
+    if not email or not password or len(password) < 16:
+        raise RuntimeError("BOOTSTRAP_ADMIN_EMAIL and a unique BOOTSTRAP_ADMIN_PASSWORD of at least 16 characters are required")
     with SessionLocal() as db:
         if not db.scalar(select(models.User).where(models.User.email == email)):
             db.add(models.User(name=os.getenv("BOOTSTRAP_ADMIN_NAME", "ERP Administrator"),
@@ -437,6 +440,7 @@ def reset_password(payload: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     _consume_auth_code(db, email, code, "reset")
     account.password_hash = hash_password(password)
+    account.token_version = int(account.token_version or 0) + 1
     db.commit()
     return {"message": "Password updated. You can now sign in."}
 
