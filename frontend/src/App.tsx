@@ -87,26 +87,6 @@ const roleDescriptions:Record<string,string> = {
  others:'A focused workspace with school help and shared information.',
  parent:'Family portal for linked students only.'
 }
-const roleModuleAccess:Record<string,string[]> = {
- super_admin:modules.map(m=>m.key),
- user:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports'],
- admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports'],
- principal:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports'],
- vice_principal:['dashboard','chatbot','students','staff','classes','documents','maintenance','fee-reports'],
- teacher:['dashboard','chatbot','students','classes','documents'],
- account:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
- accountant:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
- clerk:['dashboard','chatbot','students','student-fees','payments','documents'],
- office_assistant:['dashboard','chatbot','students','staff','documents','approvals'],
- librarian:['dashboard','chatbot','students','documents'],
- lab_assistant:['dashboard','chatbot','documents','maintenance'],
- it_administrator:['dashboard','chatbot','staff','documents','maintenance','approvals'],
- transport_manager:['dashboard','chatbot','students','vehicles','documents','maintenance'],
- hostel_warden:['dashboard','chatbot','students','hostels','documents','maintenance'],
- security_guard:['dashboard','chatbot','students'],
- others:['dashboard','chatbot'],
- parent:['parent-portal','chatbot']
-}
 const roleAccent:Record<string,string> = {
  super_admin:'#6654c7', user:'#0f766e', admin:'#0f766e', principal:'#0f766e',
  vice_principal:'#2563a6', teacher:'#39845d', account:'#a66a18', accountant:'#a66a18',
@@ -265,8 +245,7 @@ function App(){
  const [paymentFeeId,setPaymentFeeId]=useState('')
  const [paymentAmount,setPaymentAmount]=useState('')
  const [paymentMethod,setPaymentMethod]=useState('cash')
- const defaultModuleKeys=roleModuleAccess[user?.role||'user']||roleModuleAccess.user
- const allowedModuleKeys=user?.role!=='super_admin'&&rbacPermissions!==null&&rbacPermissions.role===user?.role&&rbacPermissions.configured?modules.filter(m=>Boolean(rbacPermissions.permissions[m.key+':View'])).map(m=>m.key):defaultModuleKeys
+ const allowedModuleKeys=user?.role==='super_admin'?modules.map(m=>m.key):rbacPermissions?.role===user?.role?modules.filter(m=>Boolean(rbacPermissions.permissions?.[m.key+':View'])).map(m=>m.key):[]
  const availableModules=modules.filter(m=>allowedModuleKeys.includes(m.key))
  const selected=modules.find(m=>m.key===active)||modules[0]
  const roleLabel=roleLabels[user?.role||'user']||'School User'
