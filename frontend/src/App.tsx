@@ -142,7 +142,7 @@ const money = (n:number) => new Intl.NumberFormat('en-IN',{style:'currency',curr
 
 function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
  const [mode,setMode]=useState<'signin'|'school'|'staff'|'verify'|'forgot'|'reset'|'mfa'>('signin')
- const [values,setValues]=useState({name:'',email:'',password:'',school_name:'',school_code:'',role:'principal',code:''})
+ const [values,setValues]=useState({name:'',position:'Principal',email:'',password:'',school_name:'',school_code:'',role:'principal',code:''})
  const [mfaToken,setMfaToken]=useState('')
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[showPassword,setShowPassword]=useState(false)
  const set=(key:string,value:string)=>setValues(old=>({...old,[key]:value}))
@@ -157,7 +157,7 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
   else if(mode==='reset'){const d=await call('/api/auth/reset-password',{email:values.email,code:values.code,password:values.password});setNotice(d.message);setMode('signin')}
  }catch(err:any){setError(err.message||'Unable to complete request')}finally{setBusy(false)}}
  const titles={signin:'Welcome back',mfa:'Verify your sign-in',school:'Register your school',staff:'Join your school',verify:'Verify your email',forgot:'Recover password',reset:'Create a new password'}
- const descriptions={signin:'Enter your email and password. School users must also enter their school code.',mfa:'Enter the six-digit security code sent to your email address.',school:'Submit your school and Principal details for Developer review.',staff:'Register under an existing school. Approval by a school user is required.',verify:'Enter the six-digit code sent to your email.',forgot:'Enter your registered email to request a reset code.',reset:'Verify the code and choose a new password.'}
+ const descriptions={signin:'Enter your email and password. School users must also enter their school code.',mfa:'Enter the six-digit security code sent to your email address.',school:'Submit your institution and authorized representative details for SchoolOS Developer review.',staff:'Register under an existing school. Approval by a school user is required.',verify:'Enter the six-digit code sent to your email.',forgot:'Enter your registered email to request a reset code.',reset:'Verify the code and choose a new password.'}
  const isPasswordMode=['signin','school','staff','reset'].includes(mode)
  const passwordLabel=mode==='reset'?'New password':'Password'
  const submitLabel=mode==='signin'?'Continue securely':mode==='mfa'?'Verify and sign in':mode==='school'?'Create school account':mode==='staff'?'Request staff account':mode==='verify'?'Verify email':mode==='forgot'?'Send reset code':'Reset password'
@@ -188,11 +188,13 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
      <h1>{titles[mode]}</h1>
      <p className="auth-intro">{descriptions[mode]}</p>
      {mode==='school'&&<>
-      <div className="auth-section-label"><span>01</span><div><strong>First user account</strong><small>Your first standard school user</small></div></div>
-      <div className="auth-field"><label htmlFor="admin-name">Full name</label><input id="admin-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter the user's full name" autoComplete="name" required/></div>
+      <div className="auth-section-label"><span>01</span><div><strong>Authorized representative</strong><small>Primary contact and first school account</small></div></div>
+      <div className="auth-field"><label htmlFor="admin-name">Full name</label><input id="admin-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter the authorized person's full name" autoComplete="name" required/></div>
+      <div className="auth-field"><label htmlFor="admin-position">Position / Designation</label><select id="admin-position" value={values.position} onChange={e=>set('position',e.target.value)} required><option value="Principal">Principal</option><option value="School Director">School Director</option><option value="Correspondent">Correspondent</option><option value="School Administrator">School Administrator</option><option value="Chairperson">Chairperson</option><option value="Other">Other</option></select><small>Select the role of the person submitting this school registration.</small></div>
       <div className="auth-section-label auth-section-admin"><span>02</span><div><strong>School information</strong><small>Tell us about your institution</small></div></div>
       <div className="auth-field"><label htmlFor="school-name">School name</label><input id="school-name" value={values.school_name} onChange={e=>set('school_name',e.target.value)} placeholder="e.g. Green Valley School" autoComplete="organization" required/></div>
       <div className="auth-field"><label htmlFor="school-code">School code</label><input id="school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Create a unique school code" required/><small>This code will identify your school for staff registration.</small></div>
+      <div className="auth-section-label auth-section-admin"><span>03</span><div><strong>Account credentials</strong><small>Secure your SchoolOS administrator account</small></div></div>
      </>}
      {mode==='staff'&&<>
       <div className="auth-field"><label htmlFor="staff-name">Full name</label><input id="staff-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter your full name" autoComplete="name" required/></div>
