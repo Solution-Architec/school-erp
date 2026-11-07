@@ -306,12 +306,7 @@ def _notify_support(event: str, details: str, throttle_seconds: int = 900) -> No
     msg["Subject"] = f"SchoolOS support alert: {event}"
     msg["From"] = sender
     msg["To"] = support_email
-    msg.set_content(f"SchoolOS authentication alert\
-\
-Event: {event}\
-Details: {details}\
-Time (UTC): {now.isoformat()}\
-")
+    msg.set_content(f"SchoolOS authentication alert\n\nEvent: {event}\nDetails: {details}\nTime (UTC): {now.isoformat()}\n")
     try:
         _smtp_send_message(msg)
     except Exception as exc:
@@ -329,9 +324,7 @@ def _send_auth_code(email: str, code: str, purpose: str) -> None:
     msg["From"] = sender
     msg["To"] = email
     action = {"verify": "verify your SchoolOS account", "reset": "reset your SchoolOS password", "login_mfa": "complete your SchoolOS sign-in"}.get(purpose, "verify your SchoolOS identity")
-    msg.set_content(f"Your SchoolOS code to {action} is: {code}\
-\
-This code expires in 10 minutes. If you did not request this, ignore this email.")
+    msg.set_content(f"Your SchoolOS code to {action} is: {code}\n\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
     _smtp_send_message(msg)
 
 def _issue_auth_code(db: Session, email: str, purpose: str) -> None:
