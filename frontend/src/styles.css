@@ -749,3 +749,64 @@
 .school-owner-assign select:focus{outline:0;border-color:#168f82;box-shadow:0 0 0 3px #168f821c}
 .school-owner-assign select option{color:#203b4b;background:#fff}
 .school-owner-selection{display:block;min-height:14px;margin-top:2px;color:#168276;font-size:10px;font-weight:600;line-height:1.4}
+
+
+/* Staff approvals — clear page hierarchy, summary cards and responsive request table */
+.approval-workspace{display:flex;flex-direction:column;gap:18px;min-width:0}
+.approval-page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:4px 2px 2px}
+.approval-heading-copy{min-width:0}
+.approval-eyebrow{display:inline-flex;align-items:center;gap:7px;margin-bottom:10px;color:#168276;font-size:9px;font-weight:850;letter-spacing:1.2px}
+.approval-page-heading h2{margin:0;color:#203b4d;font:800 clamp(23px,3vw,30px)/1.15 Manrope,sans-serif;letter-spacing:-.8px}
+.approval-page-heading p{margin:8px 0 0;color:#718493;font-size:12px;line-height:1.6}
+.approval-refresh{flex:0 0 auto;min-width:104px}
+.approval-refresh-spinning{animation:approval-spin 1s linear infinite}
+@keyframes approval-spin{to{transform:rotate(360deg)}}
+.approval-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.approval-summary-card{display:flex;align-items:center;gap:13px;min-width:0;padding:15px 17px;border:1px solid #e4ecef;border-radius:13px;background:#fff;box-shadow:0 4px 15px rgba(23,48,63,.035)}
+.approval-summary-icon{display:grid;place-items:center;width:40px;height:40px;flex:0 0 40px;border-radius:11px;background:#edf5f8;color:#416b82}
+.approval-summary-icon-verified{background:#eaf7f1;color:#21805e}
+.approval-summary-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.approval-summary-copy small{color:#718493;font-size:10px;font-weight:650}
+.approval-summary-copy strong{color:#203b4d;font:800 22px/1.1 Manrope,sans-serif}
+.approval-requests-panel{min-width:0;overflow:hidden;padding:0;border:1px solid #e4ecef;border-radius:14px;background:#fff;box-shadow:0 7px 24px rgba(23,48,63,.045)}
+.approval-requests-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:19px 21px;border-bottom:1px solid #edf1f4}
+.approval-requests-heading h3{margin:0;color:#203b4d;font:800 14px Manrope,sans-serif}
+.approval-requests-heading p{margin:6px 0 0;color:#718493;font-size:11px;line-height:1.5}
+.approval-pending-count{flex:0 0 auto;padding:6px 10px;border:1px solid #f0e3c4;border-radius:999px;background:#fff9eb;color:#98701e;font-size:10px;font-weight:800}
+.approval-table-wrap{width:100%;overflow-x:auto}
+.approval-table{min-width:850px;width:100%;border-collapse:collapse;white-space:normal}
+.approval-table thead{background:#f8fafb}
+.approval-table th{padding:12px 15px;color:#718493;font-size:9px;font-weight:800;letter-spacing:.55px;text-transform:uppercase;border-top:0}
+.approval-table td{padding:13px 15px;color:#526875;font-size:11px;vertical-align:middle}
+.approval-person{display:flex;align-items:center;gap:9px;min-width:145px}
+.approval-person strong{color:#294656;font-size:11px;font-weight:750}
+.approval-person-avatar{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:#edf5f5;color:#16786f;font-size:11px;font-weight:850}
+.approval-email{overflow-wrap:anywhere}
+.approval-role-label{display:inline-block;padding:5px 8px;border:1px solid #e7edf0;border-radius:7px;background:#f8fafb;color:#536b78;font-size:10px;font-weight:700;text-transform:capitalize}
+.approval-verification{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:999px;font-size:9px;font-weight:750;white-space:nowrap}
+.approval-verification>span{width:6px;height:6px;border-radius:50%;background:currentColor}
+.approval-verification.verified{background:#eaf7f1;color:#21805e}
+.approval-verification.waiting{background:#fff6e5;color:#a27420}
+.approval-decision-heading{text-align:right}
+.approval-table .approval-actions{justify-content:flex-end;flex-wrap:nowrap}
+.approval-table .approval-actions button{min-width:74px}
+.approval-empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:230px;padding:34px 18px;text-align:center}
+.approval-empty-icon{display:grid;place-items:center;width:50px;height:50px;margin-bottom:5px;border-radius:15px;background:#edf6f5;color:#168276}
+.approval-empty-state strong{color:#294656;font:800 13px Manrope,sans-serif}
+.approval-empty-state p{max-width:390px;margin:0;color:#81919c;font-size:11px;line-height:1.6}
+.approval-panel-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-top:1px solid #edf1f4;color:#91a0aa;font-size:9px}
+@media(max-width:720px){
+ .approval-workspace{gap:13px}
+ .approval-page-heading{align-items:flex-start;flex-direction:column;gap:13px}
+ .approval-refresh{width:100%}
+ .approval-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .approval-summary-card{gap:9px;padding:12px 10px}
+ .approval-summary-icon{width:34px;height:34px;flex-basis:34px}
+ .approval-summary-copy small{font-size:9px;line-height:1.35}
+ .approval-summary-copy strong{font-size:19px}
+ .approval-requests-heading{align-items:flex-start;padding:15px}
+ .approval-requests-heading p{max-width:260px}
+ .approval-panel-footer{align-items:flex-start;flex-direction:column;padding:12px 15px}
+}
+@media(max-width:390px){.approval-summary-grid{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.approval-refresh-spinning{animation:none}}
