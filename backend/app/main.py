@@ -875,12 +875,13 @@ def register_crud(path, model, schema_in, schema_out, roles):
         if model is models.LibraryBook:
             values["available_copies"] = values["total_copies"]
         if model is models.LibraryLoan:
-            book = db.scalar(select(models.LibraryBook).where(models.LibraryBook.id == values["book_id"], models.LibraryBook.school_id == values["school_id"]).with_for_update())
+            book = db.scalar(select(models.LibraryBook).where(models.LibraryBook.id == values["book_id"], models.LibraryBook.school_id == values["school_id"]).with_for_update().execution_options(populate_existing=True))
             if not book or book.available_copies < 1:
                 raise HTTPException(status_code=409, detail="No available copies of this book")
             book.available_copies -= 1
             values.update({"issued_by": user.id, "status": "issued", "issued_at": datetime.utcnow(), "returned_at": None})
-        validate_related_records(values, user, db)
+        if model is not models.LibraryLoan:
+            validate_related_records(values, user, db)
         obj = model(**values)
         db.add(obj)
         try:
@@ -1080,12 +1081,12 @@ register_crud("library-loans", models.LibraryLoan, schemas.LibraryLoanIn, schema
 @app.post("/api/library-loans/{item_id}/return", response_model=schemas.LibraryLoanOut, tags=["library"])
 def return_library_loan(item_id: int, db: Session = Depends(get_db),
                         user: models.User = Depends(require_module_permission("library-loans", "Edit", *LIBRARY_ROLES))):
-    loan = db.get(models.LibraryLoan, item_id)
+    loan = db.scalar(select(models.LibraryLoan).where(models.LibraryLoan.id == item_id).with_for_update().execution_options(populate_existing=True))
     if not loan or (user.role != "super_admin" and loan.school_id != user.school_id):
         raise HTTPException(status_code=404, detail="Library loan not found")
     if loan.status != "issued":
         raise HTTPException(status_code=409, detail="This book has already been returned")
-    book = db.scalar(select(models.LibraryBook).where(models.LibraryBook.id == loan.book_id, models.LibraryBook.school_id == loan.school_id).with_for_update())
+    book = db.scalar(select(models.LibraryBook).where(models.LibraryBook.id == loan.book_id, models.LibraryBook.school_id == loan.school_id).with_for_update().execution_options(populate_existing=True))
     if not book:
         raise HTTPException(status_code=409, detail="The linked library book record is unavailable")
     loan.status = "returned"
