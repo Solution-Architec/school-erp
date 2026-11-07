@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from sqlalchemy import String, Integer, Date, DateTime, Boolean, ForeignKey, Text, Numeric
+from sqlalchemy import String, Integer, Date, DateTime, Boolean, ForeignKey, Text, Numeric, text
 from sqlalchemy.orm import Mapped, mapped_column
 from .database import Base
 from sqlalchemy import UniqueConstraint, CheckConstraint, Index
@@ -237,9 +237,14 @@ class ParentStudentLink(Base):
 
 
 class RolePermission(Base):
+    """Global ERP defaults (school_id NULL) and per-school permission overrides."""
     __tablename__ = "role_permissions"
-    __table_args__ = (UniqueConstraint("role", "module_key", "action", name="uq_role_permission_scope"),)
+    __table_args__ = (
+        Index("uq_role_permission_global", "role", "module_key", "action", unique=True, postgresql_where=text("school_id IS NULL")),
+        Index("uq_role_permission_school", "school_id", "role", "module_key", "action", unique=True, postgresql_where=text("school_id IS NOT NULL")),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(40), index=True)
     module_key: Mapped[str] = mapped_column(String(60), index=True)
     action: Mapped[str] = mapped_column(String(20))
