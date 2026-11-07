@@ -790,7 +790,7 @@ def register_crud(path, model, schema_in, schema_out, roles):
             if not student or (user.role != "super_admin" and student.school_id != user.school_id):
                 raise HTTPException(status_code=404, detail="Document owner not found in your school")
         if model is models.LibraryLoan:
-            target_school = values.get("school_id") or user.school_id
+            target_school = values.get("school_id") if user.role == "super_admin" else user.school_id
             book = db.get(models.LibraryBook, values.get("book_id"))
             student = db.get(models.Student, values.get("student_id"))
             if not book or not student or (target_school and (book.school_id != target_school or student.school_id != target_school)):
