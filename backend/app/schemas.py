@@ -403,6 +403,13 @@ class ParentTeacherMessageIn(BaseModel):
     subject: str = Field(default="", max_length=180)
     body: str = Field(min_length=1, max_length=10000)
 
+    @field_validator("body")
+    @classmethod
+    def validate_message_body(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Message body cannot be blank")
+        return value.strip()
+
 class ParentTeacherMessageOut(BaseModel):
     id: int
     school_id: int
