@@ -41,3 +41,13 @@ This roadmap groups the requested 15 + 9 + 3 features into three delivery tiers.
 - Keep AI suggestions reviewable; do not auto-submit grades, payments, or sensitive decisions.
 - Integrations (GPS, payment gateway, SMS/email) require school-specific credentials and consent.
 - This document is a roadmap, not a claim that all 27 features are implemented.
+
+
+## Phase 1 implementation status
+The first four academic workflows have now been added to the application code and registered as school-scoped modules:
+- Attendance register: daily student status and remarks, with one record per student per date
+- Timetable: weekday periods, subject, teacher, room, and start/end times
+- Exams: class/section subject schedule, maximum marks, pass marks, and academic year
+- Report cards: student/exam marks and remarks, with school-consistent references and maximum-mark validation
+
+The UI and API changes are committed. Runtime database migration, deployment, and end-to-end verification still need to run in the target environment before these features should be considered production-verified.
