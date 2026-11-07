@@ -917,7 +917,7 @@ async def import_module_records(
     file: UploadFile = File(...),
     school_id: int | None = Form(default=None),
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("super_admin", "admin")),
+    user: models.User = Depends(current_user),
 ):
     import csv
     import io
