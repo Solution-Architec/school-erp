@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(80) NOT NULL DEFAULT 'Principal'"))
         conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
         # Role permissions support ERP-wide defaults (school_id NULL) and per-school overrides.
         conn.execute(text("ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)"))
@@ -369,15 +370,17 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
     password = str(payload.get("password", ""))
     school_name = str(payload.get("school_name", "")).strip()
     school_code = str(payload.get("school_code", "")).strip().upper()
-    if not all((name, email, password, school_name, school_code)) or len(password) < 12:
-        raise HTTPException(status_code=422, detail="All fields are required and password must be at least 12 characters")
+    position = str(payload.get("position", "Principal")).strip()
+    allowed_positions = {"Principal", "School Director", "Correspondent", "School Administrator", "Chairperson", "Other"}
+    if not all((name, email, password, school_name, school_code, position)) or len(password) < 12 or position not in allowed_positions:
+        raise HTTPException(status_code=422, detail="Complete all fields, select a valid position and use a password of at least 12 characters")
     if db.scalar(select(models.User.id).where(models.User.email == email)):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
     school = models.School(name=school_name, code=school_code, is_active=False, approval_status="pending")
     db.add(school)
     try:
         db.flush()
-        account = models.User(name=name, email=email, password_hash=hash_password(password), role="principal",
+        account = models.User(name=name, email=email, password_hash=hash_password(password), role="principal", position=position,
             school_id=school.id, is_active=False, email_verified=False, approval_status="pending")
         db.add(account)
         db.commit()
