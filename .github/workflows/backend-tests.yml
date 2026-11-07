@@ -24,6 +24,26 @@ jobs:
           pip install -r requirements.txt
       - name: Run backend tests
         env:
+          PYTHONPATH: ${{ github.workspace }}/backend
           JWT_SECRET_KEY: ci-only-secret-that-is-longer-than-thirty-two-characters
           DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/test
         run: pytest -q
+
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Build frontend
+        run: npm run build
