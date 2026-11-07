@@ -1049,3 +1049,31 @@ button:disabled{
 @keyframes workspace-refresh-pulse{0%,100%{box-shadow:0 10px 32px rgba(20,65,72,.10)}50%{box-shadow:0 12px 38px rgba(15,118,110,.22)}}
 @keyframes workspace-refresh-fade-in{from{opacity:0}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.workspace-refresh-overlay,.workspace-refresh-indicator,.workspace-refresh-indicator svg{animation:none}}
+
+
+/* Schoolios premium dark ERP dashboard refresh */
+:root{font-family:'DM Sans',sans-serif;color:#e5edf8;background:#050b1b;color-scheme:dark}
+body{background:#050b1b;color:#e5edf8}
+.app-shell{background:#050b1b}
+.sidebar{background:#071126;border-right:1px solid #1b2942;color:#dbeafe}
+.brand{border-bottom-color:#172640}.brand-mark{background:linear-gradient(135deg,#0ea5e9,#4f46e5);box-shadow:0 0 22px #2563eb40}
+.brand strong{color:#f8fafc}.brand span,.school-switch span,.user-mini span{color:#8294b3}
+.school-switch{background:#0b1730;border-color:#1b2a45;color:#edf4ff}.school-avatar{background:#082f49;color:#22d3ee}
+.nav-label{color:#7185a7}.nav-item{color:#a7b7d1;border-radius:10px}.nav-item:hover{background:#0d203d;color:#67e8f9}.nav-item.selected{background:linear-gradient(90deg,#063a43,#062a39);color:#2de3c2;box-shadow:inset 3px 0 #06b6d4}
+.sidebar-bottom{border-top-color:#172640}.avatar{background:#102d50;color:#67e8f9}
+.main{background:#050b1b}.topbar{background:#071126;border-bottom-color:#172640;color:#dce8f8}.crumb{color:#8294b3}.crumb strong{color:#e7efff}.top-actions{gap:12px}.online-pill{background:#062b2b;color:#2de3c2;border:1px solid #0b514c}.icon-button{color:#9bb0ce}.icon-button:hover{background:#13233d;color:#eaf4ff}
+.content{max-width:1800px;padding:25px 24px 22px}.page-heading h1,.login-card h1{color:#f8fafc}.page-heading .muted{color:#93a9ca}.eyebrow{color:#22d3ee}
+.primary{background:linear-gradient(100deg,#0284c7,#4f46e5);border-color:#0284c7;box-shadow:0 5px 18px #2563eb25}.primary:hover{background:#0369a1}.secondary{background:#0b1730;color:#c7d6ee;border-color:#223452}.secondary:hover{background:#13233d}
+.welcome-panel{background:linear-gradient(110deg,#071c3c,#0a3a52 60%,#102d64);border:1px solid #1d4d70;box-shadow:0 10px 30px #02061760}.welcome-tag{color:#67e8f9}.welcome-panel p{color:#c3d8f5}.welcome-icon{background:#ffffff10;color:#67e8f9}
+.stat-grid{gap:13px}.stat-card,.panel{background:#071126;border:1px solid #1b2942;color:#e5edf8;box-shadow:0 8px 24px #02061722}.stat-card{border-radius:13px;padding:18px}.stat-card p{color:#a2b4d0}.stat-card strong{color:#f8fafc}.stat-foot{color:#8195b7}.stat-icon.teal{background:#063b3a;color:#2de3c2}.stat-icon.blue{background:#0c2c50;color:#60a5fa}.stat-icon.purple{background:#2a1551;color:#c084fc}.stat-icon.orange{background:#4a260d;color:#fb923c}.stat-icon.pink{background:#43152f;color:#f472b6}.stat-icon.red{background:#451a1a;color:#f87171}
+.bottom-grid{gap:14px}.panel-heading h3{color:#f1f6ff}.panel-heading p{color:#8da4c7}.panel-heading>svg{color:#9bb0ce}.quick-grid{gap:10px}.quick-item{background:#0a1730;border-color:#1d2c49;color:#c5d6ee}.quick-item>svg{color:#22d3ee}.quick-item:hover{border-color:#0e7490;background:#0b2540}.quick-arrow{color:#7990b5}
+.status-row{border-bottom-color:#1b2942}.status-row strong{color:#e6efff}.status-row small{color:#8195b7}.status-note{background:#0a2130;color:#91c9c2}
+.data-panel>.panel-heading{border-bottom-color:#1b2942}.record-count{background:#063b3a;color:#2de3c2}.table-tools{color:#a7b7d1}.search-box{background:#09162c;border-color:#223452;color:#9bb0ce}.search-box input{background:transparent;color:#e6efff}thead{background:#0b1830}th{color:#8da4c7;border-color:#1b2942}td{color:#bdcce2;border-bottom-color:#172640}tbody tr:hover{background:#0b1b34}.id-cell{color:#22d3ee}.status-badge{background:#063b2e;color:#4ade80}.status-badge.inactive,.status-badge.rejected{background:#451a1a;color:#fca5a5}.status-badge.pending,.status-badge.open{background:#422006;color:#fdba74}.empty-state{color:#8da4c7}.empty-icon{background:#082d3c;color:#22d3ee}.empty-state strong{color:#dce8f8}.table-footer{color:#8195b7}
+.record-form,.school-owner-assign,.payment-entry-form{border-color:#1b4560;background:#08182b}.form-heading h3{color:#e6efff}.form-grid label,.login-card label,.school-owner-assign label,.payment-entry-form label{color:#a7b7d1}.form-grid input,.login-card input,.school-owner-assign select,.payment-entry-form input,.payment-entry-form select{border-color:#263956;background:#071126;color:#e6efff}.form-grid input:focus,.login-card input:focus{border-color:#06b6d4;box-shadow:0 0 0 3px #06b6d41a}.banner.error{background:#35151d;color:#fda4af;border-color:#672432}.banner.success{background:#062d27;color:#6ee7b7;border-color:#145744}
+.footer{color:#7185a7}.login-wrap{background:radial-gradient(ellipse at top left,#102d50 0,transparent 43%),#050b1b}.login-card{background:#071126;border-color:#1b2942;box-shadow:0 20px 70px #0005}.login-card h1{color:#f8fafc}.login-card>.muted{color:#93a9ca}
+.student-global-search{background:#09162c;border-color:#223452}.student-global-search input{color:#e6efff}.student-search-results{background:#071126;border-color:#223452}.student-search-results button{background:#071126;color:#e6efff}.student-search-results button:hover{background:#0b1b34}.student-search-results span,.selected-student-context span{color:#8da4c7}.selected-student-context{background:#08263b;border-color:#155e75}.selected-student-context strong{color:#e6efff}
+.student-fee-details{background:#09162c;border-color:#223452}.student-fee-details h4,.student-fee-detail-grid strong{color:#e6efff}.student-fee-detail-grid span{color:#8da4c7}
+.fee-report-filters{background:#071126;border-color:#1b2942}.fee-report-filters label{color:#a7b7d1}.fee-report-filters select{background:#0b1730;border-color:#223452;color:#e6efff}.fee-chart-track{background:#0b1b34}.fee-chart-column>strong{color:#bdcce2}.fee-chart-column>span{color:#8195b7}.fee-chart-bar{background:linear-gradient(180deg,#22d3ee,#4f46e5)}
+.chat-user-question{background:#0b3a57;color:#bae6fd}.chat-assistant-answer{background:#0b1730;color:#dce8f8}
+@media(max-width:1100px){.content{padding:22px 18px}}
+@media(max-width:720px){.content{padding:18px 12px}.topbar{background:#071126}.sidebar{background:#071126}}
