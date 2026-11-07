@@ -28,7 +28,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     networks:
       - internal
 
@@ -39,7 +39,7 @@ services:
         VITE_ENABLE_DEMO_MODE: ${VITE_ENABLE_DEMO_MODE:-false}
     restart: unless-stopped
     ports:
-      - "8081:80"
+      - "127.0.0.1:8081:80"
     depends_on:
       - backend
     networks:
