@@ -211,7 +211,7 @@ function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Pro
  async function ask(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!question.trim()||busy)return;const q=question.trim();setQuestion('');setBusy(true);setError('');try{const result=await request('/api/chatbot/faq',{method:'POST',body:JSON.stringify({question:q})});setMessages(old=>[...old,{q,a:result.answer}])}catch(err:any){setError(err.message)}finally{setBusy(false)}}
  return <div className="panel"><div className="panel-heading"><div><h3>SchoolOS Help Assistant</h3><p>Ask common questions about school workflows. Answers are from approved FAQ content.</p></div><Activity size={20}/></div><div className="chat-faq-list">{messages.map((m,i)=><div className="chat-faq-item" key={i}><div className="chat-user-question">{m.q}</div><div className="chat-assistant-answer">{m.a}</div></div>)}{!messages.length&&<div className="empty-state"><strong>How can I help?</strong><p>Try “How do I pay fees?”, “How do I reset my password?”, or “Where is transport information?”</p></div>}</div>{error&&<div className="error">{error}</div>}<form className="chat-faq-form" onSubmit={ask}><input value={question} maxLength={500} onChange={e=>setQuestion(e.target.value)} placeholder="Ask SchoolOS…" /><button className="primary" disabled={busy||!question.trim()}>{busy?'Thinking…':'Ask'}</button></form></div>
 }
-function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers,onSwitchDemo}:{request:(url:string,options?:RequestInit)=>Promise<any>;schools:any[];demoEnabled:boolean;demoActive:boolean;demoUsers:{label:string;email:string;schoolCode:string}[];onSwitchDemo:(email:string,password:string)=>Promise<void>}) {
+function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers,onSwitchDemo}:{request:(url:string,options?:RequestInit)=>Promise<any>;schools:any[];demoEnabled:boolean;demoActive:boolean;demoUsers:{label:string;email:string;schoolCode:string}[];onSwitchDemo:(email:string,password:string)=>Promise<boolean>}) {
  const requestRef=useRef(request);
  requestRef.current=request;
  const [accounts,setAccounts]=useState<any[]>([]);
@@ -220,6 +220,7 @@ function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers
  const [roleFilter,setRoleFilter]=useState('');
  const [schoolFilter,setSchoolFilter]=useState('');
  const [statusFilter,setStatusFilter]=useState('all');
+ const [page,setPage]=useState(0);
  const [selectedId,setSelectedId]=useState<number|null>(null);
  const [overview,setOverview]=useState<any|null>(null);
  const [listBusy,setListBusy]=useState(false);
@@ -235,7 +236,7 @@ function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers
   const loadAccounts=async()=>{
    setListBusy(true);setPageError('');
    try{
-    const params=new URLSearchParams({limit:'500',offset:'0',status:statusFilter});
+    const params=new URLSearchParams({limit:'100',offset:String(page*100),status:statusFilter});
     if(search.trim())params.set('q',search.trim());
     if(roleFilter)params.set('role',roleFilter);
     if(schoolFilter)params.set('school_id',schoolFilter);
@@ -246,7 +247,7 @@ function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers
   };
   const timer=window.setTimeout(loadAccounts,search.trim()?250:0);
   return()=>{cancelled=true;window.clearTimeout(timer)};
- },[search,roleFilter,schoolFilter,statusFilter]);
+ },[search,roleFilter,schoolFilter,statusFilter,page]);
 
  useEffect(()=>{
   if(selectedId===null){setOverview(null);return}
@@ -265,7 +266,7 @@ function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers
  const openDemo=async()=>{
   if(!demoEmail||!demoPassword){setDemoError('Choose a demo role and enter the demo password.');return}
   setDemoBusy(true);setDemoError('');
-  try{await onSwitchDemo(demoEmail,demoPassword);setDemoPassword('')}
+  try{const opened=await onSwitchDemo(demoEmail,demoPassword);if(opened)setDemoPassword('');else setDemoError('Demo login was not completed. Check the credentials and try again.')}
   catch(err:any){setDemoError(err.message||'Unable to open demo account')}
   finally{setDemoBusy(false)}
  };
@@ -282,10 +283,10 @@ function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers
   <section className="panel developer-account-list">
    <div className="panel-heading"><div><h3>All registered user accounts</h3><p>Platform-wide directory. Select an account to inspect its school links, module data counts and effective permissions.</p></div><span className="record-count">{total} accounts</span></div>
    <div className="developer-account-filters">
-    <label className="developer-account-search">Search name or email<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search all accounts…"/></label>
-    <label>Role<select value={roleFilter} onChange={e=>setRoleFilter(e.target.value)}><option value="">All roles</option>{Object.entries(roleLabels).filter(([key])=>key!=='user'&&key!=='accountant').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
-    <label>School<select value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)}><option value="">All schools</option>{schools.map(s=><option key={s.id} value={String(s.id)}>{s.name}</option>)}</select></label>
-    <label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="pending">Pending approval</option></select></label>
+    <label className="developer-account-search">Search name or email<input value={search} onChange={e=>{setPage(0);setSearch(e.target.value)}} placeholder="Search all accounts…"/></label>
+    <label>Role<select value={roleFilter} onChange={e=>{setPage(0);setRoleFilter(e.target.value)}}><option value="">All roles</option>{Object.entries(roleLabels).filter(([key])=>key!=='user'&&key!=='accountant').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+    <label>School<select value={schoolFilter} onChange={e=>{setPage(0);setSchoolFilter(e.target.value)}}><option value="">All schools</option>{schools.map(s=><option key={s.id} value={String(s.id)}>{s.name}</option>)}</select></label>
+    <label>Status<select value={statusFilter} onChange={e=>{setPage(0);setStatusFilter(e.target.value)}}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="pending">Pending approval</option></select></label>
    </div>
    {pageError&&<div className="error banner">{pageError}</div>}
    <div className="table-wrap developer-account-table-wrap"><table className="developer-account-table"><thead><tr><th>Account</th><th>Role</th><th>School</th><th>Owner</th><th>Account status</th><th>Email</th><th>Action</th></tr></thead><tbody>
@@ -300,7 +301,7 @@ function DeveloperUserAccounts({request,schools,demoEnabled,demoActive,demoUsers
     </tr>)}
     {!accounts.length&&<tr><td colSpan={7}><div className="empty-state"><strong>{listBusy?'Loading accounts…':'No matching accounts'}</strong><p>Change the filters or clear the search to see more accounts.</p></div></td></tr>}
    </tbody></table></div>
-   <div className="developer-account-list-footer"><span>{listBusy?'Refreshing account directory…':'Showing '+accounts.length+' of '+total+' matching accounts'}</span><span>Maximum 500 results per view</span></div>
+   <div className="developer-account-list-footer"><span>{listBusy?'Refreshing account directory…':'Showing '+accounts.length+' of '+total+' matching accounts'}</span><div className="developer-account-pagination"><button className="secondary" disabled={page===0||listBusy} onClick={()=>setPage(p=>Math.max(0,p-1))}>Previous</button><span>Page {page+1} of {Math.max(1,Math.ceil(total/100))}</span><button className="secondary" disabled={(page+1)*100>=total||listBusy} onClick={()=>setPage(p=>p+1)}>Next</button></div></div>
   </section>
   {selectedId!==null&&<section className="panel developer-account-overview">
    <div className="panel-heading"><div><h3>Account details &amp; linked module data</h3><p>Counts are read from every mapped database table carrying this account’s school_id.</p></div><button className="secondary" onClick={()=>setSelectedId(null)}>Close details</button></div>
@@ -371,17 +372,18 @@ function App(){
  async function request(url:string,options:RequestInit={}){const r=await fetch(`${API}${url}`,{...options,headers:{...authHeaders,...options.headers}});if(r.status===401){logout();throw new Error('Session expired. Please sign in again.')}const raw=await r.text();let data:any={};try{data=raw?JSON.parse(raw):{}}catch{data={}}if(!r.ok){const detail=data.detail||data.message||raw.slice(0,240);throw new Error((detail||'API request failed')+` (HTTP ${r.status}: ${options.method||'GET'} ${url})`)}return data}
  function logout(){localStorage.removeItem('erp_token');setToken('');setUser(null);setRbacPermissions(null);setRows([]);setDemoTestingActive(false);setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('');sessionStorage.removeItem('demo_testing_active')}
  function handleLogin(t:string,u:User){localStorage.setItem('erp_token',t);setToken(t);setUser(u);const canTest=DEMO_MODE&&u.role==='super_admin';setDemoTestingActive(canTest);if(canTest)sessionStorage.setItem('demo_testing_active','true');else sessionStorage.removeItem('demo_testing_active');setActive('dashboard')}
- async function switchDemoAccount(email:string,passwordOverride?:string){
+ async function switchDemoAccount(email:string,passwordOverride?:string):Promise<boolean>{
   const demo=DEMO_USERS.find(item=>item.email===email)
   const password=passwordOverride||demoSwitchPassword
-  if(!demo||!password){setDemoSwitchError('Choose a demo role and enter the shared demo password.');return}
+  if(!demo||!password){setDemoSwitchError('Choose a demo role and enter the shared demo password.');return false}
   setDemoSwitchBusy(true);setDemoSwitchError('')
   try{
    const response=await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:demo.email,password:password,...(demo.schoolCode?{school_code:demo.schoolCode}:{})})})
    const data=await response.json().catch(()=>null)
    if(!response.ok||!data?.access_token||!data?.user)throw new Error(data?.detail||'Unable to open that demo role.')
    localStorage.setItem('erp_token',data.access_token);setToken(data.access_token);setUser(data.user);setActive('dashboard');setDemoTargetEmail('');setDemoSwitchPassword('');setDemoSwitchError('')
-  }catch(err:any){setDemoSwitchError(err.message||'Unable to switch demo role.')}finally{setDemoSwitchBusy(false)}
+   return true
+  }catch(err:any){setDemoSwitchError(err.message||'Unable to switch demo role.');return false}finally{setDemoSwitchBusy(false)}
  }
  async function recordFeePayment(){if(!paymentFeeId||!paymentAmount)return;try{await request('/api/student-fees/'+paymentFeeId+'/payments',{method:'POST',body:JSON.stringify({amount:Number(paymentAmount),payment_method:paymentMethod})});setNotice('Fee payment recorded successfully');setPaymentAmount('');await load()}catch(e:any){setError(e.message)}}
  async function assignSchoolOwner(){if(!ownerUserId||!ownerSchoolId)return;try{await request('/api/users/'+ownerUserId+'/school',{method:'PATCH',body:JSON.stringify({school_id:Number(ownerSchoolId)})});setNotice('Main school owner assigned successfully');const [updatedUsers,updatedSchools]=await Promise.all([request('/api/users'),request('/api/schools')]);setOwnerUsers(updatedUsers);setSchools(updatedSchools);await load()}catch(e:any){setError(e.message)}}
