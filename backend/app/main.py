@@ -711,7 +711,7 @@ def parent_submit_leave(payload: schemas.StudentLeaveIn, db: Session = Depends(g
 
 @app.post("/api/student-leave/{item_id}/review", response_model=schemas.StudentLeaveOut, tags=["student-leave"])
 def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, db: Session = Depends(get_db),
-                         user: models.User = Depends(require_module_permission("student-leave", "Approve", *ADMIN_ROLES))):
+                         user: models.User = Depends(require_module_permission("student-leave", "Approve", "super_admin", "admin", "principal", "vice_principal", "teacher", "user"))):
     obj = db.get(models.StudentLeaveRequest, item_id)
     if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
         raise HTTPException(status_code=404, detail="Leave request not found")
