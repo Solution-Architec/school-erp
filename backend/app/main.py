@@ -1071,6 +1071,38 @@ def create_school(payload: schemas.SchoolIn, db: Session = Depends(get_db),
     return school
 
 
+@app.put("/api/schools/{school_id}", response_model=schemas.SchoolOut, tags=["schools"])
+def update_school(school_id: int, payload: schemas.SchoolIn, db: Session = Depends(get_db),
+                  user: models.User = Depends(require_roles("super_admin"))):
+    school = db.get(models.School, school_id)
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    school.name = payload.name.strip()
+    school.code = payload.code.strip().upper()
+    try:
+        db.commit()
+        db.refresh(school)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="School name or code already exists")
+    return school
+
+
+@app.delete("/api/schools/{school_id}", tags=["schools"])
+def delete_school(school_id: int, db: Session = Depends(get_db),
+                  user: models.User = Depends(require_roles("super_admin"))):
+    school = db.get(models.School, school_id)
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    db.delete(school)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This school has linked users or records. Deactivate it instead of deleting it.")
+    return {"message": "School deleted successfully", "school_id": school_id}
+
+
 @app.get("/api/users", response_model=list[schemas.UserOut], tags=["users"])
 def list_users(db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
     stmt = select(models.User).order_by(models.User.id.desc())
