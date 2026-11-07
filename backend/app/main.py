@@ -233,7 +233,7 @@ def health():
 
 # Public account registration and recovery. OTPs are hashed at rest and expire after 10 minutes.
 def _otp_digest(email: str, code: str) -> str:
-    secret = os.getenv("JWT_SECRET_KEY", "schoolos-development-secret")
+    secret = JWT_SECRET_KEY
     return hashlib.sha256(f"{email.lower()}:{code}:{secret}".encode()).hexdigest()
 
 # Support alerts are throttled per event to avoid flooding the support mailbox.
