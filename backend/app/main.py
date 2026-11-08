@@ -114,10 +114,10 @@ RBAC_ACTIONS = {"View", "Create", "Edit", "Delete", "Approve", "Export"}
 
 DEFAULT_ROLE_MODULES = {
     "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "library-books", "library-loans"],
-    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "library-books", "library-loans"],
-    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports", "attendance", "timetable", "exams", "report-cards", "library-books", "library-loans"],
-    "teacher": ["dashboard", "chatbot", "students", "classes", "documents", "attendance", "timetable", "exams", "report-cards"],
+    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
+    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
+    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
+    "teacher": ["dashboard", "chatbot", "students", "classes", "documents", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages"],
     "account": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
     "accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
     "clerk": ["dashboard", "chatbot", "students", "student-fees", "payments", "documents"],
@@ -146,12 +146,20 @@ def write_audit_log(db: Session, actor: models.User, event_type: str, target_typ
 
 def _default_permission_matrix(role: str) -> dict[str, bool]:
     allowed_modules = set(DEFAULT_ROLE_MODULES.get(role, ["dashboard", "chatbot"]))
-    return {
-        f"{module}:{action}": (
-            module in allowed_modules and action in {"View", "Create", "Edit", "Delete"}
-        ) or (module == "approvals" and action == "Approve" and module in allowed_modules)
-        for module in RBAC_MODULES for action in RBAC_ACTIONS
-    }
+    permissions: dict[str, bool] = {}
+    for module in RBAC_MODULES:
+        for action in RBAC_ACTIONS:
+            enabled = module in allowed_modules and action in {"View", "Create", "Edit", "Delete"}
+            if role == "parent" and module in {"student-leave", "parent-messages"}:
+                enabled = module in allowed_modules and action in {"View", "Create"}
+            if module == "approvals" and action == "Approve" and module in allowed_modules:
+                enabled = True
+            if module == "student-leave" and action == "Approve" and role in {
+                "admin", "principal", "vice_principal", "teacher", "user"
+            }:
+                enabled = True
+            permissions[f"{module}:{action}"] = enabled
+    return permissions
 
 
 def _permission_scope_matrix(db: Session, role: str, school_id: int | None = None) -> dict:
@@ -697,7 +705,8 @@ def _linked_parent_student(db: Session, user: models.User, student_id: int):
     return link
 
 @app.get("/api/parent-portal/leave", response_model=list[schemas.StudentLeaveOut], tags=["student-leave"])
-def parent_list_leave(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+def parent_list_leave(db: Session = Depends(get_db),
+                      user: models.User = Depends(require_module_permission("student-leave", "View", "parent"))):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
     linked_ids = select(models.ParentStudentLink.student_id).where(
@@ -711,7 +720,7 @@ def parent_list_leave(db: Session = Depends(get_db), user: models.User = Depends
 
 @app.post("/api/parent-portal/leave", response_model=schemas.StudentLeaveOut, tags=["student-leave"])
 def parent_submit_leave(payload: schemas.StudentLeaveIn, db: Session = Depends(get_db),
-                        user: models.User = Depends(current_user)):
+                        user: models.User = Depends(require_module_permission("student-leave", "Create", "parent"))):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
     student = db.get(models.Student, payload.student_id)
@@ -719,42 +728,62 @@ def parent_submit_leave(payload: schemas.StudentLeaveIn, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Linked student not found")
     obj = models.StudentLeaveRequest(school_id=user.school_id, student_id=student.id,
         start_date=payload.start_date, end_date=payload.end_date, reason=payload.reason, status="pending")
-    db.add(obj); db.commit(); db.refresh(obj)
+    db.add(obj)
+    db.flush()
+    write_audit_log(db, user, "student.leave.submitted", "student_leave_request", str(obj.id),
+                    {"student_id": student.id, "start_date": payload.start_date.isoformat(), "end_date": payload.end_date.isoformat()})
+    db.commit(); db.refresh(obj)
     return obj
 
 @app.post("/api/student-leave/{item_id}/review", response_model=schemas.StudentLeaveOut, tags=["student-leave"])
 def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, db: Session = Depends(get_db),
                          user: models.User = Depends(require_module_permission("student-leave", "Approve", "super_admin", "admin", "principal", "vice_principal", "teacher", "user"))):
+    if user.role not in {"super_admin", "admin", "principal", "vice_principal", "teacher", "user"}:
+        raise HTTPException(status_code=403, detail="School staff permission required to review leave")
     obj = db.get(models.StudentLeaveRequest, item_id)
     if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
         raise HTTPException(status_code=404, detail="Leave request not found")
+    if obj.status != "pending":
+        raise HTTPException(status_code=409, detail="Only pending leave requests can be reviewed")
     obj.status = decision.status
     obj.reviewer_note = decision.reviewer_note
     obj.reviewed_by = user.id
+    write_audit_log(db, user, "student.leave.reviewed", "student_leave_request", str(obj.id),
+                    {"student_id": obj.student_id, "status": decision.status})
     db.commit(); db.refresh(obj)
     return obj
 
 @app.get("/api/parent-messages", response_model=list[schemas.ParentTeacherMessageOut], tags=["parent-messages"])
-def list_parent_teacher_messages(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
-    if user.role == "super_admin":
-        raise HTTPException(status_code=403, detail="Use a school account to access conversations")
+def list_parent_teacher_messages(db: Session = Depends(get_db),
+                                 user: models.User = Depends(require_module_permission("parent-messages", "View", "parent", "teacher", "principal", "vice_principal", "admin", "user"))):
+    if user.role not in {"parent", "teacher", "principal", "vice_principal", "admin", "user"}:
+        raise HTTPException(status_code=403, detail="Parent or authorized school staff account required")
     if not user.school_id:
         raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
     stmt = select(models.ParentTeacherMessage).where(
         models.ParentTeacherMessage.school_id == user.school_id,
         or_(models.ParentTeacherMessage.sender_user_id == user.id,
             models.ParentTeacherMessage.recipient_user_id == user.id)
-    ).order_by(models.ParentTeacherMessage.created_at.asc()).limit(500)
+    )
+    if user.role == "parent":
+        linked_ids = select(models.ParentStudentLink.student_id).where(
+            models.ParentStudentLink.parent_user_id == user.id,
+            models.ParentStudentLink.school_id == user.school_id,
+            models.ParentStudentLink.is_active.is_(True))
+        stmt = stmt.where(models.ParentTeacherMessage.student_id.in_(linked_ids))
+    stmt = stmt.order_by(models.ParentTeacherMessage.created_at.asc()).limit(500)
     return list(db.scalars(stmt).all())
 
 @app.post("/api/parent-messages", response_model=schemas.ParentTeacherMessageOut, tags=["parent-messages"])
 def send_parent_teacher_message(payload: schemas.ParentTeacherMessageIn, db: Session = Depends(get_db),
-                                user: models.User = Depends(current_user)):
+                                user: models.User = Depends(require_module_permission("parent-messages", "Create", "parent", "teacher", "principal", "vice_principal", "admin", "user"))):
     if user.role not in ("parent", "teacher", "principal", "vice_principal", "admin", "user") or not user.school_id:
         raise HTTPException(status_code=403, detail="School parent or teaching account required")
     student = db.get(models.Student, payload.student_id)
     recipient = db.get(models.User, payload.recipient_user_id)
-    if not student or student.school_id != user.school_id or not recipient or recipient.school_id != user.school_id:
+    if (not student or student.school_id != user.school_id or not recipient
+            or recipient.school_id != user.school_id or not recipient.is_active
+            or recipient.approval_status != "approved"):
         raise HTTPException(status_code=404, detail="Student or recipient not found in your school")
     if recipient.id == user.id:
         raise HTTPException(status_code=422, detail="Choose another conversation participant")
@@ -770,7 +799,11 @@ def send_parent_teacher_message(payload: schemas.ParentTeacherMessageIn, db: Ses
         raise HTTPException(status_code=403, detail="Recipient is not an authorized school participant")
     obj = models.ParentTeacherMessage(school_id=user.school_id, student_id=student.id,
         sender_user_id=user.id, recipient_user_id=recipient.id, subject=payload.subject, body=payload.body)
-    db.add(obj); db.commit(); db.refresh(obj)
+    db.add(obj)
+    db.flush()
+    write_audit_log(db, user, "parent_message.sent", "parent_teacher_message", str(obj.id),
+                    {"student_id": student.id, "recipient_user_id": recipient.id})
+    db.commit(); db.refresh(obj)
     return obj
 
 
@@ -799,17 +832,19 @@ def register_crud(path, model, schema_in, schema_out, roles):
                 raise HTTPException(status_code=409, detail="No available copies of this book")
         if model is models.StudentLeaveRequest:
             student = db.get(models.Student, values.get("student_id"))
-            target_school = values.get("school_id") or user.school_id
+            target_school = values.get("school_id") if user.role == "super_admin" else user.school_id
             if not student or (target_school and student.school_id != target_school):
                 raise HTTPException(status_code=404, detail="Student not found in the selected school")
+            if user.role == "parent" and not _linked_parent_student(db, user, student.id):
+                raise HTTPException(status_code=404, detail="Linked student not found")
         if model in (models.AttendanceRecord, models.ReportCard):
             student = db.get(models.Student, values.get("student_id"))
-            target_school = values.get("school_id") or user.school_id
+            target_school = values.get("school_id") if user.role == "super_admin" else user.school_id
             if not student or (target_school and student.school_id != target_school):
                 raise HTTPException(status_code=404, detail="Student not found in the selected school")
         if model is models.ReportCard:
             exam = db.get(models.Exam, values.get("exam_id"))
-            target_school = values.get("school_id") or user.school_id
+            target_school = values.get("school_id") if user.role == "super_admin" else user.school_id
             if not exam or (target_school and exam.school_id != target_school):
                 raise HTTPException(status_code=404, detail="Exam not found in the selected school")
             if Decimal(str(values.get("marks_obtained", 0))) > Decimal(str(exam.max_marks)):
@@ -821,6 +856,14 @@ def register_crud(path, model, schema_in, schema_out, roles):
         scope = school_scope(model, user)
         if scope is not None:
             stmt = stmt.where(scope)
+        if model is models.StudentLeaveRequest and user.role == "parent":
+            if not user.school_id:
+                raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
+            linked_ids = select(models.ParentStudentLink.student_id).where(
+                models.ParentStudentLink.parent_user_id == user.id,
+                models.ParentStudentLink.school_id == user.school_id,
+                models.ParentStudentLink.is_active.is_(True))
+            stmt = stmt.where(model.student_id.in_(linked_ids))
         if q and model is models.LibraryBook:
             term = f"%{q}%"
             stmt = stmt.where(or_(models.LibraryBook.title.ilike(term), models.LibraryBook.author.ilike(term), models.LibraryBook.isbn.ilike(term)))
@@ -843,6 +886,9 @@ def register_crud(path, model, schema_in, schema_out, roles):
         if user.role != "super_admin" and not user.school_id:
             raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
         values = payload.model_dump()
+        if model is models.StudentLeaveRequest and user.role == "parent":
+            if not user.school_id or not _linked_parent_student(db, user, values.get("student_id")):
+                raise HTTPException(status_code=404, detail="Linked student not found")
         create_staff_account = False
         account_role = None
         account_password = None
@@ -872,6 +918,8 @@ def register_crud(path, model, schema_in, schema_out, roles):
             values["uploaded_by"] = user.id
         if model is models.AttendanceRecord:
             values["marked_by"] = user.id
+        if model is models.Homework:
+            values["assigned_by"] = user.id
         if model is models.LibraryBook:
             values["available_copies"] = values["total_copies"]
         if model is models.LibraryLoan:
@@ -884,6 +932,10 @@ def register_crud(path, model, schema_in, schema_out, roles):
             validate_related_records(values, user, db)
         obj = model(**values)
         db.add(obj)
+        if model is models.StudentLeaveRequest:
+            db.flush()
+            write_audit_log(db, user, "student.leave.submitted", "student_leave_request", str(obj.id),
+                            {"student_id": obj.student_id, "start_date": obj.start_date.isoformat(), "end_date": obj.end_date.isoformat()})
         if model is models.LibraryLoan:
             db.flush()
             write_audit_log(db, user, "library.book.issued", "library_loan", str(obj.id), {"book_id": obj.book_id, "student_id": obj.student_id, "due_date": obj.due_date.isoformat()})
@@ -911,6 +963,8 @@ def register_crud(path, model, schema_in, schema_out, roles):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
+        if model is models.StudentLeaveRequest and user.role == "parent" and not _linked_parent_student(db, user, obj.student_id):
+            raise HTTPException(status_code=404, detail="Leave request not found")
         return obj
 
     def update_item(item_id: int, payload: Any, db: Session = Depends(get_db),
@@ -918,6 +972,11 @@ def register_crud(path, model, schema_in, schema_out, roles):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
+        if model is models.StudentLeaveRequest:
+            if user.role == "parent":
+                raise HTTPException(status_code=403, detail="Parents cannot edit submitted leave requests")
+            if obj.status != "pending":
+                raise HTTPException(status_code=409, detail="Only pending leave requests can be edited")
         values = payload.model_dump()
         if model is models.Staff:
             if values.pop("create_account", False) or values.pop("account_password", None):
@@ -958,6 +1017,11 @@ def register_crud(path, model, schema_in, schema_out, roles):
         obj = db.get(model, item_id)
         if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
             raise HTTPException(status_code=404, detail="Record not found")
+        if model is models.StudentLeaveRequest:
+            if user.role == "parent":
+                raise HTTPException(status_code=403, detail="Parents cannot delete submitted leave requests")
+            if obj.status != "pending":
+                raise HTTPException(status_code=409, detail="Reviewed leave requests cannot be deleted")
         if model is models.LibraryBook and db.scalar(select(models.LibraryLoan.id).where(models.LibraryLoan.book_id == obj.id)):
             raise HTTPException(status_code=409, detail="A book with loan history cannot be deleted")
         if model is models.LibraryLoan:

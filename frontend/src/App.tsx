@@ -95,7 +95,7 @@ const roleDescriptions:Record<string,string> = {
  parent:'Family portal for linked students only.'
 }
 const roleModuleAccess:Record<string,string[]> = {
- super_admin:modules.map(m=>m.key),
+ super_admin:modules.filter(m=>m.key!=='parent-messages').map(m=>m.key),
  user:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
  admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
  principal:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
@@ -289,7 +289,7 @@ function App(){
  const availableModules=modules.filter(m=>allowedModuleKeys.includes(m.key))
  const selected=modules.find(m=>m.key===active)||modules[0]
  const roleLabel=roleLabels[user?.role||'user']||'School User'
- const showRecordActions=active==='staff'||['attendance','timetable','exams','report-cards','homework','student-leave','library-books','library-loans'].includes(active)
+ const showRecordActions=active==='staff'||['attendance','timetable','exams','report-cards','homework','library-books','library-loans'].includes(active)||(active==='student-leave'&&user?.role!=='parent')
  const hasModule=(key:string)=>allowedModuleKeys.includes(key)
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
  useEffect(()=>{if(user){const first=allowedModuleKeys[0]||'dashboard';if(!allowedModuleKeys.includes(active))setActive(first)}},[user,rbacPermissions])
