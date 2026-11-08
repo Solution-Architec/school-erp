@@ -68,6 +68,13 @@ The UI and API changes are committed. Runtime database migration, deployment, an
 - Private school-scoped messages with explicit student, sender, recipient, subject, body, and timestamps.
 - `GET/POST /api/parent-messages` returns only messages where the authenticated user is sender or recipient. Parents must have an active link to the student; staff recipients and parent recipients are validated against the same school and student link.
 
+### Security and deployment follow-up
+- Homework creation records the authenticated assigning user server-side; the Developer UI already includes a school picker for global creation.
+- Parent leave list/get/create operations honor active parent-student links even with explicit RBAC grants. Parents cannot edit/delete/review leave; reviewed requests cannot be edited/deleted.
+- Attendance, report-card, and leave relation checks use the authenticated tenant for school users instead of trusting a client-supplied `school_id`.
+- Parent messaging requires module permissions, active linked-student relationships for parent participants, and active/approved same-school recipients. Message bodies are omitted from audit logs.
+- Default role permissions include these modules for school leadership/teachers; parent leave/message actions are read/create only.
+
 ### Schema and deployment
 - New tables are created by the existing SQLAlchemy `Base.metadata.create_all` startup mechanism: `homework`, `student_leave_requests`, and `parent_teacher_messages`.
 - No Alembic migration system exists in this repository. Back up the database and restart the backend so the startup table creation runs before using the new endpoints.

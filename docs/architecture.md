@@ -78,6 +78,9 @@ The implementation is a **modular monolith**. The diagram's conceptual services 
 | Fee payments | `/api/student-fees/{fee_id}/payments` |
 | Parent app | `/api/parent-links`, `/api/parent/children`, `/api/parent/children/{student_id}/fees` |
 | Chatbot FAQ | `/api/chatbot/faq` |
+| Academic workflows | `/api/attendance`, `/api/timetable`, `/api/exams`, `/api/report-cards`, `/api/homework`, `/api/student-leave` |
+| Parent leave portal | `/api/parent-portal/leave` (active parent-student links only) |
+| Parent–teacher messaging | `/api/parent-messages` (school-scoped, sender/recipient-only) |
 
 Most CRUD domains expose list, create, retrieve, update, and delete operations. See Swagger UI at `/docs` for the live OpenAPI contract.
 
