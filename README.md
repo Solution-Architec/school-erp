@@ -20,22 +20,26 @@ A modular-monolith School ERP built around the architecture in the project diagr
 cp .env.example .env
 ```
 
-3. Start the stack:
+3. Generate a unique JWT signing secret and put it in `.env` as `JWT_SECRET_KEY`:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Also replace the database password and bootstrap administrator credentials with unique values before starting the stack.
+
+4. Start the stack:
 
 ```bash
 docker compose up --build -d
 ```
 
-4. Open:
+5. Open:
    - Web portal: http://localhost
    - API docs: http://localhost:8000/docs
    - API health: http://localhost:8000/api/health
 
-Default bootstrap administrator:
-- Email: `admin@example.com`
-- Password: `ChangeMe123!`
-
-**Do not use the bootstrap credentials in production.** Change the password, JWT secret, database password, and CORS origins before exposing the application.
+**There is no default bootstrap administrator password.** Set `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` to unique values in `.env` before first startup. Do not use example credentials in production.
 
 ## Local development
 
@@ -47,9 +51,9 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 export DATABASE_URL=sqlite:///./school_erp.db
-export JWT_SECRET_KEY='replace-with-a-long-random-secret'
+export JWT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
 export BOOTSTRAP_ADMIN_EMAIL=admin@example.com
-export BOOTSTRAP_ADMIN_PASSWORD='ChangeMe123!'
+export BOOTSTRAP_ADMIN_PASSWORD='set-a-unique-local-password'
 uvicorn app.main:app --reload
 ```
 
@@ -62,7 +66,6 @@ npm run dev
 ```
 
 Set `VITE_API_URL=http://localhost:8000` in `frontend/.env.local` when running the API separately.
-
 
 ## Demo accounts for role-wise testing
 
@@ -155,7 +158,6 @@ This repository is a functional ERP foundation; it should not be represented as 
 - Complete parent/student self-service flows and record-level access controls.
 - Add payment-provider integration and reconciliation before accepting real payments.
 - Integrate external Aadhaar verification only through an authorized provider and approved compliance workflow; never store Aadhaar numbers unless legally required and secured.
-- Implement attendance, examinations, timetable, payroll, biometric, GPS, OCR, and statutory accounting workflows as institution-specific modules.
 - Review child-data privacy, financial, employment, and school regulations for the deployment jurisdiction.
 
 ## License
