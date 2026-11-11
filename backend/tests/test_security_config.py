@@ -1,6 +1,6 @@
 import pytest
 
-from app.security_config import load_jwt_secret
+from backend.app.security_config import load_jwt_secret
 
 
 def test_missing_jwt_secret_fails_closed(monkeypatch):
