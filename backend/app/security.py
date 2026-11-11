@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from .database import get_db
 from .models import User, RolePermission
+from .security_config import load_jwt_secret
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "unsafe-development-secret-change-me")
+# Fail closed during application import/startup: there is no development fallback.
+JWT_SECRET_KEY = load_jwt_secret()
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "60"))
 password_hash = PasswordHash.recommended()
