@@ -82,12 +82,19 @@ async def lifespan(app: FastAPI):
             conn.execute(text('ALTER TABLE "' + table + '" DROP CONSTRAINT IF EXISTS "' + constraint + '"'))
             conn.execute(text('ALTER TABLE "' + table + '" ADD CONSTRAINT "' + constraint + '" UNIQUE (' + columns + ')'))
 
-    email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
-    password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "ChangeMe123!")
     with SessionLocal() as db:
-        if not db.scalar(select(models.User).where(models.User.email == email)):
-            db.add(models.User(name=os.getenv("BOOTSTRAP_ADMIN_NAME", "ERP Administrator"),
-                               email=email, password_hash=hash_password(password), role="super_admin"))
+        has_super_admin = db.scalar(
+            select(models.User.id).where(models.User.role == "super_admin").limit(1)
+        )
+        if not has_super_admin:
+            from .bootstrap_config import load_bootstrap_admin_config
+            bootstrap = load_bootstrap_admin_config()
+            db.add(models.User(
+                name=bootstrap["name"],
+                email=bootstrap["email"],
+                password_hash=hash_password(bootstrap["password"]),
+                role="super_admin",
+            ))
             db.commit()
     yield
 
