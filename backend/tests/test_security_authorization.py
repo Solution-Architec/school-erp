@@ -89,3 +89,40 @@ def test_school_account_approval_fallback_excludes_regular_staff():
         checker(user=SimpleNamespace(role="teacher", school_id=1), db=EmptyPermissionStore())
     assert exc.value.status_code == 403
     assert checker(user=SimpleNamespace(role="principal", school_id=1), db=EmptyPermissionStore()).role == "principal"
+
+
+def test_default_module_policy_blocks_cross_role_module_access():
+    teacher = SimpleNamespace(role="teacher", school_id=7)
+    with pytest.raises(HTTPException) as exc:
+        require_module_permission("payments", "View", "teacher")(user=teacher, db=EmptyPermissionStore())
+    assert exc.value.status_code == 403
+    assert require_module_permission("attendance", "View", "teacher")(user=teacher, db=EmptyPermissionStore()).role == "teacher"
+
+
+def test_default_module_policy_limits_parent_to_view_and_create():
+    parent = SimpleNamespace(role="parent", school_id=7)
+    assert require_module_permission("parent-messages", "Create", "parent")(user=parent, db=EmptyPermissionStore()).role == "parent"
+    with pytest.raises(HTTPException) as exc:
+        require_module_permission("parent-messages", "Delete", "parent")(user=parent, db=EmptyPermissionStore())
+    assert exc.value.status_code == 403
+
+
+def test_explicit_permission_grant_can_override_default_role_matrix():
+    teacher = SimpleNamespace(role="teacher", school_id=7)
+    class GrantStore:
+        def __init__(self):
+            self.calls = 0
+        def scalar(self, statement):
+            self.calls += 1
+            return None if self.calls == 1 else SimpleNamespace(enabled=True)
+    assert require_module_permission("payments", "View", "teacher")(user=teacher, db=GrantStore()).role == "teacher"
+
+
+def test_school_level_explicit_deny_overrides_global_grant():
+    teacher = SimpleNamespace(role="teacher", school_id=7)
+    class GrantStore:
+        def scalar(self, statement):
+            return SimpleNamespace(enabled=False)
+    with pytest.raises(HTTPException) as exc:
+        require_module_permission("attendance", "View", "teacher")(user=teacher, db=GrantStore())
+    assert exc.value.status_code == 403
