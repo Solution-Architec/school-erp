@@ -269,7 +269,7 @@ function App(){
  const selected=modules.find(m=>m.key===active)||modules[0]
  const roleLabel=roleLabels[user?.role||'user']||'School User'
  const hasModule=(key:string)=>allowedModuleKeys.includes(key)
- const hasPermission=(moduleKey:string,action:string)=>user?.role==='super_admin'||(rbacPermissions?.role===user?.role&&Boolean(rbacPermissions.permissions[moduleKey+':'+action]))
+ const hasPermission=(moduleKey:string,action:string)=>user?.role==='super_admin'||(rbacPermissions!==null&&rbacPermissions.role===user?.role&&Boolean(rbacPermissions.permissions[moduleKey+':'+action]))
  const showRecordActions=Boolean(selected.endpoint&&active!=='schools'&&(hasPermission(active,'Edit')||hasPermission(active,'Delete')||hasPermission(active,'Approve')))
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
  useEffect(()=>{if(user){const first=allowedModuleKeys[0]||'dashboard';if(!allowedModuleKeys.includes(active))setActive(first)}},[user,rbacPermissions])
