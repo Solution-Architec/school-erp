@@ -36,22 +36,57 @@ DEFAULT_ROLE_MODULES = {
 }
 
 
+ROLE_CREATE_MODULES = {
+    "user": DEFAULT_ROLE_MODULES["user"],
+    "admin": DEFAULT_ROLE_MODULES["admin"],
+    "principal": DEFAULT_ROLE_MODULES["principal"],
+    "vice_principal": [m for m in DEFAULT_ROLE_MODULES["vice_principal"] if m != "fee-reports"],
+    "teacher": ["attendance", "report-cards", "homework", "student-leave", "parent-messages"],
+    "account": ["fee-structures", "student-fees", "payments"],
+    "accountant": ["fee-structures", "student-fees", "payments"],
+    "clerk": ["students", "student-fees", "payments", "documents"],
+    "office_assistant": ["students", "documents"],
+    "librarian": ["library-books", "library-loans", "documents"],
+    "lab_assistant": ["maintenance", "documents"],
+    "it_administrator": ["staff", "documents", "maintenance"],
+    "transport_manager": ["vehicles", "documents", "maintenance"],
+    "hostel_warden": ["hostels", "documents", "maintenance"],
+    "parent": ["student-leave", "parent-messages"],
+}
+ROLE_EDIT_MODULES = {
+    **ROLE_CREATE_MODULES,
+    "teacher": ["attendance", "report-cards", "homework", "student-leave"],
+    "account": ["fee-structures", "student-fees"],
+    "accountant": ["fee-structures", "student-fees"],
+    "clerk": ["students", "student-fees", "documents"],
+    "librarian": ["library-books", "library-loans", "documents"],
+    "parent": [],
+}
+NON_DELETABLE_MODULES = {
+    "dashboard", "parent-portal", "chatbot", "approvals", "schools",
+    "payments", "fee-reports", "parent-messages", "library-loans",
+}
+
+
 def default_module_permission(role: str, module_key: str, action: str) -> bool:
     """Return the least-privilege default used by both the API and RBAC editor."""
     if module_key not in DEFAULT_ROLE_MODULES.get(role, []):
         return False
-    if role == "parent":
-        return action in {"View", "Create"}
-    # Generic CRUD deletion is deliberately restricted to school admins by the
-    # route policy. Other roles can receive it only through an explicit grant.
-    if action == "Delete":
-        return role == "admin"
-    if action in {"View", "Create", "Edit"}:
+    if action == "View":
         return True
-    if module_key == "approvals" and action == "Approve":
-        return role in {"admin", "principal", "vice_principal"}
-    if module_key == "student-leave" and action == "Approve":
+    if action == "Create":
+        return module_key in ROLE_CREATE_MODULES.get(role, [])
+    if action == "Edit":
+        return module_key in ROLE_EDIT_MODULES.get(role, [])
+    # Generic CRUD deletion is intentionally admin-only and unavailable for
+    # workflow/history endpoints that do not support deletion.
+    if action == "Delete":
+        return role == "admin" and module_key not in NON_DELETABLE_MODULES
+    if action == "Approve" and module_key == "approvals":
+        return role in {"admin", "principal", "vice_principal", "user"}
+    if action == "Approve" and module_key == "student-leave":
         return role in {"admin", "principal", "vice_principal", "teacher", "user"}
+    # Export is opt-in; it requires an explicit permission grant.
     return False
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
