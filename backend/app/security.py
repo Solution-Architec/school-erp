@@ -42,7 +42,11 @@ def default_module_permission(role: str, module_key: str, action: str) -> bool:
         return False
     if role == "parent":
         return action in {"View", "Create"}
-    if action in {"View", "Create", "Edit", "Delete"}:
+    # Generic CRUD deletion is deliberately restricted to school admins by the
+    # route policy. Other roles can receive it only through an explicit grant.
+    if action == "Delete":
+        return role == "admin"
+    if action in {"View", "Create", "Edit"}:
         return True
     if module_key == "approvals" and action == "Approve":
         return role in {"admin", "principal", "vice_principal"}
