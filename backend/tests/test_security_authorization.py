@@ -126,3 +126,12 @@ def test_school_level_explicit_deny_overrides_global_grant():
     with pytest.raises(HTTPException) as exc:
         require_module_permission("attendance", "View", "teacher")(user=teacher, db=GrantStore())
     assert exc.value.status_code == 403
+
+
+def test_default_delete_permission_is_limited_to_admin():
+    admin = SimpleNamespace(role="admin", school_id=3)
+    principal = SimpleNamespace(role="principal", school_id=3)
+    assert require_module_permission("students", "Delete", "admin")(user=admin, db=EmptyPermissionStore()).role == "admin"
+    with pytest.raises(HTTPException) as exc:
+        require_module_permission("students", "Delete", "super_admin", "admin")(user=principal, db=EmptyPermissionStore())
+    assert exc.value.status_code == 403
