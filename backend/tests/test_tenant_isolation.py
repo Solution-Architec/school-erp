@@ -69,7 +69,7 @@ def test_school_admin_cannot_link_parent_to_another_school_student(db):
             user=admin,
         )
 
-    assert exc.value.status_code == 404
+    assert exc.value.status_code == 422
     assert db.query(models.ParentStudentLink).count() == 0
 
 
