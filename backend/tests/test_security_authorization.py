@@ -135,3 +135,35 @@ def test_default_delete_permission_is_limited_to_admin():
     with pytest.raises(HTTPException) as exc:
         require_module_permission("students", "Delete", "super_admin", "admin")(user=principal, db=EmptyPermissionStore())
     assert exc.value.status_code == 403
+
+
+def test_teacher_can_write_academic_records_but_not_student_profiles():
+    teacher = SimpleNamespace(role="teacher", school_id=4)
+    assert require_module_permission("attendance", "Create", "teacher")(user=teacher, db=EmptyPermissionStore()).role == "teacher"
+    with pytest.raises(HTTPException) as exc:
+        require_module_permission("students", "Create", "teacher")(user=teacher, db=EmptyPermissionStore())
+    assert exc.value.status_code == 403
+
+
+def test_accountant_and_transport_manager_have_separate_write_scopes():
+    accountant = SimpleNamespace(role="accountant", school_id=4)
+    transport = SimpleNamespace(role="transport_manager", school_id=4)
+    assert require_module_permission("fee-structures", "Create", "accountant")(user=accountant, db=EmptyPermissionStore()).role == "accountant"
+    with pytest.raises(HTTPException):
+        require_module_permission("students", "Create", "accountant")(user=accountant, db=EmptyPermissionStore())
+    assert require_module_permission("vehicles", "Create", "transport_manager")(user=transport, db=EmptyPermissionStore()).role == "transport_manager"
+    with pytest.raises(HTTPException):
+        require_module_permission("fee-structures", "Create", "transport_manager")(user=transport, db=EmptyPermissionStore())
+
+
+def test_clerk_can_create_student_but_cannot_delete_records_by_default():
+    clerk = SimpleNamespace(role="clerk", school_id=4)
+    assert require_module_permission("students", "Create", "clerk")(user=clerk, db=EmptyPermissionStore()).role == "clerk"
+    with pytest.raises(HTTPException):
+        require_module_permission("students", "Delete", "admin", "clerk")(user=clerk, db=EmptyPermissionStore())
+
+
+def test_admin_cannot_delete_library_loan_history():
+    admin = SimpleNamespace(role="admin", school_id=4)
+    with pytest.raises(HTTPException):
+        require_module_permission("library-loans", "Delete", "admin")(user=admin, db=EmptyPermissionStore())
