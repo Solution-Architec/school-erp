@@ -22,7 +22,7 @@ from sqlalchemy import select, func, text
 from sqlalchemy.exc import IntegrityError
 from .database import Base, engine, get_db, SessionLocal
 from . import models, schemas
-from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission
+from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission, default_module_permission
 
 # Explicit legacy school roles used by route-level fallback authorization.
 STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "security_guard", "others")
@@ -137,10 +137,10 @@ DEFAULT_ROLE_MODULES = {
     "account": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
     "accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
     "clerk": ["dashboard", "chatbot", "students", "student-fees", "payments", "documents"],
-    "office_assistant": ["dashboard", "chatbot", "students", "staff", "documents", "approvals"],
+    "office_assistant": ["dashboard", "chatbot", "students", "staff", "documents"],
     "librarian": ["dashboard", "chatbot", "students", "documents", "library-books", "library-loans"],
     "lab_assistant": ["dashboard", "chatbot", "documents", "maintenance"],
-    "it_administrator": ["dashboard", "chatbot", "staff", "documents", "maintenance", "approvals"],
+    "it_administrator": ["dashboard", "chatbot", "staff", "documents", "maintenance"],
     "transport_manager": ["dashboard", "chatbot", "students", "vehicles", "documents", "maintenance"],
     "hostel_warden": ["dashboard", "chatbot", "students", "hostels", "documents", "maintenance"],
     "security_guard": ["dashboard", "chatbot", "students"],
@@ -161,22 +161,11 @@ def write_audit_log(db: Session, actor: models.User, event_type: str, target_typ
 
 
 def _default_permission_matrix(role: str) -> dict[str, bool]:
-    allowed_modules = set(DEFAULT_ROLE_MODULES.get(role, ["dashboard", "chatbot"]))
-    permissions: dict[str, bool] = {}
-    for module in RBAC_MODULES:
-        for action in RBAC_ACTIONS:
-            enabled = module in allowed_modules and action in {"View", "Create", "Edit", "Delete"}
-            if role == "parent" and module in {"student-leave", "parent-messages"}:
-                enabled = module in allowed_modules and action in {"View", "Create"}
-            if module == "approvals" and action == "Approve" and module in allowed_modules:
-                enabled = True
-            if module == "student-leave" and action == "Approve" and role in {
-                "admin", "principal", "vice_principal", "teacher", "user"
-            }:
-                enabled = True
-            permissions[f"{module}:{action}"] = enabled
-    return permissions
-
+    return {
+        f"{module}:{action}": default_module_permission(role, module, action)
+        for module in RBAC_MODULES
+        for action in RBAC_ACTIONS
+    }
 
 def _permission_scope_matrix(db: Session, role: str, school_id: int | None = None) -> dict:
     global_grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role, models.RolePermission.school_id.is_(None))).all()
