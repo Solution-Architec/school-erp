@@ -286,8 +286,8 @@ def health():
 
 # Public account registration and recovery. OTPs are hashed at rest and expire after 10 minutes.
 def _otp_digest(email: str, code: str) -> str:
-    secret = os.getenv("JWT_SECRET_KEY", "schoolos-development-secret")
-    return hashlib.sha256(f"{email.lower()}:{code}:{secret}".encode()).hexdigest()
+    # Reuse the validated application secret; never introduce an OTP-only fallback.
+    return hashlib.sha256(f"{email.lower()}:{code}:{JWT_SECRET_KEY}".encode()).hexdigest()
 
 # Support alerts are throttled per event to avoid flooding the support mailbox.
 _support_alert_last_sent: dict[str, datetime] = {}
@@ -370,9 +370,11 @@ def _issue_auth_code(db: Session, email: str, purpose: str) -> None:
         raise HTTPException(status_code=503, detail="Could not send email. Check SMTP settings and request a new code.")
 
 def _consume_auth_code(db: Session, email: str, code: str, purpose: str):
+    # Lock the newest unused challenge until commit so parallel submissions cannot
+    # both consume the same OTP. PostgreSQL enforces the row lock in production.
     record = db.scalar(select(models.AuthCode).where(models.AuthCode.email == email,
         models.AuthCode.purpose == purpose, models.AuthCode.used_at.is_(None))
-        .order_by(models.AuthCode.id.desc()))
+        .order_by(models.AuthCode.id.desc()).with_for_update())
     if not record or record.expires_at < datetime.utcnow() or record.attempts >= 5:
         if record and record.attempts >= 5:
             _notify_support("OTP attempt limit reached", f"Purpose={purpose}; account email={email}; maximum incorrect attempts reached.")
