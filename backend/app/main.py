@@ -24,63 +24,72 @@ from .database import Base, engine, get_db, SessionLocal
 from . import models, schemas
 from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission
 
+# Explicit legacy school roles used by route-level fallback authorization.
+STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "security_guard", "others")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(80) NOT NULL DEFAULT 'Principal'"))
-        conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
-        # Role permissions support ERP-wide defaults (school_id NULL) and per-school overrides.
-        conn.execute(text("ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)"))
-        conn.execute(text("ALTER TABLE role_permissions DROP CONSTRAINT IF EXISTS uq_role_permission_scope"))
-        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_global ON role_permissions (role, module_key, action) WHERE school_id IS NULL"))
-        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_school ON role_permissions (school_id, role, module_key, action) WHERE school_id IS NOT NULL"))
-        tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments", "attendance_records", "timetable_entries", "exams", "report_cards", "homework", "student_leave_requests", "parent_teacher_messages", "library_books", "library_loans")
-        all_school_tables = ("users",) + tenant_tables
-        for table in all_school_tables:
-            conn.execute(text('ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)'))
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(80) NOT NULL DEFAULT 'Principal'"))
+            conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
+            # Role permissions support ERP-wide defaults (school_id NULL) and per-school overrides.
+            conn.execute(text("ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)"))
+            conn.execute(text("ALTER TABLE role_permissions DROP CONSTRAINT IF EXISTS uq_role_permission_scope"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_global ON role_permissions (role, module_key, action) WHERE school_id IS NULL"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_role_permission_school ON role_permissions (school_id, role, module_key, action) WHERE school_id IS NOT NULL"))
+            tenant_tables = ("students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance_requests", "fee_structures", "student_fees", "fee_payments", "attendance_records", "timetable_entries", "exams", "report_cards", "homework", "student_leave_requests", "parent_teacher_messages", "library_books", "library_loans")
+            all_school_tables = ("users",) + tenant_tables
+            for table in all_school_tables:
+                conn.execute(text('ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)'))
+    
+            # Preserve pre-multi-school records by placing unassigned legacy data
+            # into a dedicated school before enforcing tenant isolation constraints.
+            conn.execute(text("""
+                INSERT INTO schools (name, code, is_active, created_at)
+                VALUES ('Migrated Legacy School', 'LEGACY-MIGRATED', TRUE, CURRENT_TIMESTAMP)
+                ON CONFLICT (code) DO NOTHING
+            """))
+            legacy_school_id = conn.execute(
+                text("SELECT id FROM schools WHERE code = 'LEGACY-MIGRATED'")
+            ).scalar_one()
+            for table in tenant_tables:
+                conn.execute(text(
+                    'UPDATE "' + table + '" SET school_id = :school_id WHERE school_id IS NULL'
+                ), {"school_id": legacy_school_id})
+                conn.execute(text(
+                    'ALTER TABLE "' + table + '" ALTER COLUMN school_id SET NOT NULL'
+                ))
+    
+            # Super Admin remains global; any legacy school-level users belong to
+            # the migrated school until explicitly reassigned in the Schools screen.
+            conn.execute(text("""
+                UPDATE users SET school_id = :school_id
+                WHERE school_id IS NULL AND role <> 'super_admin'
+            """), {"school_id": legacy_school_id})
+    
+            for index_name in ("ix_students_admission_no", "ix_staff_employee_no", "ix_vehicles_registration_no", "ix_fee_payments_receipt_no"):
+                conn.execute(text('DROP INDEX IF EXISTS "' + index_name + '"'))
+            conn.execute(text("ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS uq_fee_structure_name_year_term"))
+            conn.execute(text("ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS uq_fee_structure_school_year_term"))
+            conn.execute(text("ALTER TABLE fee_structures ADD CONSTRAINT uq_fee_structure_school_year_term UNIQUE (school_id, name, academic_year, term)"))
+            conn.execute(text("ALTER TABLE fee_payments DROP CONSTRAINT IF EXISTS uq_fee_payment_school_receipt"))
+            conn.execute(text("ALTER TABLE fee_payments ADD CONSTRAINT uq_fee_payment_school_receipt UNIQUE (school_id, receipt_no)"))
+            for table, constraint, columns in (
+                ("students", "uq_student_school_admission", "school_id, admission_no"),
+                ("staff", "uq_staff_school_employee", "school_id, employee_no"),
+                ("vehicles", "uq_vehicle_school_registration", "school_id, registration_no"),
+            ):
+                conn.execute(text('ALTER TABLE "' + table + '" DROP CONSTRAINT IF EXISTS "' + constraint + '"'))
+                conn.execute(text('ALTER TABLE "' + table + '" ADD CONSTRAINT "' + constraint + '" UNIQUE (' + columns + ')'))
+    elif engine.dialect.name != "sqlite":
+        raise RuntimeError(f"Unsupported database dialect: {engine.dialect.name}")
+    # SQLite is supported for fresh local-development databases. The production
+    # schema-upgrade path above is PostgreSQL-specific; use PostgreSQL for upgrades.
 
-        # Preserve pre-multi-school records by placing unassigned legacy data
-        # into a dedicated school before enforcing tenant isolation constraints.
-        conn.execute(text("""
-            INSERT INTO schools (name, code, is_active, created_at)
-            VALUES ('Migrated Legacy School', 'LEGACY-MIGRATED', TRUE, CURRENT_TIMESTAMP)
-            ON CONFLICT (code) DO NOTHING
-        """))
-        legacy_school_id = conn.execute(
-            text("SELECT id FROM schools WHERE code = 'LEGACY-MIGRATED'")
-        ).scalar_one()
-        for table in tenant_tables:
-            conn.execute(text(
-                'UPDATE "' + table + '" SET school_id = :school_id WHERE school_id IS NULL'
-            ), {"school_id": legacy_school_id})
-            conn.execute(text(
-                'ALTER TABLE "' + table + '" ALTER COLUMN school_id SET NOT NULL'
-            ))
-
-        # Super Admin remains global; any legacy school-level users belong to
-        # the migrated school until explicitly reassigned in the Schools screen.
-        conn.execute(text("""
-            UPDATE users SET school_id = :school_id
-            WHERE school_id IS NULL AND role <> 'super_admin'
-        """), {"school_id": legacy_school_id})
-
-        for index_name in ("ix_students_admission_no", "ix_staff_employee_no", "ix_vehicles_registration_no", "ix_fee_payments_receipt_no"):
-            conn.execute(text('DROP INDEX IF EXISTS "' + index_name + '"'))
-        conn.execute(text("ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS uq_fee_structure_name_year_term"))
-        conn.execute(text("ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS uq_fee_structure_school_year_term"))
-        conn.execute(text("ALTER TABLE fee_structures ADD CONSTRAINT uq_fee_structure_school_year_term UNIQUE (school_id, name, academic_year, term)"))
-        conn.execute(text("ALTER TABLE fee_payments DROP CONSTRAINT IF EXISTS uq_fee_payment_school_receipt"))
-        conn.execute(text("ALTER TABLE fee_payments ADD CONSTRAINT uq_fee_payment_school_receipt UNIQUE (school_id, receipt_no)"))
-        for table, constraint, columns in (
-            ("students", "uq_student_school_admission", "school_id, admission_no"),
-            ("staff", "uq_staff_school_employee", "school_id, employee_no"),
-            ("vehicles", "uq_vehicle_school_registration", "school_id, registration_no"),
-        ):
-            conn.execute(text('ALTER TABLE "' + table + '" DROP CONSTRAINT IF EXISTS "' + constraint + '"'))
-            conn.execute(text('ALTER TABLE "' + table + '" ADD CONSTRAINT "' + constraint + '" UNIQUE (' + columns + ')'))
 
     with SessionLocal() as db:
         has_super_admin = db.scalar(
@@ -490,12 +499,12 @@ def reset_password(payload: dict, db: Session = Depends(get_db)):
     return {"message": "Password updated. You can now sign in."}
 
 @app.get("/api/auth/pending-users", tags=["auth"])
-def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "View", "admin"))):
+def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "View", *STANDARD_ROLES))):
     return list(db.scalars(select(models.User).where(models.User.school_id == user.school_id,
         models.User.approval_status == "pending", models.User.email_verified.is_(True)).order_by(models.User.created_at)).all())
 
 @app.post("/api/auth/users/{user_id}/approval", tags=["auth"])
-def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "Approve", "admin"))):
+def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "Approve", *STANDARD_ROLES))):
     target = db.get(models.User, user_id)
     decision = str(payload.get("decision", "")).lower()
     if not target or target.school_id != user.school_id or target.role == "super_admin":
@@ -669,7 +678,7 @@ def school_scope(model, user):
 
 
 @app.get("/api/dashboard")
-def dashboard(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("dashboard", "View", "teacher", "parent"))):
+def dashboard(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("dashboard", "View", *STANDARD_ROLES, "parent"))):
     if user.role == "parent":
         return {"students": 0, "staff": 0, "classes": 0, "vehicles": 0,
                 "hostel_rooms": 0, "open_maintenance": 0, "user_role": "parent"}
@@ -744,7 +753,7 @@ def parent_submit_leave(payload: schemas.StudentLeaveIn, db: Session = Depends(g
 
 @app.post("/api/student-leave/{item_id}/review", response_model=schemas.StudentLeaveOut, tags=["student-leave"])
 def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, db: Session = Depends(get_db),
-                         user: models.User = Depends(require_module_permission("student-leave", "Approve", "super_admin", "admin", "principal", "vice_principal", "teacher", "user"))):
+                         user: models.User = Depends(require_module_permission("student-leave", "Approve", *STANDARD_ROLES))):
     if user.role not in {"super_admin", "admin", "principal", "vice_principal", "teacher", "user"}:
         raise HTTPException(status_code=403, detail="School staff permission required to review leave")
     obj = db.get(models.StudentLeaveRequest, item_id)
@@ -762,7 +771,7 @@ def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, d
 
 @app.get("/api/parent-messages", response_model=list[schemas.ParentTeacherMessageOut], tags=["parent-messages"])
 def list_parent_teacher_messages(db: Session = Depends(get_db),
-                                 user: models.User = Depends(require_module_permission("parent-messages", "View", "parent", "teacher", "principal", "vice_principal", "admin", "user"))):
+                                 user: models.User = Depends(require_module_permission("parent-messages", "View", *STANDARD_ROLES, "parent"))):
     if user.role not in {"parent", "teacher", "principal", "vice_principal", "admin", "user"}:
         raise HTTPException(status_code=403, detail="Parent or authorized school staff account required")
     if not user.school_id:
@@ -783,7 +792,7 @@ def list_parent_teacher_messages(db: Session = Depends(get_db),
 
 @app.post("/api/parent-messages", response_model=schemas.ParentTeacherMessageOut, tags=["parent-messages"])
 def send_parent_teacher_message(payload: schemas.ParentTeacherMessageIn, db: Session = Depends(get_db),
-                                user: models.User = Depends(require_module_permission("parent-messages", "Create", "parent", "teacher", "principal", "vice_principal", "admin", "user"))):
+                                user: models.User = Depends(require_module_permission("parent-messages", "Create", *STANDARD_ROLES, "parent"))):
     if user.role not in ("parent", "teacher", "principal", "vice_principal", "admin", "user") or not user.school_id:
         raise HTTPException(status_code=403, detail="School parent or teaching account required")
     student = db.get(models.Student, payload.student_id)
@@ -1051,14 +1060,13 @@ def register_crud(path, model, schema_in, schema_out, roles):
     app.add_api_route(f"/api/{path}/{{item_id}}", delete_item, methods=["DELETE"], tags=[path])
 
 
-STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student")
 ADMIN_ROLES = ("super_admin",) + STANDARD_ROLES
 FINANCE_ROLES = ADMIN_ROLES
 LIBRARY_ROLES = ("super_admin", "admin", "principal", "vice_principal", "librarian")
 @app.post("/api/students/import", tags=["students"])
 async def import_students(file: UploadFile = File(...), school_id: int | None = Form(default=None),
                          db: Session = Depends(get_db),
-                         user: models.User = Depends(require_module_permission("students", "Create", "super_admin", "admin"))):
+                         user: models.User = Depends(require_module_permission("students", "Create", *STANDARD_ROLES))):
     if user.role == "super_admin":
         target_school_id = school_id
         if not target_school_id or not db.get(models.School, target_school_id):
@@ -1070,8 +1078,9 @@ async def import_students(file: UploadFile = File(...), school_id: int | None = 
     filename = (file.filename or "").lower()
     if not (filename.endswith(".csv") or filename.endswith(".xlsx")):
         raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
-    raw = await file.read()
+    raw = await file.read(10 * 1024 * 1024 + 1)
     if len(raw) > 10 * 1024 * 1024:
+        await file.close()
         raise HTTPException(status_code=413, detail="File is larger than 10 MB")
     try:
         if filename.endswith(".csv"):
@@ -1087,8 +1096,8 @@ async def import_students(file: UploadFile = File(...), school_id: int | None = 
             headers = [str(v).strip() if v is not None else "" for v in next(values, ())]
             records = [dict(zip(headers, row)) for row in values if any(v is not None for v in row)]
             workbook.close()
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not read file: {exc}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read file. Verify that the CSV or XLSX file is valid.")
     if not records:
         raise HTTPException(status_code=400, detail="The file has no student rows")
     if len(records) > 5000:
@@ -1208,8 +1217,9 @@ async def import_module_records(
     filename = (file.filename or "").lower()
     if not (filename.endswith(".csv") or filename.endswith(".xlsx")):
         raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
-    raw = await file.read()
+    raw = await file.read(10 * 1024 * 1024 + 1)
     if len(raw) > 10 * 1024 * 1024:
+        await file.close()
         raise HTTPException(status_code=413, detail="File is larger than 10 MB")
     try:
         if filename.endswith(".csv"):
@@ -1222,8 +1232,8 @@ async def import_module_records(
             headers = [str(value).strip() if value is not None else "" for value in next(iterator, ())]
             records = [dict(zip(headers, row)) for row in iterator if any(value is not None for value in row)]
             workbook.close()
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not read import file: {exc}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read import file. Verify that the CSV or XLSX file is valid.")
     if not records:
         raise HTTPException(status_code=400, detail="The import file contains no data rows")
     if len(records) > 5000:
@@ -1271,7 +1281,7 @@ async def import_module_records(
             "skipped": skipped, "errors": errors[:100]}
 
 @app.get("/api/schools", response_model=list[schemas.SchoolOut], tags=["schools"])
-def list_schools(q: str = Query(default="", max_length=120), db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("schools", "View", "teacher", "parent"))):
+def list_schools(q: str = Query(default="", max_length=120), db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("schools", "View", *STANDARD_ROLES, "parent"))):
     stmt = select(models.School).order_by(models.School.name)
     if user.role != "super_admin":
         if not user.school_id:
@@ -1334,7 +1344,7 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
                 year: int | None = Query(default=None, ge=2000, le=2100),
                 school_id: int | None = Query(default=None, gt=0),
                 db: Session = Depends(get_db),
-                user: models.User = Depends(require_module_permission("fee-reports", "View", "super_admin", "admin", "accountant"))):
+                user: models.User = Depends(require_module_permission("fee-reports", "View", *STANDARD_ROLES))):
     if user.role != "super_admin" and not user.school_id:
         raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
     target_school_id = user.school_id if user.role != "super_admin" else school_id
@@ -1409,7 +1419,7 @@ def fee_reports(month: int | None = Query(default=None, ge=1, le=12),
 
 @app.get("/api/fee-dues", tags=["payments"])
 def fee_dues(db: Session = Depends(get_db),
-             user: models.User = Depends(require_module_permission("payments", "View", "super_admin", "admin", "accountant"))):
+             user: models.User = Depends(require_module_permission("payments", "View", *STANDARD_ROLES))):
     if user.role != "super_admin" and not user.school_id:
         raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
     stmt = select(models.StudentFee, models.Student).join(
@@ -1434,8 +1444,10 @@ def fee_dues(db: Session = Depends(get_db),
 
 @app.post("/api/student-fees/{fee_id}/payments", response_model=schemas.PaymentOut, tags=["payments"])
 def record_payment(fee_id: int, payload: schemas.PaymentIn, db: Session = Depends(get_db),
-                   user: models.User = Depends(require_module_permission("payments", "Create", "super_admin", "admin", "accountant"))):
-    fee = db.get(models.StudentFee, fee_id)
+                   user: models.User = Depends(require_module_permission("payments", "Create", *STANDARD_ROLES))):
+    # Serialize payment attempts for the same fee so concurrent requests cannot
+    # both validate against the same outstanding balance.
+    fee = db.scalar(select(models.StudentFee).where(models.StudentFee.id == fee_id).with_for_update())
     if not fee or (user.role != "super_admin" and fee.school_id != user.school_id):
         raise HTTPException(status_code=404, detail="Student fee not found")
     already_paid = db.scalar(select(func.coalesce(func.sum(models.FeePayment.amount), 0)).where(models.FeePayment.student_fee_id == fee.id)) or 0
@@ -1553,7 +1565,7 @@ def parent_child_fees(student_id: int, db: Session = Depends(get_db),
 
 # Safe FAQ assistant: answers only approved school help topics, no student-specific data.
 @app.post("/api/chatbot/faq", tags=["chatbot"])
-def chatbot_faq(payload: dict, user: models.User = Depends(require_module_permission("chatbot", "View", "teacher", "parent"))):
+def chatbot_faq(payload: dict, user: models.User = Depends(require_module_permission("chatbot", "View", *STANDARD_ROLES, "parent"))):
     question = str(payload.get("question", "")).strip().lower()
     if not question or len(question) > 500:
         raise HTTPException(status_code=422, detail="Question must be between 1 and 500 characters")
