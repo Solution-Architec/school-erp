@@ -270,7 +270,7 @@ function App(){
  const roleLabel=roleLabels[user?.role||'user']||'School User'
  const hasModule=(key:string)=>allowedModuleKeys.includes(key)
  const hasPermission=(moduleKey:string,action:string)=>user?.role==='super_admin'||(rbacPermissions?.role===user?.role&&Boolean(rbacPermissions.permissions[moduleKey+':'+action]))
- const showRecordActions=['staff','attendance','timetable','exams','report-cards','homework','library-books','library-loans','student-leave'].includes(active)&&(hasPermission(active,'Edit')||hasPermission(active,'Delete')||hasPermission(active,'Approve'))
+ const showRecordActions=Boolean(selected.endpoint&&active!=='schools'&&(hasPermission(active,'Edit')||hasPermission(active,'Delete')||hasPermission(active,'Approve')))
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
  useEffect(()=>{if(user){const first=allowedModuleKeys[0]||'dashboard';if(!allowedModuleKeys.includes(active))setActive(first)}},[user,rbacPermissions])
  useEffect(()=>{if(!token){setRbacPermissions(null);return}setRbacPermissions(null);fetch(`${API}/api/rbac/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(setRbacPermissions).catch(()=>setRbacPermissions(null))},[token,authHeaders])
