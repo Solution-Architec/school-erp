@@ -20,7 +20,7 @@ def test_require_roles_does_not_expand_admin_to_every_school_role():
 
 
 def test_module_fallback_roles_are_exact():
-    checker = require_module_permission("student-import", "Create", "admin")
+    checker = require_module_permission("students", "Create", "admin")
     with pytest.raises(HTTPException) as exc:
         checker(user=SimpleNamespace(role="teacher", school_id=1), db=EmptyPermissionStore())
     assert exc.value.status_code == 403
