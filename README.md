@@ -7,6 +7,7 @@ A modular-monolith School ERP built around the architecture in the project diagr
 - **Frontend:** React + TypeScript + Vite
 - **Backend:** Python + FastAPI
 - **Database:** PostgreSQL (SQLite supported for local development)
+  SQLite is intended for a fresh local-development database only. The automatic schema-upgrade path is PostgreSQL-specific; do not point an existing legacy SQLite database at a newer app version and assume it has been migrated. Use PostgreSQL for upgrades and production.
 - **Authentication:** JWT access tokens + password hashing + role-based permissions
 - **Deployment:** Docker Compose, Nginx, Linux
 - **API documentation:** OpenAPI / Swagger UI
