@@ -388,7 +388,7 @@ function App(){
     <label>Payment amount (₹)<input type="number" min="1" step="0.01" value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)} placeholder="Enter amount"/></label>
     <label>Payment method<select value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)}><option value="cash">Cash</option><option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option><option value="card">Card</option><option value="cheque">Cheque</option></select></label>
     <button className="primary" disabled={!paymentFeeId||!paymentAmount||Number(paymentAmount)<=0} onClick={recordFeePayment}><Wallet size={16}/> Record payment</button>
-   </div>
+   </div>}
    <div className="table-wrap"><table><thead><tr><th>Student</th><th>Admission no.</th><th>Total fee</th><th>Paid</th><th>Balance</th></tr></thead><tbody>{feeDues.map(f=><tr key={f.fee_id}><td>{f.student_name}</td><td>{f.admission_no}</td><td>{money(f.total_amount)}</td><td>{money(f.paid_amount)}</td><td><strong>{money(f.balance)}</strong></td></tr>)}{!feeDues.length&&<tr><td colSpan={5}><div className="empty-state"><strong>No outstanding fees</strong><p>Outstanding student fees will appear here.</p></div></td></tr>}</tbody></table></div>
   </div>:active==='fee-reports'?<div className="fee-report-wrap">
    <div className="fee-report-filters">
