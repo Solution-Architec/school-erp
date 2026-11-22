@@ -128,27 +128,6 @@ RBAC_MODULES = {
 }
 RBAC_ACTIONS = {"View", "Create", "Edit", "Delete", "Approve", "Export"}
 
-DEFAULT_ROLE_MODULES = {
-    "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "teacher": ["dashboard", "chatbot", "students", "classes", "documents", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages"],
-    "account": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "clerk": ["dashboard", "chatbot", "students", "student-fees", "payments", "documents"],
-    "office_assistant": ["dashboard", "chatbot", "students", "staff", "documents"],
-    "librarian": ["dashboard", "chatbot", "students", "documents", "library-books", "library-loans"],
-    "lab_assistant": ["dashboard", "chatbot", "documents", "maintenance"],
-    "it_administrator": ["dashboard", "chatbot", "staff", "documents", "maintenance"],
-    "transport_manager": ["dashboard", "chatbot", "students", "vehicles", "documents", "maintenance"],
-    "hostel_warden": ["dashboard", "chatbot", "students", "hostels", "documents", "maintenance"],
-    "security_guard": ["dashboard", "chatbot", "students"],
-    "others": ["dashboard", "chatbot"],
-    "parent": ["parent-portal", "chatbot", "student-leave", "parent-messages"],
-}
-
-
 
 def write_audit_log(db: Session, actor: models.User, event_type: str, target_type: str = "", target_id: str = "", details: dict | None = None):
     db.add(models.AuditLog(
