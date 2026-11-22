@@ -81,3 +81,11 @@ def test_otp_consumption_counts_incorrect_attempts():
     assert exc.value.status_code == 400
     assert record.attempts == 1
     assert record.used_at is None
+
+
+def test_school_account_approval_fallback_excludes_regular_staff():
+    checker = require_module_permission("approvals", "Approve", "admin", "principal", "vice_principal")
+    with pytest.raises(HTTPException) as exc:
+        checker(user=SimpleNamespace(role="teacher", school_id=1), db=EmptyPermissionStore())
+    assert exc.value.status_code == 403
+    assert checker(user=SimpleNamespace(role="principal", school_id=1), db=EmptyPermissionStore()).role == "principal"
