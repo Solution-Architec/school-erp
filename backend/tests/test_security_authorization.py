@@ -167,3 +167,19 @@ def test_admin_cannot_delete_library_loan_history():
     admin = SimpleNamespace(role="admin", school_id=4)
     with pytest.raises(HTTPException):
         require_module_permission("library-loans", "Delete", "admin")(user=admin, db=EmptyPermissionStore())
+
+
+def test_read_only_roles_cannot_create_or_edit_records():
+    guard = SimpleNamespace(role="security_guard", school_id=4)
+    assert require_module_permission("students", "View", "security_guard")(user=guard, db=EmptyPermissionStore()).role == "security_guard"
+    with pytest.raises(HTTPException):
+        require_module_permission("students", "Create", "security_guard")(user=guard, db=EmptyPermissionStore())
+    with pytest.raises(HTTPException):
+        require_module_permission("students", "Edit", "security_guard")(user=guard, db=EmptyPermissionStore())
+
+
+def test_parent_can_submit_but_not_edit_leave_requests():
+    parent = SimpleNamespace(role="parent", school_id=4)
+    assert require_module_permission("student-leave", "Create", "parent")(user=parent, db=EmptyPermissionStore()).role == "parent"
+    with pytest.raises(HTTPException):
+        require_module_permission("student-leave", "Edit", "parent")(user=parent, db=EmptyPermissionStore())
