@@ -36,11 +36,17 @@ DEFAULT_ROLE_MODULES = {
 }
 
 
+CRUD_MODULES = [
+    "students", "staff", "classes", "vehicles", "hostels", "documents",
+    "maintenance", "fee-structures", "student-fees", "attendance", "timetable",
+    "exams", "report-cards", "homework", "student-leave", "library-books", "library-loans",
+]
+LEADERSHIP_CREATE_MODULES = CRUD_MODULES + ["payments", "parent-messages"]
 ROLE_CREATE_MODULES = {
-    "user": DEFAULT_ROLE_MODULES["user"],
-    "admin": DEFAULT_ROLE_MODULES["admin"],
-    "principal": DEFAULT_ROLE_MODULES["principal"],
-    "vice_principal": [m for m in DEFAULT_ROLE_MODULES["vice_principal"] if m != "fee-reports"],
+    "user": LEADERSHIP_CREATE_MODULES,
+    "admin": LEADERSHIP_CREATE_MODULES,
+    "principal": LEADERSHIP_CREATE_MODULES,
+    "vice_principal": [m for m in CRUD_MODULES if m in DEFAULT_ROLE_MODULES["vice_principal"]] + ["parent-messages"],
     "teacher": ["attendance", "report-cards", "homework", "student-leave", "parent-messages"],
     "account": ["fee-structures", "student-fees", "payments"],
     "accountant": ["fee-structures", "student-fees", "payments"],
@@ -54,12 +60,20 @@ ROLE_CREATE_MODULES = {
     "parent": ["student-leave", "parent-messages"],
 }
 ROLE_EDIT_MODULES = {
-    **ROLE_CREATE_MODULES,
+    "user": CRUD_MODULES,
+    "admin": CRUD_MODULES,
+    "principal": CRUD_MODULES,
+    "vice_principal": [m for m in CRUD_MODULES if m in DEFAULT_ROLE_MODULES["vice_principal"]],
     "teacher": ["attendance", "report-cards", "homework", "student-leave"],
     "account": ["fee-structures", "student-fees"],
     "accountant": ["fee-structures", "student-fees"],
     "clerk": ["students", "student-fees", "documents"],
+    "office_assistant": ["students", "documents"],
     "librarian": ["library-books", "library-loans", "documents"],
+    "lab_assistant": ["maintenance", "documents"],
+    "it_administrator": ["staff", "documents", "maintenance"],
+    "transport_manager": ["vehicles", "documents", "maintenance"],
+    "hostel_warden": ["hostels", "documents", "maintenance"],
     "parent": [],
 }
 NON_DELETABLE_MODULES = {
