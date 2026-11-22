@@ -501,12 +501,12 @@ def reset_password(payload: dict, db: Session = Depends(get_db)):
     return {"message": "Password updated. You can now sign in."}
 
 @app.get("/api/auth/pending-users", tags=["auth"])
-def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "View", *STANDARD_ROLES))):
+def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "View", "admin", "principal", "vice_principal"))):
     return list(db.scalars(select(models.User).where(models.User.school_id == user.school_id,
         models.User.approval_status == "pending", models.User.email_verified.is_(True)).order_by(models.User.created_at)).all())
 
 @app.post("/api/auth/users/{user_id}/approval", tags=["auth"])
-def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "Approve", *STANDARD_ROLES))):
+def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "Approve", "admin", "principal", "vice_principal"))):
     target = db.get(models.User, user_id)
     decision = str(payload.get("decision", "")).lower()
     if not target or target.school_id != user.school_id or target.role == "super_admin":
