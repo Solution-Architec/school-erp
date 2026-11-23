@@ -20,6 +20,8 @@ SCHOOL_NAME = "SchoolOS Demo Academy"
 DEMO_USERS = [
     ("Developer Demo", "demo.developer@jovoo.in", "super_admin", None),
     ("Principal Demo", "demo.principal@jovoo.in", "principal", "principal"),
+    ("School Admin Demo", "demo.admin@jovoo.in", "admin", "admin"),
+    ("Accountant Demo", "demo.accountant@jovoo.in", "accountant", "accountant"),
     ("Vice Principal Demo", "demo.viceprincipal@jovoo.in", "vice_principal", "vice_principal"),
     ("Teacher Demo", "demo.teacher@jovoo.in", "teacher", "teacher"),
     ("Accounts Demo", "demo.accounts@jovoo.in", "account", "account"),
