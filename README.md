@@ -114,6 +114,9 @@ For a local/staging role-visibility review, enable these flags in your local `.e
 ```env
 ENABLE_DEMO_LOGIN=true
 VITE_ENABLE_DEMO_MODE=true
+# Use the same strong, temporary value for both demo password settings:
+DEMO_SEED_PASSWORD='set-a-local-demo-password-at-least-16-chars'
+VITE_DEMO_PASSWORD='set-a-local-demo-password-at-least-16-chars'
 ```
 
 Then rebuild/restart the stack:
@@ -122,7 +125,7 @@ Then rebuild/restart the stack:
 docker compose up -d --build
 ```
 
-The login page shows a **Demo workspace** role selector. Selecting a role fills its demo email and school code. Enter the shared password printed by the demo seeder. When `ENABLE_DEMO_LOGIN=true`, the exact seeded demo emails bypass email-verification and email-MFA challenges; normal accounts continue to use the regular verification/MFA flow. The backend flag defaults to `false` and is restricted to the known demo-account email list.
+The login page shows a **Practice with a demo role** selector. Selecting a role fills its demo email, school code, and (when `VITE_DEMO_PASSWORD` is configured) the shared demo password, which is displayed in the practice panel. Set `DEMO_SEED_PASSWORD` and `VITE_DEMO_PASSWORD` to the same strong temporary value so seeded accounts and the login page use matching credentials. If no fixed demo password is configured, the seeder generates one and prints it; enter that value manually. When `ENABLE_DEMO_LOGIN=true`, the exact seeded demo emails bypass email-verification and email-MFA challenges; normal accounts continue to use the regular verification/MFA flow. The backend flag defaults to `false` and is restricted to the known demo-account email list.
 
 **Never enable either demo flag on a public or production deployment.** This testing shortcut intentionally weakens sign-in protections for demo accounts.
 
