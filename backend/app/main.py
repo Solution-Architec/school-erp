@@ -591,7 +591,8 @@ DEMO_LOGIN_EMAILS = {
     "demo.labassistant@jovoo.in", "demo.itadmin@jovoo.in",
     "demo.transport@jovoo.in", "demo.warden@jovoo.in",
     "demo.security@jovoo.in", "demo.others@jovoo.in",
-    "demo.parent@jovoo.in",
+    "demo.parent@jovoo.in", "demo.admin@jovoo.in",
+    "demo.accountant@jovoo.in",
 }
 
 
