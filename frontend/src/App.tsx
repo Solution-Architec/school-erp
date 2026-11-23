@@ -131,6 +131,8 @@ const roleCatalog = Object.entries(roleLabels).filter(([key])=>key!=='user'&&key
 const DEMO_USERS = [
  {label:'Developer',email:'demo.developer@jovoo.in',schoolCode:''},
  {label:'Principal',email:'demo.principal@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'School Admin',email:'demo.admin@jovoo.in',schoolCode:'DEMO-SCHOOL'},
+ {label:'Accountant',email:'demo.accountant@jovoo.in',schoolCode:'DEMO-SCHOOL'},
  {label:'Vice Principal',email:'demo.viceprincipal@jovoo.in',schoolCode:'DEMO-SCHOOL'},
  {label:'Teacher',email:'demo.teacher@jovoo.in',schoolCode:'DEMO-SCHOOL'},
  {label:'Accounts',email:'demo.accounts@jovoo.in',schoolCode:'DEMO-SCHOOL'},
