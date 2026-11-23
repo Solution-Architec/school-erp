@@ -41,26 +41,10 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
         raise HTTPException(status_code=401, detail="User is inactive or does not exist")
     return user
 
-STANDARD_USER_ROLES = {
-    "user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student",
-    "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian",
-    "lab_assistant", "it_administrator", "security_guard", "others"
-}
-
-
 def require_roles(*roles: str):
-    """Authorize Developer-only routes strictly and unify all school-user roles.
-
-    Legacy school roles remain valid for existing accounts, but they all receive
-    the same operational permissions. Parent accounts are deliberately excluded
-    from operational access and use only their linked-student endpoints.
-    """
-    allows_standard_users = bool(STANDARD_USER_ROLES.intersection(roles))
-
+    """Authorize only the explicitly listed roles; never broaden an admin grant."""
     def checker(user: User = Depends(current_user)) -> User:
         if user.role in roles:
-            return user
-        if allows_standard_users and user.role != "parent":
             return user
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return checker
@@ -95,8 +79,7 @@ def require_module_permission(module_key: str, action: str, *fallback_roles: str
                 raise HTTPException(status_code=403, detail="Library access is restricted to school leadership and librarians")
             if action == "Delete" and user.role not in {"admin", "user"}:
                 raise HTTPException(status_code=403, detail="Only school administrators can delete library records")
-        allows_standard_users = bool(STANDARD_USER_ROLES.intersection(fallback_roles))
-        if user.role in fallback_roles or (allows_standard_users and user.role not in ("parent", "super_admin")):
+        if user.role in fallback_roles:
             return user
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return checker

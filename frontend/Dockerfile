@@ -3,7 +3,7 @@ ARG VITE_ENABLE_DEMO_MODE=false
 ENV VITE_ENABLE_DEMO_MODE=$VITE_ENABLE_DEMO_MODE
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 COPY . .
 RUN npm run build
 FROM nginx:1.27-alpine
