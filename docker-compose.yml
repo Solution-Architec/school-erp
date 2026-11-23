@@ -37,6 +37,7 @@ services:
       context: ./frontend
       args:
         VITE_ENABLE_DEMO_MODE: ${VITE_ENABLE_DEMO_MODE:-false}
+        VITE_DEMO_PASSWORD: ${VITE_DEMO_PASSWORD:-}
     restart: unless-stopped
     ports:
       - "8081:80"
