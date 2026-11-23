@@ -148,6 +148,7 @@ const DEMO_USERS = [
  {label:'Parent',email:'demo.parent@jovoo.in',schoolCode:'DEMO-SCHOOL'},
 ]
 const DEMO_MODE = (import.meta as any).env?.VITE_ENABLE_DEMO_MODE === 'true'
+const DEMO_PASSWORD = (import.meta as any).env?.VITE_DEMO_PASSWORD || ''
 
 const money = (n:number) => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n || 0)
 
@@ -198,6 +199,14 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
      <p className="eyebrow">SCHOOL MANAGEMENT PLATFORM</p>
      <h1>{titles[mode]}</h1>
      <p className="auth-intro">{descriptions[mode]}</p>
+     {mode==='signin'&&DEMO_MODE&&<div className="panel demo-login-panel">
+      <div className="panel-heading"><div><h3>Practice with a demo role</h3><p>Select a sample account to fill in its login details.</p></div><ShieldCheck size={20}/></div>
+      <div className="auth-field"><label htmlFor="demo-role-select">Choose demo role</label><select id="demo-role-select" defaultValue="" onChange={e=>{const demo=DEMO_USERS.find(item=>item.email===e.target.value);if(demo)setValues(old=>({...old,email:demo.email,school_code:demo.schoolCode,password:DEMO_PASSWORD||old.password}))}}>
+       <option value="">Select a role…</option>{DEMO_USERS.map(demo=><option key={demo.email} value={demo.email}>{demo.label} — {demo.email}</option>)}
+      </select></div>
+      {DEMO_PASSWORD?<div className="auth-field"><label>Shared demo password</label><div className="demo-password-display"><code>{DEMO_PASSWORD}</code><button type="button" className="secondary" onClick={()=>{navigator.clipboard?.writeText(DEMO_PASSWORD);setNotice('Demo password copied.')}}>Copy</button></div><small>Choosing a demo role fills this password automatically.</small></div>:<small className="auth-help">Enter the shared password printed by the demo seeder in the Password field below.</small>}
+      <small className="auth-help">Demo accounts are for local or staging practice only. Do not enable demo mode on a public production site.</small>
+     </div>}
      {mode==='school'&&<>
       <div className="auth-section-label"><span>01</span><div><strong>Authorized representative</strong><small>Primary contact and first school account</small></div></div>
       <div className="auth-field"><label htmlFor="admin-name">Full name</label><input id="admin-name" value={values.name} onChange={e=>set('name',e.target.value)} placeholder="Enter the authorized person's full name" autoComplete="name" required/></div>
