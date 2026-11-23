@@ -129,7 +129,7 @@ The login page shows a **Demo workspace** role selector. Selecting a role fills 
 ## Current implemented modules
 
 - Login, JWT access tokens, password hashing, active-user checks
-- Roles: `super_admin`, `admin`, `accountant`, `teacher`, `transport_manager`, `hostel_warden`, `student`, `parent`
+- Roles: `super_admin`, `user`, `admin`, `principal`, `vice_principal`, `teacher`, `account`, `accountant`, `clerk`, `office_assistant`, `librarian`, `lab_assistant`, `it_administrator`, `transport_manager`, `hostel_warden`, `security_guard`, `others`, `parent`
 - Tenant / school onboarding and school assignment
 - Tenant-scoped dashboard statistics and API queries
 - Students, staff, classes, library catalog and issue/return tracking, transport vehicles, hostels, documents, maintenance requests
@@ -141,6 +141,12 @@ The login page shows a **Demo workspace** role selector. Selecting a role fills 
 - PostgreSQL deployment and SQLite local development
 
 See [Architecture and implementation notes](docs/architecture.md) for component boundaries, tenant isolation, API domains, and deployment notes.
+
+## Role-based module access
+
+The API and web workspace use the same effective permission matrix. Default access is role-specific and least-privilege: teachers can update academic work such as attendance and homework, finance roles can manage fee workflows, librarians can manage library circulation, transport and hostel teams can manage their own operational records, and read-only roles cannot create or edit records. Parents can access only linked-student services and submit supported requests. Record deletion is restricted to school administrators by default; immutable payment and library-loan history cannot be deleted through the standard CRUD interface.
+
+Developer accounts can configure permissions globally or override them for an individual school from the Role Permissions workspace. A school override takes precedence over the ERP-wide role defaults. Explicit permission grants are enforced by backend API dependencies; hiding a menu or button in the frontend is only a usability layer, not the security boundary. Permission changes are audit logged.
 
 ## Architecture
 

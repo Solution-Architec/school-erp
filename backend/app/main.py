@@ -22,7 +22,7 @@ from sqlalchemy import select, func, text
 from sqlalchemy.exc import IntegrityError
 from .database import Base, engine, get_db, SessionLocal
 from . import models, schemas
-from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission
+from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission, default_module_permission
 
 # Explicit legacy school roles used by route-level fallback authorization.
 STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "security_guard", "others")
@@ -128,27 +128,6 @@ RBAC_MODULES = {
 }
 RBAC_ACTIONS = {"View", "Create", "Edit", "Delete", "Approve", "Export"}
 
-DEFAULT_ROLE_MODULES = {
-    "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "teacher": ["dashboard", "chatbot", "students", "classes", "documents", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages"],
-    "account": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
-    "clerk": ["dashboard", "chatbot", "students", "student-fees", "payments", "documents"],
-    "office_assistant": ["dashboard", "chatbot", "students", "staff", "documents", "approvals"],
-    "librarian": ["dashboard", "chatbot", "students", "documents", "library-books", "library-loans"],
-    "lab_assistant": ["dashboard", "chatbot", "documents", "maintenance"],
-    "it_administrator": ["dashboard", "chatbot", "staff", "documents", "maintenance", "approvals"],
-    "transport_manager": ["dashboard", "chatbot", "students", "vehicles", "documents", "maintenance"],
-    "hostel_warden": ["dashboard", "chatbot", "students", "hostels", "documents", "maintenance"],
-    "security_guard": ["dashboard", "chatbot", "students"],
-    "others": ["dashboard", "chatbot"],
-    "parent": ["parent-portal", "chatbot", "student-leave", "parent-messages"],
-}
-
-
 
 def write_audit_log(db: Session, actor: models.User, event_type: str, target_type: str = "", target_id: str = "", details: dict | None = None):
     db.add(models.AuditLog(
@@ -161,22 +140,11 @@ def write_audit_log(db: Session, actor: models.User, event_type: str, target_typ
 
 
 def _default_permission_matrix(role: str) -> dict[str, bool]:
-    allowed_modules = set(DEFAULT_ROLE_MODULES.get(role, ["dashboard", "chatbot"]))
-    permissions: dict[str, bool] = {}
-    for module in RBAC_MODULES:
-        for action in RBAC_ACTIONS:
-            enabled = module in allowed_modules and action in {"View", "Create", "Edit", "Delete"}
-            if role == "parent" and module in {"student-leave", "parent-messages"}:
-                enabled = module in allowed_modules and action in {"View", "Create"}
-            if module == "approvals" and action == "Approve" and module in allowed_modules:
-                enabled = True
-            if module == "student-leave" and action == "Approve" and role in {
-                "admin", "principal", "vice_principal", "teacher", "user"
-            }:
-                enabled = True
-            permissions[f"{module}:{action}"] = enabled
-    return permissions
-
+    return {
+        f"{module}:{action}": default_module_permission(role, module, action)
+        for module in RBAC_MODULES
+        for action in RBAC_ACTIONS
+    }
 
 def _permission_scope_matrix(db: Session, role: str, school_id: int | None = None) -> dict:
     global_grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role, models.RolePermission.school_id.is_(None))).all()
@@ -501,12 +469,12 @@ def reset_password(payload: dict, db: Session = Depends(get_db)):
     return {"message": "Password updated. You can now sign in."}
 
 @app.get("/api/auth/pending-users", tags=["auth"])
-def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "View", "admin", "principal", "vice_principal"))):
+def pending_users(db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "View", "admin", "principal", "vice_principal", "user"))):
     return list(db.scalars(select(models.User).where(models.User.school_id == user.school_id,
         models.User.approval_status == "pending", models.User.email_verified.is_(True)).order_by(models.User.created_at)).all())
 
 @app.post("/api/auth/users/{user_id}/approval", tags=["auth"])
-def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "Approve", "admin", "principal", "vice_principal"))):
+def approve_user(user_id: int, payload: dict, db: Session = Depends(get_db), user: models.User = Depends(require_module_permission("approvals", "Approve", "admin", "principal", "vice_principal", "user"))):
     target = db.get(models.User, user_id)
     decision = str(payload.get("decision", "")).lower()
     if not target or target.school_id != user.school_id or target.role == "super_admin":
