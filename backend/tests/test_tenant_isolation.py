@@ -193,3 +193,81 @@ def test_fee_dues_only_returns_the_requesting_school(db):
     dues = main.fee_dues(db=db, user=admin)
     assert [row["fee_id"] for row in dues] == [fee_a.id]
     assert all(row["student_name"] != student_b.full_name for row in dues)
+
+
+
+def test_parent_message_creation_rejects_foreign_student_and_recipient(db):
+    school_a = _school(db, "School A", "SCA")
+    school_b = _school(db, "School B", "SCB")
+    admin = _user(db, school_a.id, "admin", "admin@a.example")
+    own_student = _student(db, school_a.id, "A-001", "Student A")
+    foreign_student = _student(db, school_b.id, "B-001", "Student B")
+    foreign_teacher = _user(db, school_b.id, "teacher", "teacher@b.example")
+
+    foreign_student_payload = main.schemas.ParentTeacherMessageIn(
+        student_id=foreign_student.id,
+        recipient_user_id=admin.id,
+        body="Please contact me",
+    )
+    with pytest.raises(HTTPException) as student_error:
+        main.send_parent_teacher_message(foreign_student_payload, db=db, user=admin)
+    assert student_error.value.status_code == 404
+
+    foreign_recipient_payload = main.schemas.ParentTeacherMessageIn(
+        student_id=own_student.id,
+        recipient_user_id=foreign_teacher.id,
+        body="Please contact me",
+    )
+    with pytest.raises(HTTPException) as recipient_error:
+        main.send_parent_teacher_message(foreign_recipient_payload, db=db, user=admin)
+    assert recipient_error.value.status_code == 404
+    assert db.query(models.ParentTeacherMessage).count() == 0
+
+
+def test_parent_message_inbox_is_limited_to_school_and_participants(db):
+    school_a = _school(db, "School A", "SCA")
+    school_b = _school(db, "School B", "SCB")
+    admin_a = _user(db, school_a.id, "admin", "admin@a.example")
+    teacher_a = _user(db, school_a.id, "teacher", "teacher@a.example")
+    admin_b = _user(db, school_b.id, "admin", "admin@b.example")
+    student_a = _student(db, school_a.id, "A-001", "Student A")
+    student_b = _student(db, school_b.id, "B-001", "Student B")
+    db.add_all([
+        models.ParentTeacherMessage(
+            school_id=school_a.id, student_id=student_a.id,
+            sender_user_id=admin_a.id, recipient_user_id=teacher_a.id,
+            subject="Own school", body="School A message",
+        ),
+        models.ParentTeacherMessage(
+            school_id=school_b.id, student_id=student_b.id,
+            sender_user_id=admin_b.id, recipient_user_id=admin_b.id,
+            subject="Foreign school", body="School B message",
+        ),
+    ])
+    db.commit()
+
+    inbox = main.list_parent_teacher_messages(db=db, user=admin_a)
+    assert [message.body for message in inbox] == ["School A message"]
+
+
+def test_student_fee_creation_rejects_foreign_school_student(db):
+    school_a = _school(db, "School A", "SCA")
+    school_b = _school(db, "School B", "SCB")
+    admin = _user(db, school_a.id, "admin", "admin@a.example")
+    foreign_student = _student(db, school_b.id, "B-001", "Student B")
+    payload = main.schemas.StudentFeeIn(
+        student_id=foreign_student.id,
+        category="tuition",
+        description="Attempted cross-school fee",
+        academic_year="2026-2027",
+        term="annual",
+        total_amount=Decimal("1000.00"),
+        discount=Decimal("0.00"),
+    )
+
+    create_endpoint = _route_endpoint("/api/student-fees", "POST")
+    with pytest.raises(HTTPException) as exc:
+        create_endpoint(payload=payload, db=db, user=admin)
+
+    assert exc.value.status_code == 404
+    assert db.query(models.StudentFee).count() == 0
