@@ -44,7 +44,9 @@ def main() -> None:
     if os.getenv("APP_ENV", "").lower() in {"prod", "production"} and os.getenv("ALLOW_DEMO_SEED_IN_PRODUCTION", "").lower() != "true":
         raise SystemExit("Refusing to create demo accounts in production. Use a non-production database.")
 
-    demo_password = secrets.token_urlsafe(18)
+    demo_password = os.getenv("DEMO_SEED_PASSWORD") or secrets.token_urlsafe(18)
+    if len(demo_password) < 16:
+        raise SystemExit("DEMO_SEED_PASSWORD must be at least 16 characters.")
     with SessionLocal() as db:
         school = db.scalar(select(models.School).where(models.School.code == SCHOOL_CODE))
         if not school:
