@@ -49,8 +49,8 @@ async def lifespan(app: FastAPI):
             # Preserve pre-multi-school records by placing unassigned legacy data
             # into a dedicated school before enforcing tenant isolation constraints.
             conn.execute(text("""
-                INSERT INTO schools (name, code, is_active, created_at)
-                VALUES ('Migrated Legacy School', 'LEGACY-MIGRATED', TRUE, CURRENT_TIMESTAMP)
+                INSERT INTO schools (name, code, approval_status, is_active, created_at)
+                VALUES ('Migrated Legacy School', 'LEGACY-MIGRATED', 'approved', TRUE, CURRENT_TIMESTAMP)
                 ON CONFLICT (code) DO NOTHING
             """))
             legacy_school_id = conn.execute(
