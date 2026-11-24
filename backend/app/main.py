@@ -122,7 +122,20 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True
 RBAC_ROLES = {
     "user", "admin", "principal", "vice_principal", "teacher", "account", "accountant",
     "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator",
-    "transport_manager", "hostel_warden", "security_guard", "others", "parent"
+    "transport_manager", "hostel_warden", "security_guard", "others", "parent",
+    "school_hod", "class_teacher", "school_accountant", "admission_officer",
+    "examination_controller", "school_counsellor", "school_receptionist", "school_student",
+    "college_admin", "college_principal", "college_vice_principal", "dean", "college_hod",
+    "lecturer", "college_professor", "academic_coordinator", "registrar",
+    "college_exam_controller", "college_admission_officer", "accounts_officer",
+    "college_librarian", "lab_in_charge", "placement_officer", "college_student",
+    "university_admin", "chancellor", "vice_chancellor", "university_registrar",
+    "university_dean", "university_director", "department_head", "university_professor",
+    "research_supervisor", "university_exam_controller", "university_finance_officer",
+    "university_admission_officer", "research_scholar", "university_student",
+    "institute_admin", "centre_director", "other_academic_coordinator", "batch_coordinator",
+    "trainer", "admission_counsellor", "admission_executive", "other_accounts_officer",
+    "training_librarian", "training_student"
 }
 RBAC_MODULES = {
     "dashboard", "parent-portal", "chatbot", "approvals", "schools", "students", "staff",
