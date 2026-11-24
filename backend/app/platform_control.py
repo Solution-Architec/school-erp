@@ -316,9 +316,13 @@ def record_client_payment(payload: PaymentInput, db: Session = Depends(get_db),
 @router.get("/support-tickets")
 def list_support_tickets(school_id: int | None = None, status: str | None = None,
                          db: Session = Depends(get_db),
-                         user: models.User = Depends(require_roles("super_admin"))):
+                         user: models.User = Depends(current_user)):
     stmt = select(models.ClientSupportTicket).order_by(models.ClientSupportTicket.updated_at.desc())
-    if school_id:
+    if user.role != "super_admin":
+        if not user.school_id:
+            raise HTTPException(status_code=403, detail="Your account is not assigned to an institution")
+        stmt = stmt.where(models.ClientSupportTicket.school_id == user.school_id)
+    elif school_id:
         stmt = stmt.where(models.ClientSupportTicket.school_id == school_id)
     if status:
         stmt = stmt.where(models.ClientSupportTicket.status == status)
