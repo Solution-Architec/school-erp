@@ -16,10 +16,9 @@ No AWS account, S3 bucket, AWS CLI, or AWS credentials are required.
 
 ## Host directory permissions
 
-The container writes files using your Linux user and group IDs so the files remain accessible from your PC. Set these in the project-root `.env` file:
+The container writes files as its unprivileged `postgres` user and uses your PC user’s primary group ID for group-readable backup files. Set this in the project-root `.env` file:
 
 ```dotenv
-BACKUP_UID=1000
 BACKUP_GID=1000
 BACKUP_INTERVAL_SECONDS=86400
 BACKUP_DAILY_RETENTION_DAYS=7
@@ -29,7 +28,7 @@ BACKUP_RUN_ON_START=true
 BACKUP_PREFIX=school_erp
 ```
 
-Replace `1000` with the output of `id -u` and `id -g` on your PC if those commands return different values. Do not put AWS keys in this configuration.
+Replace `1000` with the output of `id -g` on your PC if it is different. Backup files are group-readable by your PC user and are not world-readable. Do not put AWS keys in this configuration.
 
 ## Start and inspect
 
