@@ -48,6 +48,18 @@ export default function DeveloperControlCentre({request,onEnterWorkspace,moduleL
   const [roleError,setRoleError]=useState('')
   const [roleNotice,setRoleNotice]=useState('')
 
+  useEffect(()=>{
+    if(tab!=='Role access'||!roleClientId)return
+    let current=true
+    setRoleBusy(true);setRoleError('')
+    request('/api/rbac/roles/'+encodeURIComponent(roleKey)+'/permissions?school_id='+encodeURIComponent(roleClientId))
+      .then(result=>{if(current){setRolePermissions(result.permissions||{});setRolePermissionMeta(result)}})
+      .catch((e:any)=>{if(current)setRoleError(e.message||'Could not load role permissions')})
+      .finally(()=>{if(current)setRoleBusy(false)})
+    return()=>{current=false}
+  },[tab,roleClientId,roleKey,request])
+
+
   async function load(){
     setBusy(true);setError('')
     try{
