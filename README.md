@@ -70,7 +70,7 @@ Set `VITE_API_URL=http://localhost:8000` in `frontend/.env.local` when running t
 
 ## Demo accounts for role-wise testing
 
-The demo seeder creates one login for every workspace role, including Developer and Parent, plus sample school records. It is **manual and opt-in**; it does not run during application startup.
+The demo seeder creates school-workspace role accounts and a Parent account, plus sample school records. Platform Developer accounts are never seeded as client demos and must be provisioned separately for authorized platform owners. It is **manual and opt-in**; it does not run during application startup.
 
 Docker Compose:
 
@@ -85,11 +85,10 @@ cd backend
 ENABLE_DEMO_SEED=true python -m app.seed_demo
 ```
 
-The command generates one temporary password and prints it once along with the login emails. All school-role accounts use school code `DEMO-SCHOOL`; Developer signs in with the school-code field left blank. The Parent demo is linked to the seeded demo student. Running the command again resets the demo accounts to a newly generated shared password.
+The command generates one temporary password and prints it once along with the login emails. All seeded school-role accounts use school code `DEMO-SCHOOL`. The Parent demo is linked to the seeded demo student. Running the command again resets the demo accounts to a newly generated shared password.
 
 Demo login emails:
 
-- `demo.developer@jovoo.in`
 - `demo.principal@jovoo.in`
 - `demo.viceprincipal@jovoo.in`
 - `demo.teacher@jovoo.in`
@@ -125,7 +124,7 @@ Then rebuild/restart the stack:
 docker compose up -d --build
 ```
 
-The login page shows a **Practice with a demo role** selector. Selecting a role fills its demo email, school code, and (when `VITE_DEMO_PASSWORD` is configured) the shared demo password, which is displayed in the practice panel. Set `DEMO_SEED_PASSWORD` and `VITE_DEMO_PASSWORD` to the same strong temporary value so seeded accounts and the login page use matching credentials. If no fixed demo password is configured, the seeder generates one and prints it; enter that value manually. When `ENABLE_DEMO_LOGIN=true`, the exact seeded demo emails bypass email-verification and email-MFA challenges; normal accounts continue to use the regular verification/MFA flow. The backend flag defaults to `false` and is restricted to the known demo-account email list.
+The login page shows a **Practice with a demo role** selector for school workspace roles only. Platform Developer is intentionally excluded; authorized platform owners use their separately provisioned platform account. Selecting a demo role fills its demo email, school code, and (when `VITE_DEMO_PASSWORD` is configured) the shared demo password. Set `DEMO_SEED_PASSWORD` and `VITE_DEMO_PASSWORD` to the same strong temporary value so seeded accounts and the login page use matching credentials. If no fixed demo password is configured, the seeder generates one and prints it; enter that value manually. When `ENABLE_DEMO_LOGIN=true`, the exact seeded demo emails bypass email-verification and email-MFA challenges; normal accounts continue to use the regular verification/MFA flow. The backend flag defaults to `false` and is restricted to the known demo-account email list.
 
 **Never enable either demo flag on a public or production deployment.** This testing shortcut intentionally weakens sign-in protections for demo accounts.
 
