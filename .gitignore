@@ -23,3 +23,6 @@ frontend/dist/
 
 # Logs and operating-system files
 *.log
+
+# Local PostgreSQL backup files (never commit production data)
+/backups/
