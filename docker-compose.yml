@@ -22,7 +22,7 @@ services:
     command:
       - /bin/sh
       - -c
-      - mkdir -p /backups && chown -R "$BACKUP_UID:$BACKUP_GID" /backups && exec su-exec "$BACKUP_UID:$BACKUP_GID" /bin/sh /opt/backup/backup-postgres.sh
+      - mkdir -p /backups && chown -R "postgres:$BACKUP_GID" /backups && exec su-exec "postgres:$BACKUP_GID" /bin/sh /opt/backup/backup-postgres.sh
     environment:
       PGHOST: db
       PGPORT: "5432"
@@ -35,7 +35,6 @@ services:
       BACKUP_DAILY_RETENTION_DAYS: ${BACKUP_DAILY_RETENTION_DAYS:-7}
       BACKUP_WEEKLY_RETENTION_WEEKS: ${BACKUP_WEEKLY_RETENTION_WEEKS:-4}
       BACKUP_MONTHLY_RETENTION_MONTHS: ${BACKUP_MONTHLY_RETENTION_MONTHS:-12}
-      BACKUP_UID: ${BACKUP_UID:-1000}
       BACKUP_GID: ${BACKUP_GID:-1000}
       BACKUP_RUN_ON_START: ${BACKUP_RUN_ON_START:-true}
       BACKUP_PREFIX: ${BACKUP_PREFIX:-school_erp}
