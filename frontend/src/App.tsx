@@ -204,8 +204,7 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
       <div className="auth-field"><label htmlFor="demo-role-select">Choose demo role</label><select id="demo-role-select" defaultValue="" onChange={e=>{const demo=DEMO_USERS.find(item=>item.email===e.target.value);if(demo)setValues(old=>({...old,email:demo.email,school_code:demo.schoolCode,password:DEMO_PASSWORD||old.password}))}}>
        <option value="">Select a role…</option>{DEMO_USERS.map(demo=><option key={demo.email} value={demo.email}>{demo.label} — {demo.email}</option>)}
       </select></div>
-      {DEMO_PASSWORD?<div className="auth-field"><label>Shared demo password</label><div className="demo-password-display"><code>{DEMO_PASSWORD}</code><button type="button" className="secondary" onClick={()=>{navigator.clipboard?.writeText(DEMO_PASSWORD);setNotice('Demo password copied.')}}>Copy</button></div><small>Choosing a demo role fills this password automatically.</small></div>:<small className="auth-help">Enter the shared password printed by the demo seeder in the Password field below.</small>}
-      <small className="auth-help">Demo accounts are for local or staging practice only. Do not enable demo mode on a public production site.</small>
+
      </div>}
      {mode==='school'&&<>
       <div className="auth-section-label"><span>01</span><div><strong>Authorized representative</strong><small>Primary contact and first school account</small></div></div>
