@@ -55,7 +55,7 @@ const INSTITUTION_ROLE_TEMPLATES:Record<string,{roleKey:string;role:string}[]> =
   ]
 }
 
-export default function DeveloperControlCentre({request,onEnterWorkspace,moduleList,roles}:{request:Request;onEnterWorkspace:(schoolId:number)=>Promise<void>;moduleList:{key:string;label:string;description:string}[];roles:{role:string;roleKey:string;scope:string;level:string}[]}) {
+export default function DeveloperControlCentre({request,onEnterWorkspace,moduleList}:{request:Request;onEnterWorkspace:(schoolId:number)=>Promise<void>;moduleList:{key:string;label:string;description:string}[];roles:{role:string;roleKey:string;scope:string;level:string}[]}) {
   const [tab,setTab]=useState('Overview')
   const [overview,setOverview]=useState<Overview>(emptyOverview)
   const [clients,setClients]=useState<Client[]>([])
