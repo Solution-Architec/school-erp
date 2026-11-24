@@ -327,10 +327,10 @@ def _notify_support(event: str, details: str, throttle_seconds: int = 900) -> No
         return
     _support_alert_last_sent[event] = now
     msg = EmailMessage()
-    msg["Subject"] = f"SchoolOS support alert: {event}"
+    msg["Subject"] = f"EduNexus support alert: {event}"
     msg["From"] = sender
     msg["To"] = support_email
-    msg.set_content(f"SchoolOS authentication alert\n\nEvent: {event}\nDetails: {details}\nTime (UTC): {now.isoformat()}\n")
+    msg.set_content(f"EduNexus authentication alert\n\nEvent: {event}\nDetails: {details}\nTime (UTC): {now.isoformat()}\n")
     try:
         _smtp_send_message(msg)
     except Exception as exc:
@@ -344,11 +344,11 @@ def _send_auth_code(email: str, code: str, purpose: str) -> None:
     if not host or not sender:
         raise HTTPException(status_code=503, detail="Email delivery is not configured. Contact the platform administrator.")
     msg = EmailMessage()
-    msg["Subject"] = {"verify": "SchoolOS email verification", "reset": "SchoolOS password reset", "login_mfa": "Your SchoolOS sign-in verification code"}.get(purpose, "SchoolOS security code")
+    msg["Subject"] = {"verify": "EduNexus email verification", "reset": "EduNexus password reset", "login_mfa": "Your EduNexus sign-in verification code"}.get(purpose, "EduNexus security code")
     msg["From"] = sender
     msg["To"] = email
-    action = {"verify": "verify your SchoolOS account", "reset": "reset your SchoolOS password", "login_mfa": "complete your SchoolOS sign-in"}.get(purpose, "verify your SchoolOS identity")
-    msg.set_content(f"Your SchoolOS code to {action} is: {code}\n\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
+    action = {"verify": "verify your EduNexus account", "reset": "reset your EduNexus password", "login_mfa": "complete your EduNexus sign-in"}.get(purpose, "verify your EduNexus identity")
+    msg.set_content(f"Your EduNexus code to {action} is: {code}\n\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
     _smtp_send_message(msg)
 
 def _issue_auth_code(db: Session, email: str, purpose: str) -> None:
@@ -414,7 +414,7 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="School name/code or email already exists")
     _issue_auth_code(db, email, "verify")
-    return {"message": "School registration submitted. Verify your email; your school will remain pending until the SchoolOS Developer approves it.", "email": email, "approval_status": "pending"}
+    return {"message": "School registration submitted. Verify your email; your school will remain pending until the EduNexus Developer approves it.", "email": email, "approval_status": "pending"}
 
 @app.post("/api/auth/register-staff", tags=["auth"])
 def register_staff(payload: dict, db: Session = Depends(get_db)):
@@ -460,7 +460,7 @@ def verify_email(payload: dict, db: Session = Depends(get_db)):
         account.is_active = False
     db.commit()
     if school and school.approval_status == "pending":
-        message = "Email verified. Your school registration is awaiting SchoolOS Developer approval."
+        message = "Email verified. Your school registration is awaiting EduNexus Developer approval."
     elif account.approval_status == "pending":
         message = "Email verified. Your account is awaiting approval by your school administrator."
     elif account.is_active:
