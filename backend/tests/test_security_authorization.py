@@ -96,3 +96,16 @@ def test_demo_login_allowlist_excludes_platform_developer():
 
     assert "demo.developer@jovoo.in" not in DEMO_LOGIN_EMAILS
     assert "demo.principal@jovoo.in" in DEMO_LOGIN_EMAILS
+
+
+def test_retired_demo_developer_account_cannot_sign_in():
+    from backend.app import main
+
+    payload = SimpleNamespace(
+        school_code="",
+        email="demo.developer@jovoo.in",
+        password="any-password",
+    )
+    with pytest.raises(HTTPException) as exc:
+        main.login(payload, db=SimpleNamespace())
+    assert exc.value.status_code == 403
