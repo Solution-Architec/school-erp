@@ -24,11 +24,37 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       ENABLE_DEMO_LOGIN: ${ENABLE_DEMO_LOGIN:-false}
+      BACKUP_DIR: ${BACKUP_DIR:-/backups}
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
+    volumes:
+      - ./backups:/backups:ro
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "8000:8000"
+    networks:
+      - internal
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    user: "0:0"
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-school_erp}
+      POSTGRES_USER: ${POSTGRES_USER:-school_erp}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ./scripts/postgres-backup.sh:/scripts/postgres-backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/scripts/postgres-backup.sh"]
     networks:
       - internal
 
