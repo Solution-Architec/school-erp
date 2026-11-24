@@ -587,7 +587,7 @@ def developer_approve_school(school_id: int, payload: dict,
 
 
 DEMO_LOGIN_EMAILS = {
-    "demo.developer@jovoo.in", "demo.principal@jovoo.in",
+    "demo.principal@jovoo.in",
     "demo.viceprincipal@jovoo.in", "demo.teacher@jovoo.in",
     "demo.accounts@jovoo.in", "demo.clerk@jovoo.in",
     "demo.officeassistant@jovoo.in", "demo.librarian@jovoo.in",
