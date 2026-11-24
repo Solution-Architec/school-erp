@@ -187,3 +187,5 @@ The activity indicator is based on authenticated application heartbeats (one per
 Commercial collection records are manual records only. They do not initiate or verify bank, UPI, card, or payment-gateway transactions. Reconcile each entry against the actual payment provider or bank statement. Subscription dates and statuses are administrative records and do not automatically suspend client logins in this initial release.
 
 All platform-control endpoints require the private platform-owner account, except the heartbeat endpoint and client-scoped support-ticket submission/listing. New platform tables are created by the application's SQLAlchemy metadata initialization. Back up the production database before deploying schema changes.
+
+The System & Audit view currently checks API reachability and a simple database query and displays recorded audit events. It does not yet inspect host CPU/RAM/disk, backup completion, SSL/domain expiry, or third-party integration health; those require deployment-specific monitoring integrations.
