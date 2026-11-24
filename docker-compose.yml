@@ -17,7 +17,7 @@ services:
       - internal
 
   db-backup:
-    image: postgres:16-alpine
+    build: ./docker/backup
     restart: unless-stopped
     command:
       - /bin/sh
@@ -32,17 +32,54 @@ services:
       BACKUP_DIR: /backups
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      BACKUP_DAILY_RETENTION_DAYS: ${BACKUP_DAILY_RETENTION_DAYS:-7}
+      BACKUP_WEEKLY_RETENTION_WEEKS: ${BACKUP_WEEKLY_RETENTION_WEEKS:-4}
+      BACKUP_MONTHLY_RETENTION_MONTHS: ${BACKUP_MONTHLY_RETENTION_MONTHS:-12}
+      BACKUP_S3_URI: ${BACKUP_S3_URI:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-south-1}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
       BACKUP_RUN_ON_START: ${BACKUP_RUN_ON_START:-true}
       BACKUP_PREFIX: ${BACKUP_PREFIX:-school_erp}
     volumes:
       - ./scripts/backup-postgres.sh:/opt/backup/backup-postgres.sh:ro
-      - postgres_backups:/backups
+      - ./scripts/backup-retention.py:/opt/backup/backup-retention.py:ro
+      - ./backups:/backups
     depends_on:
       db:
         condition: service_healthy
     networks:
       - internal
 
+  platform-monitor:
+    build: ./monitoring
+    restart: unless-stopped
+    environment:
+      MONITOR_INTERVAL_SECONDS: ${MONITOR_INTERVAL_SECONDS:-900}
+      MONITOR_TIMEOUT_SECONDS: ${MONITOR_TIMEOUT_SECONDS:-12}
+      MONITOR_STATE_DIR: /state
+      MONITOR_APP_URL: ${MONITOR_APP_URL:-http://backend:8000}
+      MONITOR_TLS_HOSTS: ${MONITOR_TLS_HOSTS:-}
+      MONITOR_DOMAINS: ${MONITOR_DOMAINS:-}
+      MONITOR_ALERT_EMAIL: ${MONITOR_ALERT_EMAIL:-}
+      MONITOR_SMTP_TEST_EMAIL: ${MONITOR_SMTP_TEST_EMAIL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_USE_SSL: ${SMTP_USE_SSL:-false}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+    volumes:
+      - platform_monitor_state:/state
+    depends_on:
+      - backend
+    networks:
+      - internal
   backend:
     build: ./backend
     restart: unless-stopped
@@ -63,28 +100,6 @@ services:
     networks:
       - internal
 
-  backup:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    user: "0:0"
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_DB: ${POSTGRES_DB:-school_erp}
-      POSTGRES_USER: ${POSTGRES_USER:-school_erp}
-      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      BACKUP_DIR: /backups
-      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
-    volumes:
-      - ./scripts/postgres-backup.sh:/scripts/postgres-backup.sh:ro
-      - ./backups:/backups
-    depends_on:
-      db:
-        condition: service_healthy
-    entrypoint: ["/bin/sh", "/scripts/postgres-backup.sh"]
-    networks:
-      - internal
-
   frontend:
     build:
       context: ./frontend
@@ -101,7 +116,7 @@ services:
 
 volumes:
   postgres_data:
-  postgres_backups:
+  platform_monitor_state:
 
 networks:
   internal:

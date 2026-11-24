@@ -8,7 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Validate PostgreSQL backup script syntax
-        run: sh -n scripts/postgres-backup.sh
+        run: sh -n scripts/backup-postgres.sh
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -19,6 +19,8 @@ jobs:
           pip install -r backend/requirements.txt pytest flake8
       - name: Check Python syntax and undefined names
         run: flake8 backend --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Compile monitoring and retention scripts
+        run: python -m py_compile monitoring/platform-monitor.py scripts/backup-retention.py
       - name: Run backend tests
         env:
           # Test-only signing key. Never reuse this value outside CI.
@@ -59,14 +61,17 @@ jobs:
           --health-retries 20
     steps:
       - uses: actions/checkout@v7
+      - name: Build backup image
+        run: docker build -t school-erp-backup-ci -f docker/backup/Dockerfile .
       - name: Create and restore-verify a PostgreSQL backup
         run: |
           mkdir -p "$RUNNER_TEMP/postgres-backups"
           docker run --rm --network host \
             -v "$GITHUB_WORKSPACE/scripts/backup-postgres.sh:/opt/backup/backup-postgres.sh:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/backup-retention.py:/opt/backup/backup-retention.py:ro" \
             -v "$RUNNER_TEMP/postgres-backups:/backups" \
             -e PGHOST=127.0.0.1 -e PGPORT=5432 \
             -e PGDATABASE=school_erp -e PGUSER=school_erp \
             -e PGPASSWORD=ci-backup-test-password \
             -e BACKUP_DIR=/backups -e BACKUP_ONCE=true \
-            postgres:16-alpine sh -c "mkdir -p /backups && chown postgres:postgres /backups && exec su-exec postgres sh /opt/backup/backup-postgres.sh"
+            school-erp-backup-ci sh -c "mkdir -p /backups && chown postgres:postgres /backups && exec su-exec postgres sh /opt/backup/backup-postgres.sh"

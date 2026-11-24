@@ -11,6 +11,10 @@ BACKUP_DIR=${BACKUP_DIR:-/backups}
 BACKUP_PREFIX=${BACKUP_PREFIX:-school_erp}
 BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
 BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+BACKUP_DAILY_RETENTION_DAYS=${BACKUP_DAILY_RETENTION_DAYS:-7}
+BACKUP_WEEKLY_RETENTION_WEEKS=${BACKUP_WEEKLY_RETENTION_WEEKS:-4}
+BACKUP_MONTHLY_RETENTION_MONTHS=${BACKUP_MONTHLY_RETENTION_MONTHS:-12}
+BACKUP_S3_URI=${BACKUP_S3_URI:-}
 BACKUP_RUN_ON_START=${BACKUP_RUN_ON_START:-true}
 BACKUP_ONCE=${BACKUP_ONCE:-false}
 VERIFY_DIR=""
@@ -88,15 +92,23 @@ run_backup() {
     return 1
   fi
 
+  offsite_verified=false
+  if [ -n "$BACKUP_S3_URI" ]; then
+    remote_uri="${BACKUP_S3_URI%/}/$filename"
+    if ! aws s3 cp "$partial_file" "$remote_uri" --sse AES256; then write_attempt "failed" || true; log "Offsite upload failed"; return 1; fi
+    remote_copy=$(mktemp /tmp/remote-backup-check.XXXXXX.dump)
+    if ! aws s3 cp "$remote_uri" "$remote_copy" || ! pg_restore --list "$remote_copy" >/dev/null 2>&1 || ! verify_restore "$remote_copy"; then rm -f "$remote_copy"; write_attempt "failed" || true; log "Offsite restore verification failed"; return 1; fi
+    rm -f "$remote_copy"
+    offsite_verified=true
+  fi
   mv "$partial_file" "$archive_file" || { write_attempt "failed" || true; return 1; }
   size_bytes=$(wc -c < "$archive_file" | tr -d ' ')
-  printf '{"status":"verified","last_success_utc":"%s","archive":"%s","size_bytes":%s,"restore_verified":true}\n' \
-    "$timestamp" "$filename" "$size_bytes" > "$status_tmp" || { write_attempt "failed" || true; return 1; }
+  printf '{"status":"verified","last_success_utc":"%s","archive":"%s","size_bytes":%s,"restore_verified":true,"offsite_restore_verified":%s}\n' \
+    "$timestamp" "$filename" "$size_bytes" "$offsite_verified" > "$status_tmp" || { write_attempt "failed" || true; return 1; }
   mv "$status_tmp" "$BACKUP_DIR/backup-status.json" || { write_attempt "failed" || true; return 1; }
   write_attempt "verified" || return 1
 
-  find "$BACKUP_DIR" -type f -name "${BACKUP_PREFIX}_*_backup.dump" \
-    -mtime "+$BACKUP_RETENTION_DAYS" -delete || return 1
+  BACKUP_DAILY_RETENTION_DAYS="$BACKUP_DAILY_RETENTION_DAYS" BACKUP_WEEKLY_RETENTION_WEEKS="$BACKUP_WEEKLY_RETENTION_WEEKS" BACKUP_MONTHLY_RETENTION_MONTHS="$BACKUP_MONTHLY_RETENTION_MONTHS" python3 /opt/backup/backup-retention.py || return 1
 
   log "Backup verified and stored: $filename ($size_bytes bytes)"
 }

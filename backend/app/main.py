@@ -385,8 +385,12 @@ def get_rbac_audit_logs(limit: int = Query(default=50, ge=1, le=200), db: Sessio
     } for item in records]
 
 @app.get("/api/health")
-def health():
-    return {"status": "ok", "service": "edunexus-platform-api"}
+def health(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Database connectivity check failed")
+    return {"status": "ok", "service": "edunexus-platform-api", "database": "ok"}
 
 
 # Public account registration and recovery. OTPs are hashed at rest and expire after 10 minutes.
