@@ -122,14 +122,13 @@ const roleAccent:Record<string,string> = {
  transport_manager:'#b36b24', hostel_warden:'#9a5c86',
  security_guard:'#64748b', others:'#64748b', parent:'#267d9b'
 }
-const roleCatalog = Object.entries(roleLabels).filter(([key])=>key!=='user'&&key!=='admin'&&key!=='accountant').map(([key,label])=>({
+const roleCatalog = Object.entries(roleLabels).filter(([key])=>key!=='super_admin'&&key!=='user'&&key!=='admin'&&key!=='accountant').map(([key,label])=>({
  role:label, roleKey:key,
  scope:roleDescriptions[key],
  level:key==='super_admin'?'Platform access':key==='parent'?'Linked-student access':'Role workspace'
 }))
 
 const DEMO_USERS = [
- {label:'Developer',email:'demo.developer@jovoo.in',schoolCode:''},
  {label:'Principal',email:'demo.principal@jovoo.in',schoolCode:'DEMO-SCHOOL'},
  {label:'School Admin',email:'demo.admin@jovoo.in',schoolCode:'DEMO-SCHOOL'},
  {label:'Accountant',email:'demo.accountant@jovoo.in',schoolCode:'DEMO-SCHOOL'},
