@@ -400,7 +400,7 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
     institution_type = str(payload.get("institution_type", "school")).strip().lower()
     position = str(payload.get("position", "Principal")).strip()
     allowed_types = {"school", "college", "university", "coaching_centre", "training_institute", "other"}
-    allowed_positions = {"Principal", "School Director", "Correspondent", "School Administrator", "Chairperson", "Other"}
+    allowed_positions = {"Principal", "Head of Institution", "Dean", "Director", "School Director", "Correspondent", "School Administrator", "Chairperson", "Other"}
     if not all((name, email, password, school_name, school_code, position)) or len(password) < 12 or position not in allowed_positions or institution_type not in allowed_types:
         raise HTTPException(status_code=422, detail="Complete all fields, select a valid institution type and position, and use a password of at least 12 characters")
     if db.scalar(select(models.User.id).where(models.User.email == email)):
@@ -417,7 +417,7 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="School name/code or email already exists")
     _issue_auth_code(db, email, "verify")
-    return {"message": "School registration submitted. Verify your email; your school will remain pending until the EduNexus Developer approves it.", "email": email, "approval_status": "pending"}
+    return {"message": "Institution registration submitted. Verify your email; your institution will remain pending until the EduNexus platform administrator approves it.", "email": email, "approval_status": "pending"}
 
 @app.post("/api/auth/register-staff", tags=["auth"])
 def register_staff(payload: dict, db: Session = Depends(get_db)):
