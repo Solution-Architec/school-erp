@@ -20,7 +20,7 @@ const day=(v:any)=>v?new Date(v).toLocaleDateString('en-IN'):'—'
 const dateInput=(v:any)=>v?String(v).slice(0,10):''
 const INSTITUTION_ROLE_TEMPLATES:Record<string,{roleKey:string;role:string}[]> = {
   school:[
-    {roleKey:'principal',role:'Principal'},{roleKey:'vice_principal',role:'Vice Principal'},{roleKey:'school_hod',role:'Head of Department'},
+    {roleKey:'admin',role:'School Administrator'},{roleKey:'principal',role:'Principal'},{roleKey:'vice_principal',role:'Vice Principal'},{roleKey:'school_hod',role:'Head of Department'},
     {roleKey:'teacher',role:'Teacher'},{roleKey:'class_teacher',role:'Class Teacher'},{roleKey:'school_accountant',role:'Accountant'},
     {roleKey:'admission_officer',role:'Admission Officer'},{roleKey:'examination_controller',role:'Examination Controller'},
     {roleKey:'librarian',role:'Librarian'},{roleKey:'transport_manager',role:'Transport Manager'},

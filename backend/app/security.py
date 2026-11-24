@@ -41,6 +41,7 @@ def _enforce_subscription_expiry(school: School, db: Session) -> None:
         grace_days = 7
     latest = db.scalar(select(ClientSubscription).where(
         ClientSubscription.school_id == school.id,
+        ClientSubscription.status.in_(["active", "expired", "cancelled", "suspended"]),
     ).order_by(ClientSubscription.end_date.desc()).limit(1))
     if latest and (latest.status in {"cancelled", "suspended"} or
                    latest.end_date + timedelta(days=grace_days) < datetime.utcnow().date()):

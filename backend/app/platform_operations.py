@@ -463,13 +463,17 @@ def renew_subscription(subscription_id: int, payload: SubscriptionRenewalInput,
 
 @router.post("/subscriptions/expiry-sweep")
 def subscription_expiry_sweep(db: Session = Depends(get_db), user=platform_owner):
-    grace_days = max(0, min(90, int(os.getenv("SUBSCRIPTION_GRACE_DAYS", "7"))))
+    try:
+        grace_days = max(0, min(90, int(os.getenv("SUBSCRIPTION_GRACE_DAYS", "7"))))
+    except ValueError:
+        grace_days = 7
     today = date.today()
     changed = []
     schools = db.scalars(select(models.School).where(models.School.is_active.is_(True))).all()
     for school in schools:
         latest = db.scalar(select(models.ClientSubscription).where(
-            models.ClientSubscription.school_id == school.id
+            models.ClientSubscription.school_id == school.id,
+            models.ClientSubscription.status.in_(["active", "expired", "cancelled", "suspended"])
         ).order_by(models.ClientSubscription.end_date.desc()).limit(1))
         if latest and (latest.status in {"cancelled", "suspended"} or
                        latest.end_date + timedelta(days=grace_days) < today):
@@ -539,13 +543,15 @@ def verify_gateway_payment(payload: VerifyPaymentInput, db: Session = Depends(ge
         raise HTTPException(status_code=502, detail=f"Could not verify payment with provider: {type(exc).__name__}")
     if provider_payment.get("order_id") != payload.order_id or provider_payment.get("status") != "captured":
         raise HTTPException(status_code=409, detail="Provider has not confirmed a captured payment for this order")
-    if int(provider_payment.get("amount", 0)) != int((attempt.amount * 100).quantize(Decimal("1"))):
+    if provider_payment.get("currency") != attempt.currency or int(provider_payment.get("amount", 0)) != int((attempt.amount * 100).quantize(Decimal("1"))):
         raise HTTPException(status_code=409, detail="Captured payment amount does not match the order")
     attempt.provider_payment_id = payload.payment_id
     attempt.status = "paid"
     attempt.verified_at = datetime.utcnow()
+    provider_method = provider_payment.get("method", "")
+    payment_method = provider_method if provider_method in {"upi", "card"} else "bank_transfer" if provider_method == "netbanking" else "other"
     payment = models.ClientPayment(school_id=attempt.school_id, subscription_id=attempt.subscription_id,
-        amount=attempt.amount, payment_date=date.today(), payment_method="upi",
+        amount=attempt.amount, payment_date=date.today(), payment_method=payment_method,
         transaction_reference=payload.payment_id, status="received",
         notes="Verified Razorpay payment", recorded_by=user.id)
     db.add(payment)
