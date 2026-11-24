@@ -1,4 +1,4 @@
-# EduNexus — Multi-Tenant School Management Platform
+# EduNexus — All-in-One Education Management Platform
 
 A modular-monolith Education Management Platform built around the architecture in the project diagram.
 
