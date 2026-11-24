@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 import jwt
 from pwdlib import PasswordHash
 from fastapi import Depends, HTTPException
@@ -7,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from .database import get_db
-from .models import User, RolePermission
+from .models import User, RolePermission, School
 from .security_config import load_jwt_secret
 
 # Fail closed during application import/startup: there is no development fallback.
@@ -23,10 +24,12 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return password_hash.verify(password, hashed)
 
-def create_access_token(user: User) -> str:
+def create_access_token(user: User, workspace_school_id: int | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {"sub": str(user.id), "role": user.role, "iat": now,
                "exp": now + timedelta(minutes=ACCESS_TOKEN_MINUTES)}
+    if workspace_school_id is not None:
+        payload["workspace_school_id"] = int(workspace_school_id)
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
@@ -39,6 +42,26 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
     user = db.get(User, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User is inactive or does not exist")
+    workspace_school_id = payload.get("workspace_school_id")
+    if workspace_school_id is not None:
+        if user.role != "super_admin":
+            raise HTTPException(status_code=403, detail="Only the platform owner can enter a client workspace")
+        try:
+            workspace_school_id = int(workspace_school_id)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=401, detail="Invalid client workspace token")
+        school = db.get(School, workspace_school_id)
+        if not school or not school.is_active:
+            raise HTTPException(status_code=403, detail="Client institution is unavailable")
+        # A short-lived, signed workspace token presents the platform owner as a
+        # tenant admin for exactly one school. Platform-only routes reject this
+        # wrapper because its effective role is admin, not super_admin.
+        return SimpleNamespace(
+            id=user.id, name=user.name, email=user.email, role="admin",
+            school_id=school.id, is_active=user.is_active,
+            platform_owner_id=user.id, is_platform_workspace=True,
+            platform_school_name=school.name,
+        )
     return user
 
 def require_roles(*roles: str):
@@ -53,6 +76,8 @@ def require_roles(*roles: str):
 def require_module_permission(module_key: str, action: str, *fallback_roles: str):
     """Use saved role grants when configured; otherwise preserve legacy route policy."""
     def checker(user: User = Depends(current_user), db: Session = Depends(get_db)) -> User:
+        if getattr(user, "is_platform_workspace", False):
+            return user
         if user.role == "super_admin":
             return user
         school_grant = None
