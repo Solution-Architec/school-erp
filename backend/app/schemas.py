@@ -21,6 +21,7 @@ class UserOut(BaseModel):
     name: str
     email: EmailStr
     role: str
+    platform_workspace: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 class SchoolIn(BaseModel):
