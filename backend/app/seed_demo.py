@@ -18,7 +18,6 @@ from .security import hash_password
 SCHOOL_CODE = "DEMO-SCHOOL"
 SCHOOL_NAME = "EduNexus Demo Institution"
 DEMO_USERS = [
-    ("Developer Demo", "demo.developer@jovoo.in", "super_admin", None),
     ("Principal Demo", "demo.principal@jovoo.in", "principal", "principal"),
     ("School Admin Demo", "demo.admin@jovoo.in", "admin", "admin"),
     ("Accountant Demo", "demo.accountant@jovoo.in", "accountant", "accountant"),
@@ -56,6 +55,14 @@ def main() -> None:
         else:
             school.name = SCHOOL_NAME
             school.is_active = True
+
+        # Retire the old public demo Developer account from previous seed runs.
+        # Platform owners must use their separately provisioned, authorized account.
+        legacy_developer = db.scalar(select(models.User).where(
+            models.User.email == "demo.developer@jovoo.in"))
+        if legacy_developer:
+            legacy_developer.is_active = False
+            legacy_developer.password_hash = hash_password(secrets.token_urlsafe(32))
 
         users = {}
         for name, email, role, _ in DEMO_USERS:
@@ -190,7 +197,6 @@ def main() -> None:
 
     print("\nEduNexus demo accounts are ready.")
     print(f"School code for all school roles: {SCHOOL_CODE}")
-    print("Developer: leave the school-code field blank.")
     print(f"Shared temporary password (shown once): {demo_password}\n")
     for name, email, role, _ in DEMO_USERS:
         print(f"{role:18} {email}")
