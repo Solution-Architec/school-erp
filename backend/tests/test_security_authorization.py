@@ -89,3 +89,10 @@ def test_school_account_approval_fallback_excludes_regular_staff():
         checker(user=SimpleNamespace(role="teacher", school_id=1), db=EmptyPermissionStore())
     assert exc.value.status_code == 403
     assert checker(user=SimpleNamespace(role="principal", school_id=1), db=EmptyPermissionStore()).role == "principal"
+
+
+def test_demo_login_allowlist_excludes_platform_developer():
+    from backend.app.main import DEMO_LOGIN_EMAILS
+
+    assert "demo.developer@jovoo.in" not in DEMO_LOGIN_EMAILS
+    assert "demo.principal@jovoo.in" in DEMO_LOGIN_EMAILS
