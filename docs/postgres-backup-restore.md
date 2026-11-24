@@ -8,7 +8,7 @@ The `db-backup` service uses the same PostgreSQL major version as the database (
 2. Checks that PostgreSQL can read the archive catalog.
 3. Starts a disposable, isolated PostgreSQL instance inside the backup container and restores the archive into a temporary database with `pg_restore --exit-on-error`.
 4. Publishes the archive only after the isolated restore succeeds.
-5. Writes `backup-status.json` and removes matching archives older than the configured retention period.
+5. Writes `backup-status.json`; tiered retention keeps daily, weekly and monthly recovery points. When an S3 destination is configured, the remote object is downloaded and independently restore-tested before success is reported.
 
 The temporary restore is discarded after verification. It does not connect to or modify the live application database.
 
@@ -19,7 +19,7 @@ Set these optional values in the project-root `.env` file:
 | Variable | Default | Meaning |
 |---|---:|---|
 | `BACKUP_INTERVAL_SECONDS` | `86400` | Interval between backup attempts (24 hours) |
-| `BACKUP_RETENTION_DAYS` | `30` | Delete verified archives older than this many days |
+| `BACKUP_DAILY_RETENTION_DAYS` | `7` | Keep the newest backup for each of the last 7 UTC days |\n| `BACKUP_WEEKLY_RETENTION_WEEKS` | `4` | Keep the newest backup for each of the last 4 ISO weeks |\n| `BACKUP_MONTHLY_RETENTION_MONTHS` | `12` | Keep the newest backup for each of the last 12 calendar months |
 | `BACKUP_RUN_ON_START` | `true` | Run a backup when the service starts |
 | `BACKUP_PREFIX` | `school_erp` | Prefix used for archive filenames |
 
@@ -34,7 +34,7 @@ docker compose exec db-backup cat /backups/backup-status.json
 docker compose exec db-backup ls -lh /backups
 ```
 
-Backups are stored in the Docker named volume `postgres_backups`, separate from `postgres_data`. This protects against accidental database-volume changes, but both volumes may still reside on the same host and disk.
+Backups are stored in the host-mounted `./backups` directory, separate from the PostgreSQL data volume. This lets the backend health view inspect backup state. Host loss can still destroy both database and local backup files; configure offsite storage for disaster recovery.
 
 ## Manual restore drill
 
