@@ -38,3 +38,33 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+  backup:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: school_erp
+          POSTGRES_USER: school_erp
+          POSTGRES_PASSWORD: ci-backup-test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U school_erp -d school_erp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create and restore-verify a PostgreSQL backup
+        run: |
+          mkdir -p "$RUNNER_TEMP/postgres-backups"
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE/scripts/backup-postgres.sh:/opt/backup/backup-postgres.sh:ro" \
+            -v "$RUNNER_TEMP/postgres-backups:/backups" \
+            -e PGHOST=127.0.0.1 -e PGPORT=5432 \
+            -e PGDATABASE=school_erp -e PGUSER=school_erp \
+            -e PGPASSWORD=ci-backup-test-password \
+            -e BACKUP_DIR=/backups -e BACKUP_ONCE=true \
+            postgres:16-alpine sh /opt/backup/backup-postgres.sh
