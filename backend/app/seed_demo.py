@@ -1,4 +1,4 @@
-"""Opt-in seed data for exercising each SchoolOS workspace.
+"""Opt-in seed data for exercising each EduNexus workspace.
 
 Run with ENABLE_DEMO_SEED=true python -m app.seed_demo.
 A fresh shared demo password is generated and printed once per run.
@@ -16,7 +16,7 @@ from .security import hash_password
 
 
 SCHOOL_CODE = "DEMO-SCHOOL"
-SCHOOL_NAME = "SchoolOS Demo Academy"
+SCHOOL_NAME = "EduNexus Demo Institution"
 DEMO_USERS = [
     ("Developer Demo", "demo.developer@jovoo.in", "super_admin", None),
     ("Principal Demo", "demo.principal@jovoo.in", "principal", "principal"),
@@ -188,7 +188,7 @@ def main() -> None:
 
         db.commit()
 
-    print("\nSchoolOS demo accounts are ready.")
+    print("\nEduNexus demo accounts are ready.")
     print(f"School code for all school roles: {SCHOOL_CODE}")
     print("Developer: leave the school-code field blank.")
     print(f"Shared temporary password (shown once): {demo_password}\n")
