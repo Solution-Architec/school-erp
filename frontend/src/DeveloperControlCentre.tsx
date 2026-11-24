@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 import { Activity, Building2, CalendarClock, CheckCircle2, CircleAlert, FileText, Headset, IndianRupee, RefreshCw, Save, ShieldCheck, Users, X } from 'lucide-react'
 import './DeveloperControlCentre.css'
 
@@ -62,18 +63,18 @@ export default function DeveloperControlCentre({request,onEnterWorkspace}:{reque
     if(kind==='payment')setForm(c?{school_id:String(c.id),amount:'',payment_date:dateInput(new Date()),payment_method:'bank_transfer',status:'received',transaction_reference:'',notes:''}:{amount:'',payment_date:dateInput(new Date()),payment_method:'bank_transfer',status:'received',transaction_reference:'',notes:''})
     if(kind==='ticket')setForm(c?{school_id:String(c.id),subject:'',description:'',category:'technical',priority:'normal',requester_name:'',requester_email:''}:{subject:'',description:'',category:'technical',priority:'normal',requester_name:'',requester_email:''})
   }
-  async function submitForm(e:React.FormEvent){
+  async function submitForm(e:FormEvent){
     e.preventDefault();setBusy(true);setError('');setNotice('')
     try{
       const endpoint=({quotation:'/api/platform/quotations',subscription:'/api/platform/subscriptions',payment:'/api/platform/payments',ticket:'/api/platform/support-tickets'} as Record<string,string>)[formKind]
-      const payload={...form}
+      const payload:any={...form}
       if(payload.school_id)payload.school_id=Number(payload.school_id);if(formKind==='quotation'&&!payload.valid_until)payload.valid_until=null
       await request(endpoint,{method:'POST',body:JSON.stringify(payload)})
       setFormKind('');setNotice('Record saved successfully.');await load()
     }catch(err:any){setError(err.message||'Could not save record')}
     finally{setBusy(false)}
   }
-  async function saveProfile(e:React.FormEvent){
+  async function saveProfile(e:FormEvent){
     e.preventDefault();if(!selected)return;setBusy(true);setError('');setNotice('')
     try{await request('/api/platform/clients/'+selected.id+'/profile',{method:'PUT',body:JSON.stringify(profile)});setNotice('Client profile updated.');await load()}
     catch(err:any){setError(err.message||'Could not update client profile')}
