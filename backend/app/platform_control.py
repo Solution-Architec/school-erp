@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from . import models
@@ -429,4 +429,21 @@ def exit_client_workspace(db: Session = Depends(get_db),
         "user": {"id": platform_owner.id, "name": platform_owner.name,
                  "email": platform_owner.email, "role": platform_owner.role,
                  "school_id": None, "platform_workspace": False},
+    }
+
+
+@router.get("/system-health")
+def platform_system_health(db: Session = Depends(get_db),
+                           user: models.User = Depends(require_roles("super_admin"))):
+    database_status = "healthy"
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        db.rollback()
+        database_status = "unavailable"
+    checked_at = datetime.utcnow()
+    return {
+        "api": "healthy",
+        "database": database_status,
+        "checked_at": checked_at.isoformat() + "Z",
     }
