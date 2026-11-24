@@ -26,12 +26,14 @@ class UserOut(BaseModel):
 class SchoolIn(BaseModel):
     name: str = Field(min_length=2, max_length=180)
     code: str = Field(min_length=2, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
+    institution_type: Literal["school", "college", "university", "coaching_centre", "training_institute", "other"] = "school"
 
 
 class SchoolOut(BaseModel):
     id: int
     name: str
     code: str
+    institution_type: str = "school"
     is_active: bool
     approval_status: str = "approved"
     created_at: datetime
