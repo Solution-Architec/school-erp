@@ -196,7 +196,7 @@ export default function DeveloperControlCentre({request,onEnterWorkspace,moduleL
         <label>Client institution
           <select value={roleClientId} onChange={e=>{setRoleClientId(e.target.value);setRolePermissions({});setRolePermissionMeta({});setRoleError('');setRoleNotice('')}}>
             <option value="">Choose a client</option>
-            {clients.filter(c=>roleInstitutionType==='other'?['coaching_centre','training_institute','other'].includes(c.institution_type):c.institution_type===roleInstitutionType).map(c=><option key={c.id} value={c.id}>{c.name} · {c.code}</option>)}
+            {clients.filter(c=>c.approval_status!=='archived'&&(roleInstitutionType==='other'?['coaching_centre','training_institute','other'].includes(c.institution_type):c.institution_type===roleInstitutionType)).map(c=><option key={c.id} value={c.id}>{c.name} · {c.code}</option>)}
           </select>
         </label>
         <label>Role template
