@@ -23,7 +23,7 @@ case "$BACKUP_PREFIX" in ""|*[!A-Za-z0-9_-]*) echo "BACKUP_PREFIX may contain on
 case "$BACKUP_RETENTION_DAYS" in ''|*[!0-9]*) echo "BACKUP_RETENTION_DAYS must be a non-negative integer" >&2; exit 2 ;; esac
 [ "$BACKUP_INTERVAL_SECONDS" -gt 0 ] || { echo "BACKUP_INTERVAL_SECONDS must be greater than zero" >&2; exit 2; }
 
-umask 077
+umask 027
 mkdir -p "$BACKUP_DIR"
 
 log() {
