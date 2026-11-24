@@ -1,4 +1,4 @@
-# SchoolOS architecture and implementation notes
+# EduNexus architecture and implementation notes
 
 ## Logical architecture
 
@@ -13,7 +13,7 @@ flowchart TB
     WEB[React + TypeScript + Vite]
     API[FastAPI HTTP API]
     AUTH[JWT authentication + RBAC]
-    MOD[School ERP modules]
+    MOD[Education management modules]
   end
   subgraph Persistence
     PG[(PostgreSQL)]
@@ -31,7 +31,7 @@ The implementation is a **modular monolith**. The diagram's conceptual services 
 
 ## Tenancy model
 
-- A school is represented by the `schools` table.
+- An institution tenant is represented by the existing `schools` table for backward compatibility; its `institution_type` distinguishes schools, colleges, universities, coaching centres, training institutes and other providers.
 - School-owned records use `school_id` as their tenant discriminator.
 - Super Admin is a global role and may manage schools across tenants.
 - School users must be assigned to a school; endpoints apply tenant filters using the authenticated user's `school_id`.
@@ -41,10 +41,16 @@ The implementation is a **modular monolith**. The diagram's conceptual services 
 
 **Security invariant:** every read, update, delete, import, report, and relation lookup for school-level users must be scoped to their tenant. New endpoints must use the same rule and include cross-tenant negative tests.
 
-## School code login and mandatory privileged-account MFA
+## Institution types and academic configuration
 
-- Every sign-in requires a school code, email address, and password.
-- The backend resolves the active school from the normalized school code and matches the user by both email and school_id; the school code is never trusted as a frontend-only filter.
+- New institution registrations select an institution type: school, college, university, coaching centre, training institute, or other.
+- The database change is additive: existing rows default to `school`, and existing `schools` table references and tenant IDs are retained.
+- Existing class/section workflows are preserved. College/university structures such as departments, programmes, semesters, credits and coaching batches are not yet implemented by this foundation and must be delivered as separate domain work.
+
+## Institution code login and mandatory privileged-account MFA
+
+- Every sign-in requires a institution code, email address, and password.
+- The backend resolves the active school from the normalized institution code and matches the user by both email and school_id; the institution code is never trusted as a frontend-only filter.
 - Global Developer (super_admin) accounts sign in with the configured PLATFORM_SCHOOL_CODE (default: PLATFORM) and have no school tenant assignment.
 - Admin and Developer accounts always receive a six-digit email MFA challenge after password, email-verification, account-approval, and active-account checks. No access token is issued until /api/auth/verify-mfa consumes the one-time code.
 - MFA challenges expire after five minutes; email codes expire after ten minutes and allow at most five attempts. Existing 60-second resend throttling applies.

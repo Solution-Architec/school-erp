@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(80) NOT NULL DEFAULT 'Principal'"))
             conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
+            conn.execute(text("ALTER TABLE schools ADD COLUMN IF NOT EXISTS institution_type VARCHAR(40) NOT NULL DEFAULT 'school'"))
             # Role permissions support ERP-wide defaults (school_id NULL) and per-school overrides.
             conn.execute(text("ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id)"))
             conn.execute(text("ALTER TABLE role_permissions DROP CONSTRAINT IF EXISTS uq_role_permission_scope"))
@@ -107,8 +108,8 @@ async def lifespan(app: FastAPI):
             db.commit()
     yield
 
-app = FastAPI(title="School ERP API", version="0.1.0",
-              description="Starter ERP API. Review security and complete domain workflows before production.",
+app = FastAPI(title="EduNexus Education Platform API", version="0.2.0",
+              description="Multi-institution education management platform API.",
               lifespan=lifespan)
 origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "http://localhost,http://localhost:5173").split(",") if x.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
@@ -281,7 +282,7 @@ def get_rbac_audit_logs(limit: int = Query(default=50, ge=1, le=200), db: Sessio
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "school-erp-api"}
+    return {"status": "ok", "service": "edunexus-platform-api"}
 
 
 # Public account registration and recovery. OTPs are hashed at rest and expire after 10 minutes.
@@ -327,10 +328,10 @@ def _notify_support(event: str, details: str, throttle_seconds: int = 900) -> No
         return
     _support_alert_last_sent[event] = now
     msg = EmailMessage()
-    msg["Subject"] = f"SchoolOS support alert: {event}"
+    msg["Subject"] = f"EduNexus support alert: {event}"
     msg["From"] = sender
     msg["To"] = support_email
-    msg.set_content(f"SchoolOS authentication alert\n\nEvent: {event}\nDetails: {details}\nTime (UTC): {now.isoformat()}\n")
+    msg.set_content(f"EduNexus authentication alert\n\nEvent: {event}\nDetails: {details}\nTime (UTC): {now.isoformat()}\n")
     try:
         _smtp_send_message(msg)
     except Exception as exc:
@@ -344,11 +345,11 @@ def _send_auth_code(email: str, code: str, purpose: str) -> None:
     if not host or not sender:
         raise HTTPException(status_code=503, detail="Email delivery is not configured. Contact the platform administrator.")
     msg = EmailMessage()
-    msg["Subject"] = {"verify": "SchoolOS email verification", "reset": "SchoolOS password reset", "login_mfa": "Your SchoolOS sign-in verification code"}.get(purpose, "SchoolOS security code")
+    msg["Subject"] = {"verify": "EduNexus email verification", "reset": "EduNexus password reset", "login_mfa": "Your EduNexus sign-in verification code"}.get(purpose, "EduNexus security code")
     msg["From"] = sender
     msg["To"] = email
-    action = {"verify": "verify your SchoolOS account", "reset": "reset your SchoolOS password", "login_mfa": "complete your SchoolOS sign-in"}.get(purpose, "verify your SchoolOS identity")
-    msg.set_content(f"Your SchoolOS code to {action} is: {code}\n\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
+    action = {"verify": "verify your EduNexus account", "reset": "reset your EduNexus password", "login_mfa": "complete your EduNexus sign-in"}.get(purpose, "verify your EduNexus identity")
+    msg.set_content(f"Your EduNexus code to {action} is: {code}\n\nThis code expires in 10 minutes. If you did not request this, ignore this email.")
     _smtp_send_message(msg)
 
 def _issue_auth_code(db: Session, email: str, purpose: str) -> None:
@@ -396,13 +397,15 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
     password = str(payload.get("password", ""))
     school_name = str(payload.get("school_name", "")).strip()
     school_code = str(payload.get("school_code", "")).strip().upper()
+    institution_type = str(payload.get("institution_type", "school")).strip().lower()
     position = str(payload.get("position", "Principal")).strip()
-    allowed_positions = {"Principal", "School Director", "Correspondent", "School Administrator", "Chairperson", "Other"}
-    if not all((name, email, password, school_name, school_code, position)) or len(password) < 12 or position not in allowed_positions:
-        raise HTTPException(status_code=422, detail="Complete all fields, select a valid position and use a password of at least 12 characters")
+    allowed_types = {"school", "college", "university", "coaching_centre", "training_institute", "other"}
+    allowed_positions = {"Principal", "Head of Institution", "Dean", "Director", "School Director", "Correspondent", "School Administrator", "Chairperson", "Other"}
+    if not all((name, email, password, school_name, school_code, position)) or len(password) < 12 or position not in allowed_positions or institution_type not in allowed_types:
+        raise HTTPException(status_code=422, detail="Complete all fields, select a valid institution type and position, and use a password of at least 12 characters")
     if db.scalar(select(models.User.id).where(models.User.email == email)):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
-    school = models.School(name=school_name, code=school_code, is_active=False, approval_status="pending")
+    school = models.School(name=school_name, code=school_code, institution_type=institution_type, is_active=False, approval_status="pending")
     db.add(school)
     try:
         db.flush()
@@ -414,7 +417,7 @@ def register_school(payload: dict, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="School name/code or email already exists")
     _issue_auth_code(db, email, "verify")
-    return {"message": "School registration submitted. Verify your email; your school will remain pending until the SchoolOS Developer approves it.", "email": email, "approval_status": "pending"}
+    return {"message": "Institution registration submitted. Verify your email; your institution will remain pending until the EduNexus platform administrator approves it.", "email": email, "approval_status": "pending"}
 
 @app.post("/api/auth/register-staff", tags=["auth"])
 def register_staff(payload: dict, db: Session = Depends(get_db)):
@@ -460,7 +463,7 @@ def verify_email(payload: dict, db: Session = Depends(get_db)):
         account.is_active = False
     db.commit()
     if school and school.approval_status == "pending":
-        message = "Email verified. Your school registration is awaiting SchoolOS Developer approval."
+        message = "Email verified. Your school registration is awaiting EduNexus Developer approval."
     elif account.approval_status == "pending":
         message = "Email verified. Your account is awaiting approval by your school administrator."
     elif account.is_active:
@@ -1298,7 +1301,7 @@ def list_schools(q: str = Query(default="", max_length=120), db: Session = Depen
 @app.post("/api/schools", response_model=schemas.SchoolOut, tags=["schools"])
 def create_school(payload: schemas.SchoolIn, db: Session = Depends(get_db),
                   user: models.User = Depends(require_roles("super_admin"))):
-    school = models.School(name=payload.name.strip(), code=payload.code.strip().upper())
+    school = models.School(name=payload.name.strip(), code=payload.code.strip().upper(), institution_type=payload.institution_type)
     db.add(school)
     try:
         db.commit()
