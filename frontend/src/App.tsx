@@ -122,14 +122,13 @@ const roleAccent:Record<string,string> = {
  transport_manager:'#b36b24', hostel_warden:'#9a5c86',
  security_guard:'#64748b', others:'#64748b', parent:'#267d9b'
 }
-const roleCatalog = Object.entries(roleLabels).filter(([key])=>key!=='user'&&key!=='admin'&&key!=='accountant').map(([key,label])=>({
+const roleCatalog = Object.entries(roleLabels).filter(([key])=>key!=='super_admin'&&key!=='user'&&key!=='admin'&&key!=='accountant').map(([key,label])=>({
  role:label, roleKey:key,
  scope:roleDescriptions[key],
  level:key==='super_admin'?'Platform access':key==='parent'?'Linked-student access':'Role workspace'
 }))
 
 const DEMO_USERS = [
- {label:'Developer',email:'demo.developer@jovoo.in',schoolCode:''},
  {label:'Principal',email:'demo.principal@jovoo.in',schoolCode:'DEMO-SCHOOL'},
  {label:'School Admin',email:'demo.admin@jovoo.in',schoolCode:'DEMO-SCHOOL'},
  {label:'Accountant',email:'demo.accountant@jovoo.in',schoolCode:'DEMO-SCHOOL'},
@@ -169,7 +168,7 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
   else if(mode==='reset'){const d=await call('/api/auth/reset-password',{email:values.email,code:values.code,password:values.password});setNotice(d.message);setMode('signin')}
  }catch(err:any){setError(err.message||'Unable to complete request')}finally{setBusy(false)}}
  const titles={signin:'Welcome back',mfa:'Verify your sign-in',school:'Register your institution',staff:'Join your school',verify:'Verify your email',forgot:'Recover password',reset:'Create a new password'}
- const descriptions={signin:'Enter your email and password. School users must also enter their school code.',mfa:'Enter the six-digit security code sent to your email address.',school:'Submit your institution and authorized representative details for EduNexus Developer review.',staff:'Register under an existing school. Approval by a school user is required.',verify:'Enter the six-digit code sent to your email.',forgot:'Enter your registered email to request a reset code.',reset:'Verify the code and choose a new password.'}
+ const descriptions={signin:'Enter your email and password. School users must also enter their school code.',mfa:'Enter the six-digit security code sent to your email address.',school:'Submit your institution and authorized representative details for EduNexus platform review.',staff:'Register under an existing school. Approval by a school user is required.',verify:'Enter the six-digit code sent to your email.',forgot:'Enter your registered email to request a reset code.',reset:'Verify the code and choose a new password.'}
  const isPasswordMode=['signin','school','staff','reset'].includes(mode)
  const passwordLabel=mode==='reset'?'New password':'Password'
  const submitLabel=mode==='signin'?'Continue securely':mode==='mfa'?'Verify and sign in':mode==='school'?'Register institution':mode==='staff'?'Request staff account':mode==='verify'?'Verify email':mode==='forgot'?'Send reset code':'Reset password'
@@ -220,7 +219,7 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
       <div className="auth-field"><label htmlFor="staff-school-code">School code</label><input id="staff-school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Enter your school's code" required/></div>
       <div className="auth-field"><label htmlFor="staff-role">Account type</label><select id="staff-role" value={values.role} onChange={e=>set('role',e.target.value)}>{Object.entries(roleLabels).filter(([key])=>key!=='super_admin'&&key!=='parent'&&key!=='user'&&key!=='admin'&&key!=='accountant').map(([key,label])=><option key={key} value={key}>{label}</option>)}<option value="parent">Parent (linked students only)</option></select></div>
      </>}
-     {mode==='signin'&&<div className="auth-field"><label htmlFor="login-school-code">School code <span className="muted">(school accounts only)</span></label><input id="login-school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Leave blank for Developer" autoCapitalize="characters"/><small>Leave this blank to sign in as Developer. All institution users must enter their institution code.</small></div>}
+     {mode==='signin'&&<div className="auth-field"><label htmlFor="login-school-code">School code <span className="muted">(school accounts only)</span></label><input id="login-school-code" value={values.school_code} onChange={e=>set('school_code',e.target.value.toUpperCase())} placeholder="Authorized platform account only" autoCapitalize="characters"/><small>Only authorized platform accounts may sign in without an institution code. All institution users must enter their institution code.</small></div>}
       {['signin','school','staff','verify','forgot','reset'].includes(mode)&&<div className="auth-field"><label htmlFor="auth-email">Email address</label><div className="auth-input-wrap"><Mail size={17}/><input id="auth-email" type="email" value={values.email} onChange={e=>set('email',e.target.value)} placeholder="you@school.com" required autoComplete="email"/></div></div>}
      {isPasswordMode&&<div className="auth-field"><label htmlFor="auth-password">{passwordLabel}</label><div className="auth-input-wrap"><LockKeyhole size={17}/><input id="auth-password" type={showPassword?'text':'password'} value={values.password} onChange={e=>set('password',e.target.value)} placeholder={mode==='signin'?'Enter your password':'Create a strong password'} minLength={mode==='signin'?undefined:12} required autoComplete={mode==='signin'?'current-password':'new-password'}/><button className="auth-password-toggle" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>{mode!=='signin'&&<small className="auth-help">Use at least 12 characters.</small>}</div>}
      {['verify','reset','mfa'].includes(mode)&&<div className="auth-field"><label htmlFor="auth-code">{mode==='mfa'?'Sign-in security code':'Email verification / reset code'}</label><div className="auth-input-wrap"><ShieldCheck size={17}/><input id="auth-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={values.code} onChange={e=>set('code',e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="6-digit code" required/></div></div>}
