@@ -67,7 +67,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/postgres-backups"
           docker run --rm --network host \
-            -v "$GITHUB_WORKSPACE/scripts/backup-postgres.sh:/opt/backup/backup-postgres.sh:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/backup-postgres.sh:/opt/backup/backup-postgres.sh:ro" \\
+            -v "$GITHUB_WORKSPACE/scripts/backup-retention.py:/opt/backup/backup-retention.py:ro" \
             -v "$RUNNER_TEMP/postgres-backups:/backups" \
             -e PGHOST=127.0.0.1 -e PGPORT=5432 \
             -e PGDATABASE=school_erp -e PGUSER=school_erp \
