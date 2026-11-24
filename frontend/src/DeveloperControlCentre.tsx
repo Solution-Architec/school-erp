@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Activity, Building2, CalendarClock, CheckCircle2, CircleAlert, FileText, Headset, IndianRupee, RefreshCw, Save, ShieldCheck, Users, X } from 'lucide-react'
+import { Activity, Building2, CalendarClock, CheckCircle2, CircleAlert, FileText, Headset, IndianRupee, RefreshCw, Save, ShieldCheck, Users, X, Mail, UserPlus, Wrench, AlertTriangle, CreditCard } from 'lucide-react'
 import './DeveloperControlCentre.css'
 
 type Request = (url: string, options?: RequestInit) => Promise<any>
@@ -14,13 +14,13 @@ type Overview = {
   pending_quotations:number; received_amount:number; open_support_tickets:number
 }
 const emptyOverview:Overview={institutions:0,active_institutions:0,users:0,students:0,staff:0,online_users:0,active_subscriptions:0,subscriptions_expiring_30_days:0,pending_quotations:0,received_amount:0,open_support_tickets:0}
-const tabs=['Overview','Clients','Role access','Quotations','Subscriptions','Collections','Support','Live usage','System & audit']
+const tabs=['Overview','Client Requests','Clients','User access','Role access','Quotations','Subscriptions','Collections','Support','Platform operations','Live usage','Reports','System & audit']
 const money=(v:any)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(Number(v||0))
 const day=(v:any)=>v?new Date(v).toLocaleDateString('en-IN'):'—'
 const dateInput=(v:any)=>v?String(v).slice(0,10):''
 const INSTITUTION_ROLE_TEMPLATES:Record<string,{roleKey:string;role:string}[]> = {
   school:[
-    {roleKey:'admin',role:'School Administrator'},{roleKey:'principal',role:'Principal'},{roleKey:'vice_principal',role:'Vice Principal'},{roleKey:'school_hod',role:'Head of Department'},
+    {roleKey:'principal',role:'Principal'},{roleKey:'vice_principal',role:'Vice Principal'},{roleKey:'school_hod',role:'Head of Department'},
     {roleKey:'teacher',role:'Teacher'},{roleKey:'class_teacher',role:'Class Teacher'},{roleKey:'school_accountant',role:'Accountant'},
     {roleKey:'admission_officer',role:'Admission Officer'},{roleKey:'examination_controller',role:'Examination Controller'},
     {roleKey:'librarian',role:'Librarian'},{roleKey:'transport_manager',role:'Transport Manager'},
@@ -84,6 +84,20 @@ export default function DeveloperControlCentre({request,onEnterWorkspace,moduleL
   const [roleBusy,setRoleBusy]=useState(false)
   const [roleError,setRoleError]=useState('')
   const [roleNotice,setRoleNotice]=useState('')
+  const [clientRequests,setClientRequests]=useState<any[]>([])
+  const [opsClientId,setOpsClientId]=useState('')
+  const [opsUsers,setOpsUsers]=useState<any[]>([])
+  const [inviteEmail,setInviteEmail]=useState('')
+  const [inviteRole,setInviteRole]=useState('teacher')
+  const [inviteLink,setInviteLink]=useState('')
+  const [incidents,setIncidents]=useState<any[]>([])
+  const [windows,setWindows]=useState<any[]>([])
+  const [infra,setInfra]=useState<any>({})
+  const [opsReport,setOpsReport]=useState<any>({})
+  const [incidentForm,setIncidentForm]=useState({title:'',description:'',severity:'medium',affected_scope:'platform',school_id:'',assigned_to:''})
+  const [windowForm,setWindowForm]=useState({title:'',description:'',starts_at:'',ends_at:''})
+  const [checkoutSchoolId,setCheckoutSchoolId]=useState('')
+  const [checkoutAmount,setCheckoutAmount]=useState('')
 
   useEffect(()=>{
     if(tab!=='Role access'||!roleClientId)return
@@ -100,18 +114,87 @@ export default function DeveloperControlCentre({request,onEnterWorkspace,moduleL
   async function load(){
     setBusy(true);setError('')
     try{
-      const [o,c,q,s,p,t,a,h,logs]=await Promise.all([
+      const [o,c,q,s,p,t,a,h,logs,cr,inc,win,ih,rp]=await Promise.all([
         request('/api/platform/overview'),request('/api/platform/clients'),request('/api/platform/quotations'),
         request('/api/platform/subscriptions'),request('/api/platform/payments'),request('/api/platform/support-tickets'),
-        request('/api/platform/activity'),request('/api/platform/system-health'),request('/api/rbac/audit-logs?limit=30')
+        request('/api/platform/activity'),request('/api/platform/system-health'),request('/api/rbac/audit-logs?limit=30'),
+        request('/api/platform/ops/client-requests'),request('/api/platform/ops/incidents'),
+        request('/api/platform/ops/maintenance-windows'),request('/api/platform/ops/infrastructure-health'),
+        request('/api/platform/ops/reports')
       ])
       setOverview(o);setClients(c);setQuotes(q);setSubscriptions(s);setPayments(p);setTickets(t);setActivity(a);setHealth(h);setAudit(logs)
+      setClientRequests(cr);setIncidents(inc);setWindows(win);setInfra(ih);setOpsReport(rp)
       if(selected){const fresh=c.find((item:Client)=>item.id===selected.id);if(fresh){setSelected(fresh);setProfile(toProfile(fresh.profile))}}
     }catch(e:any){setError(e.message||'Could not load platform data')}
     finally{setBusy(false)}
   }
   function toProfile(p:Record<string,any>={}){return Object.fromEntries(['contact_person','contact_email','contact_phone','address','city','state','country','affiliation','registration_no','website','notes'].map(k=>[k,String(p[k]??'')]))}
   useEffect(()=>{load()},[])
+  async function loadOpsUsers(schoolId:string){
+    setOpsClientId(schoolId);setOpsUsers([]);setInviteLink('')
+    if(!schoolId)return
+    try{setOpsUsers(await request('/api/platform/ops/users?school_id='+encodeURIComponent(schoolId)))}
+    catch(e:any){setError(e.message||'Could not load institution users')}
+    const c=clients.find(x=>String(x.id)===schoolId)
+    const key=c?.institution_type==='school'?'school':c?.institution_type==='college'?'college':c?.institution_type==='university'?'university':'other'
+    setInviteRole((INSTITUTION_ROLE_TEMPLATES[key]||INSTITUTION_ROLE_TEMPLATES.school)[0].roleKey)
+  }
+  async function decideRequest(item:any,decision:string){
+    let reason=''
+    if(decision==='request_info'){reason=window.prompt('What additional information is required?','Please provide the institution registration documents and contact details.')||'';if(!reason.trim())return}
+    else if(!window.confirm((decision==='approve'?'Approve':'Reject')+' '+item.school_name+'?'))return
+    setBusy(true);setError('');setNotice('')
+    try{await request('/api/platform/ops/client-requests/'+item.school_id+'/decision',{method:'POST',body:JSON.stringify({decision,reason})});setNotice('Client request updated.');await load()}
+    catch(e:any){setError(e.message||'Could not update client request')}finally{setBusy(false)}
+  }
+  async function sendInvitation(e:FormEvent){
+    e.preventDefault();if(!opsClientId)return
+    setBusy(true);setError('');setNotice('');setInviteLink('')
+    try{const result=await request('/api/platform/ops/invitations',{method:'POST',body:JSON.stringify({school_id:Number(opsClientId),email:inviteEmail,role:inviteRole})});setInviteLink(result.invitation_url||'');setNotice(result.email_sent?'Invitation email sent.':'Invitation created; copy the one-time link below and share it securely.');setInviteEmail('');await loadOpsUsers(opsClientId)}
+    catch(e:any){setError(e.message||'Could not create invitation')}finally{setBusy(false)}
+  }
+  async function changeUserRole(userId:number,role:string){
+    if(!opsClientId)return
+    setBusy(true);setError('')
+    try{await request('/api/platform/ops/clients/'+opsClientId+'/users/'+userId+'/role',{method:'PUT',body:JSON.stringify({role})});setNotice('Institution role updated and audited.');await loadOpsUsers(opsClientId)}
+    catch(e:any){setError(e.message||'Could not update user role')}finally{setBusy(false)}
+  }
+  async function createIncident(e:FormEvent){
+    e.preventDefault();setBusy(true);setError('')
+    try{await request('/api/platform/ops/incidents',{method:'POST',body:JSON.stringify({...incidentForm,school_id:incidentForm.school_id?Number(incidentForm.school_id):null})});setIncidentForm({title:'',description:'',severity:'medium',affected_scope:'platform',school_id:'',assigned_to:''});setNotice('Platform incident created.');await load()}
+    catch(e:any){setError(e.message||'Could not create incident')}finally{setBusy(false)}
+  }
+  async function updateIncident(item:any,status:string){
+    setBusy(true);setError('')
+    try{await request('/api/platform/ops/incidents/'+item.id,{method:'PATCH',body:JSON.stringify({status,severity:item.severity,assigned_to:item.assigned_to||'',resolution_notes:item.resolution_notes||''})});setNotice('Incident updated.');await load()}
+    catch(e:any){setError(e.message||'Could not update incident')}finally{setBusy(false)}
+  }
+  async function createMaintenanceWindow(e:FormEvent){
+    e.preventDefault();setBusy(true);setError('')
+    try{await request('/api/platform/ops/maintenance-windows',{method:'POST',body:JSON.stringify({...windowForm,starts_at:new Date(windowForm.starts_at).toISOString(),ends_at:new Date(windowForm.ends_at).toISOString()})});setWindowForm({title:'',description:'',starts_at:'',ends_at:''});setNotice('Maintenance window scheduled.');await load()}
+    catch(e:any){setError(e.message||'Could not schedule maintenance')}finally{setBusy(false)}
+  }
+  async function runExpirySweep(){
+    if(!window.confirm('Run subscription expiry enforcement now? Institutions beyond the configured grace period will be suspended.'))return
+    setBusy(true);setError('')
+    try{const result=await request('/api/platform/ops/subscriptions/expiry-sweep',{method:'POST'});setNotice(result.count+' institution(s) suspended after subscription expiry.');await load()}
+    catch(e:any){setError(e.message||'Expiry check failed')}finally{setBusy(false)}
+  }
+  async function startGatewayCheckout(){
+    if(!checkoutSchoolId||!checkoutAmount)return
+    setBusy(true);setError('')
+    try{
+      const order=await request('/api/platform/ops/payments/checkout',{method:'POST',body:JSON.stringify({school_id:Number(checkoutSchoolId),amount:checkoutAmount})})
+      if(!(window as any).Razorpay){
+        await new Promise<void>((resolve,reject)=>{const script=document.createElement('script');script.src='https://checkout.razorpay.com/v1/checkout.js';script.onload=()=>resolve();script.onerror=()=>reject(new Error('Could not load Razorpay Checkout'));document.body.appendChild(script)})
+      }
+      const RazorpayCtor=(window as any).Razorpay
+      const checkout=new RazorpayCtor({key:order.key_id,amount:order.amount,currency:order.currency,name:'EduNexus',description:'Institution subscription payment',order_id:order.order_id,
+        handler:async(response:any)=>{try{const verified=await request('/api/platform/ops/payments/verify',{method:'POST',body:JSON.stringify({school_id:Number(checkoutSchoolId),order_id:response.razorpay_order_id,payment_id:response.razorpay_payment_id,signature:response.razorpay_signature})});setNotice('Payment verified and recorded. Reference: '+(verified.payment_id||response.razorpay_payment_id));await load()}catch(err:any){setError(err.message||'Payment verification failed')}},
+        modal:{ondismiss:()=>setNotice('Payment window closed. No payment was recorded unless provider verification completed.')}})
+      checkout.open()
+    }catch(e:any){setError(e.message||'Could not start checkout')}finally{setBusy(false)}
+  }
   const filteredClients=useMemo(()=>clients.filter(c=>(c.name+' '+c.code+' '+c.institution_type).toLowerCase().includes(query.toLowerCase())),[clients,query])
   const clientName=(id:number)=>clients.find(c=>c.id===id)?.name||'Unknown institution'
   async function openClient(c:Client){setSelected(c);setProfile(toProfile(c.profile));setClientDetail(null);try{setClientDetail(await request('/api/platform/clients/'+c.id))}catch(e:any){setError(e.message||'Could not load client details')}}
@@ -218,7 +301,7 @@ export default function DeveloperControlCentre({request,onEnterWorkspace,moduleL
       </>}
     </div>}
     {tab==='Client Requests'&&<div className="dcc-panel"><div className="dcc-panel-title"><div><h3>Institution applications</h3><p>Review new school, college, university and institute registrations.</p></div><span className="dcc-count">{clientRequests.filter(r=>r.approval_status==='pending').length} pending</span></div><div className="dcc-table-wrap"><table><thead><tr><th>Institution / Code</th><th>Type</th><th>Founder</th><th>Email verified</th><th>Submitted</th><th>Review status</th><th>Actions</th></tr></thead><tbody>{clientRequests.map(r=><tr key={r.school_id}><td><strong>{r.school_name}</strong><small>{r.school_code}</small></td><td>{r.institution_type.replaceAll('_',' ')}</td><td>{r.founder?.name||'—'}<small>{r.founder?.email||'Founder unavailable'}</small></td><td>{r.founder?.email_verified?'Yes':'Pending'}</td><td>{day(r.created_at)}</td><td><span className={'dcc-status '+(r.review_status==='approved'?'good':'warning')}>{r.review_status.replaceAll('_',' ')}</span>{r.requested_information&&<small>{r.requested_information}</small>}</td><td><div className="dcc-inline-actions"><button className="primary compact" disabled={busy||!r.founder?.email_verified} onClick={()=>decideRequest(r,'approve')}>Approve</button><button className="secondary compact" disabled={busy} onClick={()=>decideRequest(r,'request_info')}>Request info</button><button className="secondary compact" disabled={busy} onClick={()=>decideRequest(r,'reject')}>Reject</button></div></td></tr>)}{!clientRequests.length&&<tr><td colSpan={7}><p className="dcc-empty">No pending institution applications.</p></td></tr>}</tbody></table></div><p className="dcc-note">Approval activates the institution and assigns its founder the institution administrator role. Email verification is required before the founder can sign in.</p></div>}
-    {tab==='User access'&&<div className="dcc-columns"><article className="dcc-panel"><div className="dcc-panel-title"><div><h3>Institution account access</h3><p>Invite users and assign institution-specific roles.</p></div><UserPlus size={19}/></div><label>Client institution<select value={opsClientId} onChange={e=>loadOpsUsers(e.target.value)}><option value="">Select institution</option>{clients.filter(c=>c.approval_status==='approved'&&c.is_active).map(c=><option key={c.id} value={c.id}>{c.name} · {c.institution_type}</option>)}</select></label>{opsClientId&&<form className="dcc-profile-form" onSubmit={sendInvitation}><div className="dcc-form-grid"><label>Invite email<input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/></label><label>Institution role<select value={inviteRole} onChange={e=>setInviteRole(e.target.value)}>{(INSTITUTION_ROLE_TEMPLATES[(clients.find(c=>String(c.id)===opsClientId)?.institution_type==='school'?'school':clients.find(c=>String(c.id)===opsClientId)?.institution_type==='college'?'college':clients.find(c=>String(c.id)===opsClientId)?.institution_type==='university'?'university':'other')]||INSTITUTION_ROLE_TEMPLATES.school).map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></label></div><button className="primary" disabled={busy}><Mail size={15}/> Send invitation</button></form>}{inviteLink&&<div className="dcc-invite-link"><strong>One-time invitation link</strong><code>{inviteLink}</code><button className="secondary compact" onClick={()=>navigator.clipboard?.writeText(inviteLink)}>Copy link</button></div>}</article><article className="dcc-panel"><div className="dcc-panel-title"><div><h3>Existing accounts</h3><p>Role changes are checked against institution type and audited.</p></div><Users size={19}/></div><div className="dcc-table-wrap"><table><thead><tr><th>User</th><th>Current role</th><th>Assign role</th><th>Status</th></tr></thead><tbody>{opsUsers.map(u=><tr key={u.id}><td><strong>{u.name}</strong><small>{u.email}</small></td><td>{u.role.replaceAll('_',' ')}</td><td><select value={u.role} onChange={e=>changeUserRole(u.id,e.target.value)}>{(INSTITUTION_ROLE_TEMPLATES[(clients.find(c=>String(c.id)===opsClientId)?.institution_type==='school'?'school':clients.find(c=>String(c.id)===opsClientId)?.institution_type==='college'?'college':clients.find(c=>String(c.id)===opsClientId)?.institution_type==='university'?'university':'other')]||INSTITUTION_ROLE_TEMPLATES.school).map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></td><td><span className={'dcc-status '+(u.is_active?'good':'warning')}>{u.is_active?'Active':u.approval_status}</span></td></tr>)}{!opsUsers.length&&<tr><td colSpan={4}><p className="dcc-empty">Select an institution to view its accounts.</p></td></tr>}</tbody></table></div></article></div>}
+    {tab==='User access'&&<div className="dcc-columns"><article className="dcc-panel"><div className="dcc-panel-title"><div><h3>Institution account access</h3><p>Invite users and assign institution-specific roles.</p></div><UserPlus size={19}/></div><label>Client institution<select value={opsClientId} onChange={e=>loadOpsUsers(e.target.value)}><option value="">Select institution</option>{clients.filter(c=>c.approval_status==='approved'&&c.is_active).map(c=><option key={c.id} value={c.id}>{c.name} · {c.institution_type}</option>)}</select></label>{opsClientId&&<form className="dcc-profile-form" onSubmit={sendInvitation}><div className="dcc-form-grid"><label>Invite email<input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/></label><label>Institution role<select value={inviteRole} onChange={e=>setInviteRole(e.target.value)}>{(INSTITUTION_ROLE_TEMPLATES[(clients.find(c=>String(c.id)===opsClientId)?.institution_type==='school'?'school':clients.find(c=>String(c.id)===opsClientId)?.institution_type==='college'?'college':clients.find(c=>String(c.id)===opsClientId)?.institution_type==='university'?'university':'other')]||INSTITUTION_ROLE_TEMPLATES.school).map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></label></div><button className="primary" disabled={busy}><Mail size={15}/> Send invitation</button></form>}{inviteLink&&<div className="dcc-invite-link"><strong>One-time invitation link</strong><code>{inviteLink}</code><button className="secondary compact" onClick={()=>navigator.clipboard?.writeText(inviteLink)}>Copy link</button></div>}</article><article className="dcc-panel"><div className="dcc-panel-title"><div><h3>Existing accounts</h3><p>Role changes are checked against institution type and audited.</p></div><Users size={19}/></div><div className="dcc-table-wrap"><table><thead><tr><th>User</th><th>Current role</th><th>Assign role</th><th>Status</th></tr></thead><tbody>{opsUsers.map(u=><tr key={u.id}><td><strong>{u.name}</strong><small>{u.email}</small></td><td>{u.role.replaceAll('_',' ')}</td><td><select value={u.role} onChange={e=>changeUserRole(u.id,e.target.value)}><option value={u.role}>{u.role.replaceAll('_',' ')}</option>{(INSTITUTION_ROLE_TEMPLATES[(clients.find(c=>String(c.id)===opsClientId)?.institution_type==='school'?'school':clients.find(c=>String(c.id)===opsClientId)?.institution_type==='college'?'college':clients.find(c=>String(c.id)===opsClientId)?.institution_type==='university'?'university':'other')]||INSTITUTION_ROLE_TEMPLATES.school).filter(r=>r.roleKey!==u.role).map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></td><td><span className={'dcc-status '+(u.is_active?'good':'warning')}>{u.is_active?'Active':u.approval_status}</span></td></tr>)}{!opsUsers.length&&<tr><td colSpan={4}><p className="dcc-empty">Select an institution to view its accounts.</p></td></tr>}</tbody></table></div></article></div>}
     {tab==='Platform operations'&&<><div className="dcc-columns"><article className="dcc-panel"><div className="dcc-panel-title"><div><h3>Platform incidents</h3><p>Track service outages, security events and client-impacting incidents.</p></div><AlertTriangle size={19}/></div><form className="dcc-profile-form" onSubmit={createIncident}><div className="dcc-form-grid"><label>Incident title<input required value={incidentForm.title} onChange={e=>setIncidentForm({...incidentForm,title:e.target.value})}/></label><label>Severity<select value={incidentForm.severity} onChange={e=>setIncidentForm({...incidentForm,severity:e.target.value})}>{['low','medium','high','critical'].map(x=><option key={x}>{x}</option>)}</select></label><label>Scope<select value={incidentForm.affected_scope} onChange={e=>setIncidentForm({...incidentForm,affected_scope:e.target.value})}><option value="platform">Entire platform</option><option value="institution">One institution</option></select></label>{incidentForm.affected_scope==='institution'&&<label>Institution<select required value={incidentForm.school_id} onChange={e=>setIncidentForm({...incidentForm,school_id:e.target.value})}><option value="">Select client</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}<label>Assigned to<input value={incidentForm.assigned_to} onChange={e=>setIncidentForm({...incidentForm,assigned_to:e.target.value})}/></label><label className="wide">Description<textarea value={incidentForm.description} onChange={e=>setIncidentForm({...incidentForm,description:e.target.value})}/></label></div><button className="primary" disabled={busy}>Create incident</button></form><div className="dcc-ticket-list">{incidents.map(x=><article className="dcc-ticket" key={x.id}><div><strong>#{x.id} · {x.title}</strong><small>{x.severity} · {x.affected_scope} · {day(x.created_at)}</small><p>{x.description}</p>{x.resolution_notes&&<small>{x.resolution_notes}</small>}</div><div className="dcc-ticket-controls"><select value={x.status} disabled={busy} onChange={e=>updateIncident(x,e.target.value)}>{['open','investigating','identified','monitoring','resolved','closed'].map(st=><option key={st}>{st}</option>)}</select></div></article>)}{!incidents.length&&<p className="dcc-empty">No platform incidents recorded.</p>}</div></article><article className="dcc-panel"><div className="dcc-panel-title"><div><h3>Scheduled maintenance</h3><p>Plan maintenance windows and publish operational timing.</p></div><Wrench size={19}/></div><form className="dcc-profile-form" onSubmit={createMaintenanceWindow}><div className="dcc-form-grid"><label className="wide">Maintenance title<input required value={windowForm.title} onChange={e=>setWindowForm({...windowForm,title:e.target.value})}/></label><label>Starts at<input type="datetime-local" required value={windowForm.starts_at} onChange={e=>setWindowForm({...windowForm,starts_at:e.target.value})}/></label><label>Ends at<input type="datetime-local" required value={windowForm.ends_at} onChange={e=>setWindowForm({...windowForm,ends_at:e.target.value})}/></label><label className="wide">Description<textarea value={windowForm.description} onChange={e=>setWindowForm({...windowForm,description:e.target.value})}/></label></div><button className="primary" disabled={busy}>Schedule maintenance</button></form>{windows.map(w=><div className="dcc-list-row" key={w.id}><div><strong>{w.title}</strong><small>{new Date(w.starts_at).toLocaleString()} – {new Date(w.ends_at).toLocaleString()}</small></div><span className="dcc-status">{w.status}</span></div>)}{!windows.length&&<p className="dcc-empty">No maintenance windows scheduled.</p>}</article></div><article className="dcc-panel"><div className="dcc-panel-title"><div><h3>Infrastructure monitoring</h3><p>Live application, database, storage and backup checks.</p></div><Activity size={19}/></div><div className="dcc-health-row"><span>API</span><strong className="dcc-status good">{infra.api||'unknown'}</strong></div><div className="dcc-health-row"><span>Database</span><strong className={'dcc-status '+(infra.database==='healthy'?'good':'warning')}>{infra.database||'unknown'}{infra.database_latency_ms!=null?' · '+infra.database_latency_ms+' ms':''}</strong></div><div className="dcc-health-row"><span>Disk usage</span><strong>{infra.disk?.used_percent!=null?infra.disk.used_percent+'% used':'unavailable'}</strong></div><div className="dcc-health-row"><span>Backup status</span><strong>{infra.backup?.latest_file?infra.backup.latest_file+' · '+infra.backup.age_hours+'h ago':infra.backup?.configured?'No backup file found':'Not configured'}</strong></div><div className="dcc-health-row"><span>CPU load average</span><strong>{infra.cpu_load_average?.join(' / ')||'Unavailable'}</strong></div><p className="dcc-note">SSL/domain expiry checks require an external monitor and are not reported as healthy unless configured. Backup status is based on BACKUP_DIR and the latest recognised backup file.</p></article></>}
     {tab==='Reports'&&<div className="dcc-panel"><div className="dcc-panel-title"><div><h3>Platform operational report</h3><p>Institution activity, subscriptions, collections and incident overview.</p></div><button className="secondary" onClick={()=>{request('/api/platform/ops/reports').then(setOpsReport).catch((e:any)=>setError(e.message||'Report refresh failed'))}}><RefreshCw size={15}/> Refresh report</button></div><div className="dcc-stats"><article className="dcc-stat"><strong>{opsReport.institutions||0}</strong><small>Institutions</small></article><article className="dcc-stat"><strong>{opsReport.active_institutions||0}</strong><small>Active institutions</small></article><article className="dcc-stat"><strong>{opsReport.open_platform_incidents||0}</strong><small>Open platform incidents</small></article><article className="dcc-stat"><strong>{money(overview.received_amount)}</strong><small>All-time collections</small></article></div><DataTable headers={['Institution','Type','Status','Users','Students','Staff','Subscription end','Received this month']} rows={(opsReport.clients||[]).map(r=>[r.institution,r.type,r.active?'Active':'Inactive',r.users,r.students,r.staff,day(r.subscription_end),money(r.received_this_month)])}/><p className="dcc-note">Report generated: {opsReport.generated_at?new Date(opsReport.generated_at).toLocaleString():'Not generated'}. Export and scheduled delivery are not yet enabled.</p></div>}
     {tab==='Quotations'&&<div className="dcc-panel"><div className="dcc-panel-title"><div><h3>Client quotations</h3><p>Prepare and track quotations for implementation, modules and services</p></div><button className="primary" onClick={()=>openForm('quotation')}>New quotation</button></div><DataTable headers={['Quotation','Institution','Title','Amount','Valid until','Status']} rows={quotes.map(q=>[q.quotation_no,clientName(q.school_id),q.title,money(Number(q.amount)+Number(q.tax_amount)-Number(q.discount_amount)),day(q.valid_until),q.status])}/></div>}

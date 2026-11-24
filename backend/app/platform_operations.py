@@ -15,12 +15,12 @@ from typing import Literal
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, select, func
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, select, func
 from sqlalchemy.orm import Mapped, mapped_column, Session
 
 from .database import Base, get_db
 from . import models
-from .security import current_user, require_roles, hash_password
+from .security import require_roles, hash_password
 
 router = APIRouter(prefix="/api/platform/ops", tags=["platform-operations"])
 platform_owner = Depends(require_roles("super_admin"))
@@ -232,6 +232,35 @@ def _send_invitation(email: str, link: str, school_name: str, role: str) -> bool
     return True
 
 
+def _send_status_email(email: str, subject: str, body: str) -> bool:
+    host = os.getenv("SMTP_HOST")
+    sender = os.getenv("SMTP_FROM_EMAIL") or os.getenv("SMTP_USERNAME")
+    if not host or not sender:
+        return False
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = sender
+    message["To"] = email
+    message.set_content(body)
+    port = int(os.getenv("SMTP_PORT", "587"))
+    username, password = os.getenv("SMTP_USERNAME"), os.getenv("SMTP_PASSWORD")
+    if os.getenv("SMTP_USE_SSL", "false").lower() == "true":
+        with smtplib.SMTP_SSL(host, port, timeout=20) as server:
+            if username and password:
+                server.login(username, password)
+            server.send_message(message)
+    else:
+        with smtplib.SMTP(host, port, timeout=20) as server:
+            server.ehlo()
+            if os.getenv("SMTP_USE_TLS", "true").lower() == "true":
+                server.starttls()
+                server.ehlo()
+            if username and password:
+                server.login(username, password)
+            server.send_message(message)
+    return True
+
+
 @router.get("/client-requests")
 def list_client_requests(db: Session = Depends(get_db), user=platform_owner):
     schools = db.scalars(select(models.School).where(
@@ -297,6 +326,19 @@ def decide_client_request(school_id: int, payload: ClientRequestDecision,
     _audit(db, user, event, "school", str(school_id),
            {"institution": school.name, "decision": payload.decision, "reason": payload.reason})
     db.commit()
+    if founder and founder.email:
+        try:
+            if payload.decision == "request_info":
+                _send_status_email(founder.email, "More information needed for your EduNexus application",
+                    f"Your {school.name} application needs additional information:\\n\\n{payload.reason}\\n\\nPlease reply to your EduNexus onboarding contact.")
+            elif payload.decision == "reject":
+                _send_status_email(founder.email, "Update on your EduNexus institution application",
+                    f"Your application for {school.name} was not approved.\\n\\nReason: {payload.reason or 'Please contact EduNexus support for details.'}")
+            else:
+                _send_status_email(founder.email, "Your institution is approved on EduNexus",
+                    f"{school.name} has been approved. Your institution administrator role is {founder.role.replace('_', ' ')}. Sign in after verifying your email.")
+        except Exception as exc:
+            print(f"CLIENT ONBOARDING EMAIL FAILED: {type(exc).__name__}: {exc}", flush=True)
     return {"school_id": school_id, "approval_status": school.approval_status,
             "review_status": review.status, "founder_active": bool(founder and founder.is_active)}
 
@@ -427,10 +469,10 @@ def subscription_expiry_sweep(db: Session = Depends(get_db), user=platform_owner
     schools = db.scalars(select(models.School).where(models.School.is_active.is_(True))).all()
     for school in schools:
         latest = db.scalar(select(models.ClientSubscription).where(
-            models.ClientSubscription.school_id == school.id,
-            models.ClientSubscription.status == "active"
+            models.ClientSubscription.school_id == school.id
         ).order_by(models.ClientSubscription.end_date.desc()).limit(1))
-        if latest and latest.end_date + timedelta(days=grace_days) < today:
+        if latest and (latest.status in {"cancelled", "suspended"} or
+                       latest.end_date + timedelta(days=grace_days) < today):
             school.is_active = False
             school.approval_status = "subscription_expired"
             changed.append(school.id)
@@ -480,7 +522,7 @@ def verify_gateway_payment(payload: VerifyPaymentInput, db: Session = Depends(ge
         raise HTTPException(status_code=503, detail="Razorpay is not configured")
     attempt = db.scalar(select(GatewayPaymentAttempt).where(
         GatewayPaymentAttempt.provider_order_id == payload.order_id,
-        GatewayPaymentAttempt.school_id == payload.school_id))
+        GatewayPaymentAttempt.school_id == payload.school_id).with_for_update())
     if not attempt:
         raise HTTPException(status_code=404, detail="Payment order not found")
     expected = hmac.new(key_secret.encode(), f"{payload.order_id}|{payload.payment_id}".encode(), hashlib.sha256).hexdigest()
@@ -511,6 +553,53 @@ def verify_gateway_payment(payload: VerifyPaymentInput, db: Session = Depends(ge
            {"school_id": attempt.school_id, "order_id": payload.order_id, "amount": str(attempt.amount)})
     db.commit()
     return {"verified": True, "payment_id": payment.id, "amount": str(payment.amount)}
+
+
+@router.post("/payments/webhook")
+async def razorpay_payment_webhook(request: Request,
+                                   x_razorpay_signature: str = Header(default=""),
+                                   db: Session = Depends(get_db)):
+    secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+    if not secret:
+        raise HTTPException(status_code=503, detail="Razorpay webhook secret is not configured")
+    raw_body = await request.body()
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    if not x_razorpay_signature or not hmac.compare_digest(expected, x_razorpay_signature):
+        raise HTTPException(status_code=400, detail="Invalid Razorpay webhook signature")
+    try:
+        event = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+    if event.get("event") != "payment.captured":
+        return {"received": True, "recorded": False}
+    entity = event.get("payload", {}).get("payment", {}).get("entity", {})
+    order_id, payment_id = entity.get("order_id"), entity.get("id")
+    if not order_id or not payment_id:
+        raise HTTPException(status_code=422, detail="Captured payment event is missing its order or payment ID")
+    attempt = db.scalar(select(GatewayPaymentAttempt).where(
+        GatewayPaymentAttempt.provider_order_id == order_id).with_for_update())
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Payment order is not recognised")
+    if attempt.status == "paid":
+        return {"received": True, "recorded": True, "duplicate": True}
+    expected_amount = int((attempt.amount * 100).quantize(Decimal("1")))
+    if int(entity.get("amount", 0)) != expected_amount or entity.get("currency") != attempt.currency:
+        raise HTTPException(status_code=409, detail="Captured payment does not match the stored order")
+    attempt.provider_payment_id = payment_id
+    attempt.status = "paid"
+    attempt.verified_at = datetime.utcnow()
+    method = entity.get("method", "")
+    payment_method = method if method in {"upi", "card"} else "bank_transfer" if method == "netbanking" else "other"
+    payment = models.ClientPayment(school_id=attempt.school_id, subscription_id=attempt.subscription_id,
+        amount=attempt.amount, payment_date=date.today(), payment_method=payment_method,
+        transaction_reference=payment_id, status="received",
+        notes="Captured Razorpay payment (verified webhook)", recorded_by=attempt.created_by)
+    db.add(payment)
+    _audit(db, db.get(models.User, attempt.created_by), "platform.payment.webhook_verified",
+           "payment", payment_id, {"school_id": attempt.school_id, "order_id": order_id,
+                                    "amount": str(attempt.amount)})
+    db.commit()
+    return {"received": True, "recorded": True}
 
 
 @router.get("/incidents")
