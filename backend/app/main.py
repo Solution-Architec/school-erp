@@ -24,6 +24,7 @@ from .database import Base, engine, get_db, SessionLocal
 from . import models, schemas
 from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission
 from .platform_control import router as platform_control_router
+from .platform_operations import router as platform_operations_router
 
 # Explicit legacy school roles used by route-level fallback authorization.
 STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "security_guard", "others")
@@ -113,6 +114,7 @@ app = FastAPI(title="EduNexus Education Platform API", version="0.2.0",
               description="Multi-institution education management platform API.",
               lifespan=lifespan)
 app.include_router(platform_control_router)
+app.include_router(platform_operations_router)
 origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "http://localhost,http://localhost:5173").split(",") if x.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
@@ -122,8 +124,48 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True
 RBAC_ROLES = {
     "user", "admin", "principal", "vice_principal", "teacher", "account", "accountant",
     "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator",
-    "transport_manager", "hostel_warden", "security_guard", "others", "parent"
+    "transport_manager", "hostel_warden", "security_guard", "others", "parent",
+    "school_hod", "class_teacher", "school_accountant", "admission_officer",
+    "examination_controller", "school_counsellor", "school_receptionist", "school_student",
+    "college_admin", "college_principal", "college_vice_principal", "dean", "college_hod",
+    "lecturer", "college_professor", "academic_coordinator", "registrar",
+    "college_exam_controller", "college_admission_officer", "accounts_officer",
+    "college_librarian", "lab_in_charge", "placement_officer", "college_student",
+    "university_admin", "chancellor", "vice_chancellor", "university_registrar",
+    "university_dean", "university_director", "department_head", "university_professor",
+    "research_supervisor", "university_exam_controller", "university_finance_officer",
+    "university_admission_officer", "research_scholar", "university_student",
+    "institute_admin", "centre_director", "other_academic_coordinator", "batch_coordinator",
+    "trainer", "admission_counsellor", "admission_executive", "other_accounts_officer",
+    "training_librarian", "training_student"
 }
+ROLE_INSTITUTION_TYPES = {
+    "school_hod": {"school"}, "class_teacher": {"school"}, "school_accountant": {"school"},
+    "admission_officer": {"school"}, "examination_controller": {"school"}, "school_counsellor": {"school"},
+    "school_receptionist": {"school"}, "school_student": {"school"},
+    "college_admin": {"college"}, "college_principal": {"college"}, "college_vice_principal": {"college"},
+    "dean": {"college"}, "college_hod": {"college"}, "lecturer": {"college"},
+    "college_professor": {"college"}, "academic_coordinator": {"college"}, "registrar": {"college"},
+    "college_exam_controller": {"college"}, "college_admission_officer": {"college"},
+    "accounts_officer": {"college"}, "college_librarian": {"college"}, "lab_in_charge": {"college"},
+    "placement_officer": {"college"}, "college_student": {"college"},
+    "university_admin": {"university"}, "chancellor": {"university"}, "vice_chancellor": {"university"},
+    "university_registrar": {"university"}, "university_dean": {"university"}, "university_director": {"university"},
+    "department_head": {"university"}, "university_professor": {"university"}, "research_supervisor": {"university"},
+    "university_exam_controller": {"university"}, "university_finance_officer": {"university"},
+    "university_admission_officer": {"university"}, "research_scholar": {"university"}, "university_student": {"university"},
+    "institute_admin": {"coaching_centre", "training_institute", "other"},
+    "centre_director": {"coaching_centre", "training_institute", "other"},
+    "other_academic_coordinator": {"coaching_centre", "training_institute", "other"},
+    "batch_coordinator": {"coaching_centre", "training_institute", "other"},
+    "trainer": {"coaching_centre", "training_institute", "other"},
+    "admission_counsellor": {"coaching_centre", "training_institute", "other"},
+    "admission_executive": {"coaching_centre", "training_institute", "other"},
+    "other_accounts_officer": {"coaching_centre", "training_institute", "other"},
+    "training_librarian": {"coaching_centre", "training_institute", "other"},
+    "training_student": {"coaching_centre", "training_institute", "other"},
+}
+
 RBAC_MODULES = {
     "dashboard", "parent-portal", "chatbot", "approvals", "schools", "students", "staff",
     "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures",
@@ -151,6 +193,58 @@ DEFAULT_ROLE_MODULES = {
     "parent": ["parent-portal", "chatbot", "student-leave", "parent-messages"],
 }
 
+# Institution-specific starting permissions. Developers can still override every
+# module/action independently for each client using RolePermission.school_id.
+DEFAULT_ROLE_MODULES.update({
+    "school_hod": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "report-cards", "homework", "documents", "approvals"],
+    "class_teacher": ["dashboard", "chatbot", "students", "classes", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages"],
+    "school_accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports", "documents"],
+    "admission_officer": ["dashboard", "chatbot", "students", "documents", "approvals"],
+    "examination_controller": ["dashboard", "chatbot", "students", "classes", "exams", "report-cards", "documents", "approvals"],
+    "school_counsellor": ["dashboard", "chatbot", "students", "staff", "documents", "student-leave"],
+    "school_receptionist": ["dashboard", "chatbot", "students", "staff", "documents"],
+    "school_student": ["dashboard", "chatbot", "student-leave", "homework", "timetable", "report-cards", "parent-messages"],
+    "college_admin": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "report-cards", "documents", "approvals", "fee-structures", "student-fees", "payments", "fee-reports", "library-books", "library-loans", "maintenance"],
+    "college_principal": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "report-cards", "documents", "approvals", "fee-reports"],
+    "college_vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "report-cards", "documents", "approvals"],
+    "dean": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "report-cards", "documents", "approvals"],
+    "college_hod": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "report-cards", "homework", "documents"],
+    "lecturer": ["dashboard", "chatbot", "students", "classes", "attendance", "timetable", "exams", "report-cards", "homework", "documents"],
+    "college_professor": ["dashboard", "chatbot", "students", "classes", "attendance", "timetable", "exams", "report-cards", "homework", "documents"],
+    "academic_coordinator": ["dashboard", "chatbot", "students", "classes", "attendance", "timetable", "exams", "report-cards", "documents"],
+    "registrar": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "approvals", "exams", "report-cards"],
+    "college_exam_controller": ["dashboard", "chatbot", "students", "classes", "exams", "report-cards", "documents", "approvals"],
+    "college_admission_officer": ["dashboard", "chatbot", "students", "documents", "approvals"],
+    "accounts_officer": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports", "documents"],
+    "college_librarian": ["dashboard", "chatbot", "students", "documents", "library-books", "library-loans"],
+    "lab_in_charge": ["dashboard", "chatbot", "students", "staff", "documents", "maintenance"],
+    "placement_officer": ["dashboard", "chatbot", "students", "staff", "documents"],
+    "college_student": ["dashboard", "chatbot", "student-leave", "homework", "timetable", "report-cards", "documents", "parent-messages"],
+    "university_admin": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "report-cards", "documents", "approvals", "fee-structures", "student-fees", "payments", "fee-reports", "library-books", "library-loans", "maintenance"],
+    "chancellor": ["dashboard", "chatbot", "students", "staff", "classes", "exams", "report-cards", "fee-reports", "documents"],
+    "vice_chancellor": ["dashboard", "chatbot", "students", "staff", "classes", "exams", "report-cards", "fee-reports", "documents", "approvals"],
+    "university_registrar": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "approvals", "exams", "report-cards"],
+    "university_dean": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "report-cards", "documents", "approvals"],
+    "university_director": ["dashboard", "chatbot", "students", "staff", "documents", "approvals", "fee-reports"],
+    "department_head": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "report-cards", "documents"],
+    "university_professor": ["dashboard", "chatbot", "students", "classes", "attendance", "timetable", "exams", "report-cards", "homework", "documents"],
+    "research_supervisor": ["dashboard", "chatbot", "students", "staff", "documents", "approvals"],
+    "university_exam_controller": ["dashboard", "chatbot", "students", "classes", "exams", "report-cards", "documents", "approvals"],
+    "university_finance_officer": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports", "documents"],
+    "university_admission_officer": ["dashboard", "chatbot", "students", "documents", "approvals"],
+    "research_scholar": ["dashboard", "chatbot", "documents"],
+    "university_student": ["dashboard", "chatbot", "student-leave", "homework", "timetable", "report-cards", "documents"],
+    "institute_admin": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "documents", "approvals", "fee-structures", "student-fees", "payments", "fee-reports", "maintenance"],
+    "centre_director": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "documents", "approvals", "fee-reports"],
+    "other_academic_coordinator": ["dashboard", "chatbot", "students", "staff", "classes", "attendance", "timetable", "exams", "documents"],
+    "batch_coordinator": ["dashboard", "chatbot", "students", "classes", "attendance", "timetable", "documents"],
+    "trainer": ["dashboard", "chatbot", "students", "classes", "attendance", "timetable", "homework", "documents"],
+    "admission_counsellor": ["dashboard", "chatbot", "students", "documents"],
+    "admission_executive": ["dashboard", "chatbot", "students", "documents"],
+    "other_accounts_officer": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports", "documents"],
+    "training_librarian": ["dashboard", "chatbot", "students", "documents", "library-books", "library-loans"],
+    "training_student": ["dashboard", "chatbot", "homework", "timetable", "documents"],
+})
 
 
 def write_audit_log(db: Session, actor: models.User, event_type: str, target_type: str = "", target_id: str = "", details: dict | None = None):
@@ -208,9 +302,15 @@ def _validate_permission_payload(permissions: Any) -> set[str]:
     return expected
 
 
-def _validate_permission_school(db: Session, school_id: int | None) -> None:
-    if school_id is not None and db.get(models.School, school_id) is None:
+def _validate_permission_school(db: Session, school_id: int | None, role: str | None = None) -> None:
+    if school_id is None:
+        return
+    school = db.get(models.School, school_id)
+    if school is None:
         raise HTTPException(status_code=404, detail="School not found")
+    allowed_types = ROLE_INSTITUTION_TYPES.get(role or "")
+    if allowed_types and school.institution_type not in allowed_types:
+        raise HTTPException(status_code=422, detail=f"Role '{role}' is not available for institution type '{school.institution_type}'")
 
 
 @app.get("/api/rbac/roles/{role}/permissions", tags=["rbac"])
@@ -218,7 +318,7 @@ def get_role_permissions(role: str, school_id: int | None = Query(default=None, 
     role = role.strip().lower()
     if role not in RBAC_ROLES:
         raise HTTPException(status_code=404, detail="Role not found")
-    _validate_permission_school(db, school_id)
+    _validate_permission_school(db, school_id, role)
     scope = _permission_scope_matrix(db, role, school_id)
     return {"role": role, "school_id": school_id, "scope": "school" if school_id is not None else "global",
             "configured": scope["configured"], "global_configured": scope["global_configured"], "school_configured": scope["school_configured"],
@@ -230,7 +330,7 @@ def save_role_permissions(role: str, payload: dict, school_id: int | None = Quer
     role = role.strip().lower()
     if role not in RBAC_ROLES:
         raise HTTPException(status_code=404, detail="Role not found")
-    _validate_permission_school(db, school_id)
+    _validate_permission_school(db, school_id, role)
     permissions = payload.get("permissions")
     expected = _validate_permission_payload(permissions)
     scope_filter = models.RolePermission.school_id == school_id if school_id is not None else models.RolePermission.school_id.is_(None)
@@ -258,7 +358,7 @@ def reset_school_role_permissions(role: str, school_id: int = Query(..., gt=0), 
     role = role.strip().lower()
     if role not in RBAC_ROLES:
         raise HTTPException(status_code=404, detail="Role not found")
-    _validate_permission_school(db, school_id)
+    _validate_permission_school(db, school_id, role)
     db.query(models.RolePermission).filter(models.RolePermission.role == role, models.RolePermission.school_id == school_id).delete(synchronize_session=False)
     write_audit_log(db, user, "rbac.permissions.reset", "role", f"{role}:school:{school_id}", {"role": role, "scope": "school", "school_id": school_id})
     db.commit()

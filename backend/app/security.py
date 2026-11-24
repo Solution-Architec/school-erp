@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from .database import get_db
-from .models import User, RolePermission, School
+from .models import User, RolePermission, School, ClientSubscription, AuditLog
 from .security_config import load_jwt_secret
 
 # Fail closed during application import/startup: there is no development fallback.
@@ -32,6 +32,26 @@ def create_access_token(user: User, workspace_school_id: int | None = None) -> s
         payload["workspace_school_id"] = int(workspace_school_id)
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
+def _enforce_subscription_expiry(school: School, db: Session) -> None:
+    if not hasattr(db, "scalar") or not school or not school.is_active:
+        return
+    try:
+        grace_days = max(0, min(90, int(os.getenv("SUBSCRIPTION_GRACE_DAYS", "7"))))
+    except ValueError:
+        grace_days = 7
+    latest = db.scalar(select(ClientSubscription).where(
+        ClientSubscription.school_id == school.id,
+        ClientSubscription.status.in_(["active", "expired", "cancelled", "suspended"]),
+    ).order_by(ClientSubscription.end_date.desc()).limit(1))
+    if latest and (latest.status in {"cancelled", "suspended"} or
+                   latest.end_date + timedelta(days=grace_days) < datetime.utcnow().date()):
+        school.is_active = False
+        school.approval_status = "subscription_expired"
+        db.add(AuditLog(actor_user_id=None, event_type="platform.subscription.expired",
+                        target_type="school", target_id=str(school.id),
+                        details=f"Subscription {latest.id} expired after {grace_days} grace days"))
+        db.commit()
+
 def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
@@ -42,6 +62,15 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
     user = db.get(User, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User is inactive or does not exist")
+    # Enforce tenant suspension on every authenticated request, including
+    # already-issued access tokens, not only on the next login attempt.
+    user_school_id = getattr(user, "school_id", None)
+    if user.role != "super_admin" and user_school_id is not None:
+        tenant_school = db.get(School, user_school_id)
+        if tenant_school:
+            _enforce_subscription_expiry(tenant_school, db)
+        if not tenant_school or not tenant_school.is_active or tenant_school.approval_status in {"archived", "subscription_expired"}:
+            raise HTTPException(status_code=403, detail="This institution is paused or archived. Contact EduNexus support.")
     workspace_school_id = payload.get("workspace_school_id")
     if workspace_school_id is not None:
         if user.role != "super_admin":
@@ -51,6 +80,8 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
         except (TypeError, ValueError):
             raise HTTPException(status_code=401, detail="Invalid client workspace token")
         school = db.get(School, workspace_school_id)
+        if school:
+            _enforce_subscription_expiry(school, db)
         if not school or not school.is_active:
             raise HTTPException(status_code=403, detail="Client institution is unavailable")
         # A short-lived, signed workspace token presents the platform owner as a
