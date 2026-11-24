@@ -174,3 +174,16 @@ This repository is a functional ERP foundation; it should not be represented as 
 ## License
 
 See repository license if present.
+
+
+## Platform Owner / Developer Control Centre
+
+The platform owner uses the existing private `super_admin` account for both platform administration and technical Developer responsibilities. This account is not part of the public demo-role selector.
+
+The Developer Control Centre provides platform-wide institution summaries, client contact profiles, quotations, subscriptions, recorded collections, support tickets, and authenticated-user activity monitoring. Client-specific records are accessible through a signed, short-lived client-workspace token. Entering a client workspace presents the platform owner with tenant-admin permissions scoped to that single institution; platform-only routes remain unavailable until the owner exits back to the platform account. Workspace entry and exit are written to the audit log.
+
+The activity indicator is based on authenticated application heartbeats (one per minute, considered online for five minutes). It records account and institution identifiers with a last-seen timestamp; it does not record keystrokes or page content.
+
+Commercial collection records are manual records only. They do not initiate or verify bank, UPI, card, or payment-gateway transactions. Reconcile each entry against the actual payment provider or bank statement. Subscription dates and statuses are administrative records and do not automatically suspend client logins in this initial release.
+
+All platform-control endpoints require the private platform-owner account, except the heartbeat endpoint and client-scoped support-ticket submission/listing. New platform tables are created by the application's SQLAlchemy metadata initialization. Back up the production database before deploying schema changes.
