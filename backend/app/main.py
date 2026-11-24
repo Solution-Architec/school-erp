@@ -754,6 +754,9 @@ def login(payload: schemas.LoginInput, db: Session = Depends(get_db)):
         }, JWT_SECRET_KEY, algorithm="HS256")
         return {"mfa_required": True, "mfa_token": challenge,
                 "message": "A sign-in verification code has been sent to your email."}
+    write_audit_log(db, user, "auth.login.succeeded", "user", str(user.id),
+                    {"role": user.role, "school_id": user.school_id, "mfa_required": False})
+    db.commit()
     return {"access_token": create_access_token(user), "token_type": "bearer",
             "user": schemas.UserOut.model_validate(user).model_dump()}
 
@@ -774,6 +777,9 @@ def verify_login_mfa(payload: dict, db: Session = Depends(get_db)):
     if not user or not user.is_active or not user.email_verified or user.role == "parent":
         raise HTTPException(status_code=401, detail="Account is not eligible for this sign-in challenge")
     _consume_auth_code(db, user.email, code, "login_mfa")
+    write_audit_log(db, user, "auth.login.succeeded", "user", str(user.id),
+                    {"role": user.role, "school_id": user.school_id, "mfa_required": True})
+    db.commit()
     return {"access_token": create_access_token(user), "token_type": "bearer",
             "user": schemas.UserOut.model_validate(user).model_dump()}
 

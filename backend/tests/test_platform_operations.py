@@ -37,3 +37,31 @@ def test_maintenance_window_rejects_missing_title():
             starts_at="2026-12-01T01:00:00",
             ends_at="2026-12-01T02:00:00",
         )
+
+
+
+def test_platform_audit_helper_records_structured_event():
+    import json
+    from types import SimpleNamespace
+
+    from backend.app.platform_operations import _audit
+
+    class AuditCollector:
+        def add(self, record):
+            self.record = record
+
+    collector = AuditCollector()
+    _audit(
+        collector,
+        SimpleNamespace(id=42),
+        "platform.test.event",
+        "school",
+        "17",
+        {"action": "verified", "count": 2},
+    )
+
+    assert collector.record.actor_user_id == 42
+    assert collector.record.event_type == "platform.test.event"
+    assert collector.record.target_type == "school"
+    assert collector.record.target_id == "17"
+    assert json.loads(collector.record.details) == {"action": "verified", "count": 2}
