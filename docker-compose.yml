@@ -40,12 +40,13 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-south-1}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
       BACKUP_RUN_ON_START: ${BACKUP_RUN_ON_START:-true}
       BACKUP_PREFIX: ${BACKUP_PREFIX:-school_erp}
     volumes:
       - ./scripts/backup-postgres.sh:/opt/backup/backup-postgres.sh:ro
       - ./scripts/backup-retention.py:/opt/backup/backup-retention.py:ro
-      - postgres_backups:/backups
+      - ./backups:/backups
     depends_on:
       db:
         condition: service_healthy
@@ -96,28 +97,6 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
-    networks:
-      - internal
-
-  backup:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    user: "0:0"
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_DB: ${POSTGRES_DB:-school_erp}
-      POSTGRES_USER: ${POSTGRES_USER:-school_erp}
-      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      BACKUP_DIR: /backups
-      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
-    volumes:
-      - ./scripts/postgres-backup.sh:/scripts/postgres-backup.sh:ro
-      - ./backups:/backups
-    depends_on:
-      db:
-        condition: service_healthy
-    entrypoint: ["/bin/sh", "/scripts/postgres-backup.sh"]
     networks:
       - internal
 
