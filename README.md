@@ -1,6 +1,6 @@
 # EduNexus — All-in-One Education Management Platform
 
-A modular-monolith Education Management Platform built around the architecture in the project diagram.
+A modular-monolith, multi-tenant platform foundation for schools, colleges, universities, coaching centres, training institutes and other education providers. Existing school workflows remain supported while institution-type metadata enables institution-aware onboarding and future academic configuration.
 
 ## Technology stack
 
@@ -128,6 +128,10 @@ docker compose up -d --build
 The login page shows a **Practice with a demo role** selector. Selecting a role fills its demo email, school code, and (when `VITE_DEMO_PASSWORD` is configured) the shared demo password, which is displayed in the practice panel. Set `DEMO_SEED_PASSWORD` and `VITE_DEMO_PASSWORD` to the same strong temporary value so seeded accounts and the login page use matching credentials. If no fixed demo password is configured, the seeder generates one and prints it; enter that value manually. When `ENABLE_DEMO_LOGIN=true`, the exact seeded demo emails bypass email-verification and email-MFA challenges; normal accounts continue to use the regular verification/MFA flow. The backend flag defaults to `false` and is restricted to the known demo-account email list.
 
 **Never enable either demo flag on a public or production deployment.** This testing shortcut intentionally weakens sign-in protections for demo accounts.
+
+## Institution types
+
+New institution registrations can identify as `school`, `college`, `university`, `coaching_centre`, `training_institute`, or `other`. Existing database rows default additively to `school`; existing records and tenant IDs are preserved. This release adds institution-aware onboarding and platform branding, while existing class/section-based academic workflows remain unchanged. Degree programmes, departments, semesters, credit systems and coaching batches require further domain-specific implementation before being advertised as fully supported.
 
 ## Institution types
 
