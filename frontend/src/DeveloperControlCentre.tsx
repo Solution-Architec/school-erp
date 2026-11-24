@@ -43,12 +43,12 @@ export default function DeveloperControlCentre({request,onEnterWorkspace}:{reque
   async function load(){
     setBusy(true);setError('')
     try{
-      const [o,c,q,s,p,t,a]=await Promise.all([
+      const [o,c,q,s,p,t,a,h,logs]=await Promise.all([
         request('/api/platform/overview'),request('/api/platform/clients'),request('/api/platform/quotations'),
         request('/api/platform/subscriptions'),request('/api/platform/payments'),request('/api/platform/support-tickets'),
-        request('/api/platform/activity')
+        request('/api/platform/activity'),request('/api/platform/system-health'),request('/api/rbac/audit-logs?limit=30')
       ])
-      setOverview(o);setClients(c);setQuotes(q);setSubscriptions(s);setPayments(p);setTickets(t);setActivity(a)
+      setOverview(o);setClients(c);setQuotes(q);setSubscriptions(s);setPayments(p);setTickets(t);setActivity(a);setHealth(h);setAudit(logs)
       if(selected){const fresh=c.find((item:Client)=>item.id===selected.id);if(fresh){setSelected(fresh);setProfile(toProfile(fresh.profile))}}
     }catch(e:any){setError(e.message||'Could not load platform data')}
     finally{setBusy(false)}
