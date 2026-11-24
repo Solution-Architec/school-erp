@@ -386,3 +386,96 @@ class LibraryLoan(Base):
     due_date: Mapped[date] = mapped_column(Date, index=True)
     returned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="issued", index=True)
+
+
+class PlatformClientProfile(Base):
+    """Platform-level commercial and contact details for one institution."""
+    __tablename__ = "platform_client_profiles"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), unique=True, index=True)
+    contact_person: Mapped[str] = mapped_column(String(180), default="")
+    contact_email: Mapped[str] = mapped_column(String(255), default="")
+    contact_phone: Mapped[str] = mapped_column(String(40), default="")
+    address: Mapped[str] = mapped_column(Text, default="")
+    city: Mapped[str] = mapped_column(String(100), default="")
+    state: Mapped[str] = mapped_column(String(100), default="")
+    country: Mapped[str] = mapped_column(String(100), default="India")
+    affiliation: Mapped[str] = mapped_column(String(180), default="")
+    registration_no: Mapped[str] = mapped_column(String(120), default="")
+    website: Mapped[str] = mapped_column(String(255), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ClientQuotation(Base):
+    __tablename__ = "client_quotations"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), index=True)
+    quotation_no: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    tax_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    discount_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ClientSubscription(Base):
+    __tablename__ = "client_subscriptions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), index=True)
+    plan_name: Mapped[str] = mapped_column(String(120))
+    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    billing_cycle: Mapped[str] = mapped_column(String(20), default="annual")
+    start_date: Mapped[date] = mapped_column(Date, index=True)
+    end_date: Mapped[date] = mapped_column(Date, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ClientPayment(Base):
+    __tablename__ = "client_payments"
+    __table_args__ = (CheckConstraint("amount > 0", name="ck_client_payment_amount"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), index=True)
+    quotation_id: Mapped[int | None] = mapped_column(ForeignKey("client_quotations.id"), nullable=True, index=True)
+    subscription_id: Mapped[int | None] = mapped_column(ForeignKey("client_subscriptions.id"), nullable=True, index=True)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    payment_date: Mapped[date] = mapped_column(Date, default=date.today, index=True)
+    payment_method: Mapped[str] = mapped_column(String(30), default="bank_transfer")
+    transaction_reference: Mapped[str] = mapped_column(String(120), default="")
+    status: Mapped[str] = mapped_column(String(20), default="received", index=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    recorded_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ClientSupportTicket(Base):
+    __tablename__ = "client_support_tickets"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), index=True)
+    subject: Mapped[str] = mapped_column(String(180))
+    description: Mapped[str] = mapped_column(Text, default="")
+    category: Mapped[str] = mapped_column(String(40), default="general")
+    priority: Mapped[str] = mapped_column(String(20), default="normal", index=True)
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)
+    requester_name: Mapped[str] = mapped_column(String(180), default="")
+    requester_email: Mapped[str] = mapped_column(String(255), default="")
+    resolution_notes: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PlatformActivity(Base):
+    """Latest authenticated activity heartbeat for each account; no content is captured."""
+    __tablename__ = "platform_activity"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
