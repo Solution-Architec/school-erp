@@ -387,6 +387,10 @@ def create_subscription(payload: SubscriptionInput, db: Session = Depends(get_db
     _school_or_404(db, payload.school_id)
     item = models.ClientSubscription(**payload.model_dump(), created_by=user.id)
     db.add(item)
+    if item.status == "active":
+        school = _school_or_404(db, item.school_id)
+        school.is_active = True
+        school.approval_status = "approved"
     db.flush()
     db.add(models.AuditLog(actor_user_id=user.id, event_type="platform.subscription.created",
                            target_type="subscription", target_id=str(item.id),

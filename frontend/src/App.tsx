@@ -256,6 +256,27 @@ function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Pro
  async function ask(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!question.trim()||busy)return;const q=question.trim();setQuestion('');setBusy(true);setError('');try{const result=await request('/api/chatbot/faq',{method:'POST',body:JSON.stringify({question:q})});setMessages(old=>[...old,{q,a:result.answer}])}catch(err:any){setError(err.message)}finally{setBusy(false)}}
  return <div className="panel"><div className="panel-heading"><div><h3>EduNexus Help Assistant</h3><p>Ask common questions about school workflows. Answers are from approved FAQ content.</p></div><Activity size={20}/></div><div className="chat-faq-list">{messages.map((m,i)=><div className="chat-faq-item" key={i}><div className="chat-user-question">{m.q}</div><div className="chat-assistant-answer">{m.a}</div></div>)}{!messages.length&&<div className="empty-state"><strong>How can I help?</strong><p>Try “How do I pay fees?”, “How do I reset my password?”, or “Where is transport information?”</p></div>}</div>{error&&<div className="error">{error}</div>}<form className="chat-faq-form" onSubmit={ask}><input value={question} maxLength={500} onChange={e=>setQuestion(e.target.value)} placeholder="Ask EduNexus…" /><button className="primary" disabled={busy||!question.trim()}>{busy?'Thinking…':'Ask'}</button></form></div>
 }
+
+function InvitationAccept(){
+ const token=new URLSearchParams(window.location.search).get('token')||''
+ const [name,setName]=useState('')
+ const [password,setPassword]=useState('')
+ const [busy,setBusy]=useState(false)
+ const [error,setError]=useState('')
+ const [success,setSuccess]=useState('')
+ async function submit(e:FormEvent){
+  e.preventDefault();setBusy(true);setError('');setSuccess('')
+  try{
+   const response=await fetch(`${API}/api/platform/ops/invitations/accept`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,name,password})})
+   const data=await response.json()
+   if(!response.ok)throw new Error(data.detail||'Invitation could not be accepted')
+   setSuccess(data.message||'Invitation accepted. You can now sign in.')
+   setPassword('')
+  }catch(err:any){setError(err.message||'Invitation could not be accepted')}finally{setBusy(false)}
+ }
+ return <div className="auth-page"><main className="auth-main"><section className="auth-form-shell"><form className="auth-form-card" onSubmit={submit}><div className="auth-mobile-brand"><div className="auth-brand-icon"><GraduationCap size={22}/></div><strong>EduNexus</strong></div><h2>Accept your institution invitation</h2><p>Create your account password to join your institution workspace.</p>{!token&&<div className="error auth-message">Invitation token is missing. Open the complete invitation link.</div>}{error&&<div className="error auth-message">{error}</div>}{success&&<div className="success auth-message">{success}<p><a href="/">Go to sign in</a></p></div>}<label className="auth-field">Full name<input required minLength={2} maxLength={160} value={name} onChange={e=>setName(e.target.value)}/></label><label className="auth-field">New password<input type="password" required minLength={12} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 12 characters"/></label><button className="primary" disabled={busy||!token||Boolean(success)}>{busy?'Accepting invitation…':'Accept invitation'}</button></form></section></main></div>
+}
+
 function App(){
  const [token,setToken]=useState(localStorage.getItem('erp_token')||'')
  const [user,setUser]=useState<User|null>(null)
@@ -350,6 +371,7 @@ function App(){
  async function reviewLeave(row:any,status:'approved'|'rejected'){const note=window.prompt('Optional reviewer note','')??'';try{await request('/api/student-leave/'+row.id+'/review',{method:'POST',body:JSON.stringify({status,reviewer_note:note})});setNotice('Leave request '+status);await load()}catch(e:any){setError(e.message)}}
   async function returnLibraryLoan(row:any){if(!window.confirm('Record this book as returned?'))return;try{await request('/api/library-loans/'+row.id+'/return',{method:'POST'});setNotice('Book return recorded successfully');await load()}catch(e:any){setError(e.message)}}
  async function deleteAcademicRecord(row:any){if(!window.confirm('Delete this '+selected.label.toLowerCase()+' record? This cannot be undone.'))return;try{await request(selected.endpoint+'/'+row.id,{method:'DELETE'});setNotice(selected.label+' record deleted successfully');await load()}catch(e:any){setError(e.message)}} async function deleteStaff(row:any){if(!window.confirm('Delete staff record '+row.employee_no+' — '+row.full_name+'? This cannot be undone.'))return;try{await request('/api/staff/'+row.id,{method:'DELETE'});setNotice('Staff record deleted successfully');await load()}catch(e:any){setError(e.message)}}
+ if(new URLSearchParams(window.location.search).has('token'))return <InvitationAccept/>
  if(!token||!user)return <Login onLogin={handleLogin}/>
  function refreshCurrentView(){if(active==='parent-portal'){setLoading(true);setRefreshVersion(version=>version+1)}else{load()}}
  const dashboardNow=new Date()
