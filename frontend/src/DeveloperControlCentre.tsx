@@ -18,8 +18,44 @@ const tabs=['Overview','Clients','Role access','Quotations','Subscriptions','Col
 const money=(v:any)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(Number(v||0))
 const day=(v:any)=>v?new Date(v).toLocaleDateString('en-IN'):'—'
 const dateInput=(v:any)=>v?String(v).slice(0,10):''
+const INSTITUTION_ROLE_TEMPLATES:Record<string,{roleKey:string;role:string}[]> = {
+  school:[
+    {roleKey:'principal',role:'Principal'},{roleKey:'vice_principal',role:'Vice Principal'},{roleKey:'school_hod',role:'Head of Department'},
+    {roleKey:'teacher',role:'Teacher'},{roleKey:'class_teacher',role:'Class Teacher'},{roleKey:'school_accountant',role:'Accountant'},
+    {roleKey:'admission_officer',role:'Admission Officer'},{roleKey:'examination_controller',role:'Examination Controller'},
+    {roleKey:'librarian',role:'Librarian'},{roleKey:'transport_manager',role:'Transport Manager'},
+    {roleKey:'hostel_warden',role:'Hostel Warden'},{roleKey:'school_counsellor',role:'Counsellor'},
+    {roleKey:'school_receptionist',role:'Receptionist'},{roleKey:'parent',role:'Parent'},{roleKey:'school_student',role:'Student'}
+  ],
+  college:[
+    {roleKey:'college_admin',role:'College Administrator'},{roleKey:'college_principal',role:'Principal'},
+    {roleKey:'college_vice_principal',role:'Vice Principal'},{roleKey:'dean',role:'Dean'},
+    {roleKey:'college_hod',role:'Head of Department'},{roleKey:'lecturer',role:'Lecturer'},
+    {roleKey:'college_professor',role:'Professor'},{roleKey:'academic_coordinator',role:'Academic Coordinator'},
+    {roleKey:'registrar',role:'Registrar'},{roleKey:'college_exam_controller',role:'Controller of Examinations'},
+    {roleKey:'college_admission_officer',role:'Admission Officer'},{roleKey:'accounts_officer',role:'Accounts Officer'},
+    {roleKey:'college_librarian',role:'Librarian'},{roleKey:'lab_in_charge',role:'Lab In-charge'},
+    {roleKey:'placement_officer',role:'Placement Officer'},{roleKey:'college_student',role:'Student'}
+  ],
+  university:[
+    {roleKey:'university_admin',role:'University Administrator'},{roleKey:'chancellor',role:'Chancellor'},
+    {roleKey:'vice_chancellor',role:'Vice Chancellor'},{roleKey:'university_registrar',role:'Registrar'},
+    {roleKey:'university_dean',role:'Dean'},{roleKey:'university_director',role:'Director'},
+    {roleKey:'department_head',role:'Department Head'},{roleKey:'university_professor',role:'Professor / Faculty'},
+    {roleKey:'research_supervisor',role:'Research Supervisor'},{roleKey:'university_exam_controller',role:'Examination Controller'},
+    {roleKey:'university_finance_officer',role:'Finance Officer'},{roleKey:'university_admission_officer',role:'Admission Officer'},
+    {roleKey:'research_scholar',role:'Research Scholar'},{roleKey:'university_student',role:'Student'}
+  ],
+  other:[
+    {roleKey:'institute_admin',role:'Institute Administrator'},{roleKey:'centre_director',role:'Centre Director'},
+    {roleKey:'other_academic_coordinator',role:'Academic Coordinator'},{roleKey:'batch_coordinator',role:'Batch Coordinator'},
+    {roleKey:'trainer',role:'Trainer / Faculty'},{roleKey:'admission_counsellor',role:'Admission Counsellor'},
+    {roleKey:'admission_executive',role:'Admission Executive'},{roleKey:'other_accounts_officer',role:'Accounts Officer'},
+    {roleKey:'training_librarian',role:'Librarian'},{roleKey:'training_student',role:'Learner / Student'}
+  ]
+}
 
-export default function DeveloperControlCentre({request,onEnterWorkspace,moduleList,roles}:{request:Request;onEnterWorkspace:(schoolId:number)=>Promise<void>;moduleList:{key:string;label:string;description:string}[];roles:{role:string;roleKey:string;scope:string;level:string}[]}) {
+export default function DeveloperControlCentre({request,onEnterWorkspace,moduleList}:{request:Request;onEnterWorkspace:(schoolId:number)=>Promise<void>;moduleList:{key:string;label:string;description:string}[];roles:{role:string;roleKey:string;scope:string;level:string}[]}) {
   const [tab,setTab]=useState('Overview')
   const [overview,setOverview]=useState<Overview>(emptyOverview)
   const [clients,setClients]=useState<Client[]>([])
@@ -42,6 +78,7 @@ export default function DeveloperControlCentre({request,onEnterWorkspace,moduleL
   const [roleInstitutionType,setRoleInstitutionType]=useState('school')
   const [roleClientId,setRoleClientId]=useState('')
   const [roleKey,setRoleKey]=useState('principal')
+  const roleTemplates=INSTITUTION_ROLE_TEMPLATES[roleInstitutionType]||INSTITUTION_ROLE_TEMPLATES.school
   const [rolePermissions,setRolePermissions]=useState<Record<string,boolean>>({})
   const [rolePermissionMeta,setRolePermissionMeta]=useState<any>({})
   const [roleBusy,setRoleBusy]=useState(false)
@@ -132,7 +169,7 @@ export default function DeveloperControlCentre({request,onEnterWorkspace,moduleL
     {tab==='Role access'&&<div className="dcc-panel">
       <div className="dcc-panel-title"><div><h3>Institution-specific role access</h3><p>Choose an institution type and client, then configure permissions for each role in that client only.</p></div><ShieldCheck size={19}/></div>
       <div className="dcc-role-types">
-        {[['school','Schools'],['college','Colleges'],['university','Universities'],['other','Other institutions']].map(([key,label])=><button key={key} className={roleInstitutionType===key?'active':''} onClick={()=>{setRoleInstitutionType(key);setRoleClientId('');setRolePermissions({});setRolePermissionMeta({});setRoleError('');setRoleNotice('')}}>{label}</button>)}
+        {[['school','Schools'],['college','Colleges'],['university','Universities'],['other','Other institutions']].map(([key,label])=><button key={key} className={roleInstitutionType===key?'active':''} onClick={()=>{setRoleInstitutionType(key);setRoleClientId('');setRoleKey((INSTITUTION_ROLE_TEMPLATES[key]||INSTITUTION_ROLE_TEMPLATES.school)[0].roleKey);setRolePermissions({});setRolePermissionMeta({});setRoleError('');setRoleNotice('')}}>{label}</button>)}
       </div>
       <div className="dcc-role-selectors">
         <label>Client institution
@@ -143,7 +180,7 @@ export default function DeveloperControlCentre({request,onEnterWorkspace,moduleL
         </label>
         <label>Role template
           <select value={roleKey} onChange={e=>{setRoleKey(e.target.value);setRolePermissions({});setRolePermissionMeta({});setRoleError('');setRoleNotice('')}}>
-            {roles.filter(r=>r.roleKey!=='super_admin'&&r.roleKey!=='parent'&&r.roleKey!=='admin'&&r.roleKey!=='user').map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}
+            {roleTemplates.map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}
           </select>
         </label>
       </div>
@@ -152,7 +189,7 @@ export default function DeveloperControlCentre({request,onEnterWorkspace,moduleL
         <div className="dcc-role-context"><strong>{clients.find(c=>String(c.id)===roleClientId)?.name||'Selected client'}</strong><span>Changes apply only to this client. Other institutions keep their own settings.</span></div>
         {roleError&&<div className="dcc-alert error">{roleError}</div>}
         {roleNotice&&<div className="dcc-alert success">{roleNotice}</div>}
-        <div className="dcc-role-permission-heading"><div><h4>{roles.find(r=>r.roleKey===roleKey)?.role||roleKey} permissions</h4><p>{rolePermissionMeta.school_configured?'Client-specific permissions are configured.':rolePermissionMeta.global_configured?'Using platform defaults with client override available.':'No saved override for this client yet.'}</p></div><span className="dcc-count">{moduleList.filter(m=>rolePermissions[m.key+':View']).length} modules enabled</span></div>
+        <div className="dcc-role-permission-heading"><div><h4>{roleTemplates.find(r=>r.roleKey===roleKey)?.role||roleKey} permissions</h4><p>{rolePermissionMeta.school_configured?'Client-specific permissions are configured.':rolePermissionMeta.global_configured?'Using platform defaults with client override available.':'No saved override for this client yet.'}</p></div><span className="dcc-count">{moduleList.filter(m=>rolePermissions[m.key+':View']).length} modules enabled</span></div>
         <div className="dcc-table-wrap"><table><thead><tr><th>Module</th>{['View','Create','Edit','Delete','Approve','Export'].map(a=><th key={a}>{a}</th>)}</tr></thead><tbody>
           {moduleList.filter(m=>m.key!=='developer-control').map(m=><tr key={m.key}><td><strong>{m.label}</strong><small>{m.description}</small></td>{['View','Create','Edit','Delete','Approve','Export'].map(action=><td key={action}><input aria-label={m.label+' '+action} type="checkbox" checked={Boolean(rolePermissions[m.key+':'+action])} onChange={e=>setRolePermissions(old=>({...old,[m.key+':'+action]:e.target.checked}))}/></td>)}</tr>)}
         </tbody></table></div>
