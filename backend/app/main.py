@@ -267,6 +267,8 @@ def reset_school_role_permissions(role: str, school_id: int = Query(..., gt=0), 
 
 @app.get("/api/rbac/me", tags=["rbac"])
 def my_module_permissions(db: Session = Depends(get_db), user: models.User = Depends(current_user)):
+    if getattr(user, "is_platform_workspace", False):
+        return {"role": "admin", "school_id": user.school_id, "configured": False, "permissions": {}}
     if user.role == "super_admin":
         return {"role": user.role, "configured": True, "permissions": {"*": True}}
     scope = _permission_scope_matrix(db, user.role, user.school_id)
@@ -677,9 +679,14 @@ def verify_login_mfa(payload: dict, db: Session = Depends(get_db)):
 
 @app.get("/api/auth/me", response_model=schemas.UserOut)
 def me(user: models.User = Depends(current_user)):
+    if getattr(user, "is_platform_workspace", False):
+        return {"id": user.id, "name": user.name, "email": user.email, "role": user.role,
+                "school_id": user.school_id, "platform_workspace": True}
     return user
 
 def school_scope(model, user):
+    if getattr(user, "is_platform_workspace", False):
+        return model.school_id == user.school_id
     if user.role == "super_admin":
         return None
     if not user.school_id:
