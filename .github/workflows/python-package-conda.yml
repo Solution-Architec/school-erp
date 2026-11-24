@@ -61,6 +61,8 @@ jobs:
           --health-retries 20
     steps:
       - uses: actions/checkout@v7
+      - name: Build backup image
+        run: docker build -t school-erp-backup-ci -f docker/backup/Dockerfile .
       - name: Create and restore-verify a PostgreSQL backup
         run: |
           mkdir -p "$RUNNER_TEMP/postgres-backups"
