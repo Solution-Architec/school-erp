@@ -40,7 +40,7 @@ verify_restore() {
   archive_file=$1
   VERIFY_DIR=$(mktemp -d /tmp/pg-restore-check.XXXXXX)
   initdb -D "$VERIFY_DIR/data" --username=postgres --auth-local=trust --auth-host=trust --no-instructions >/dev/null
-  pg_ctl -D "$VERIFY_DIR/data" -o "-h '' -k $VERIFY_DIR -p 55432" -w start >/dev/null
+  pg_ctl -D "$VERIFY_DIR/data" -o "-h 127.0.0.1 -k $VERIFY_DIR -p 55432" -w start >/dev/null
   createdb -h "$VERIFY_DIR" -p 55432 -U postgres backup_restore_check
   pg_restore --host "$VERIFY_DIR" --port 55432 --username postgres \
     --dbname backup_restore_check --no-owner --no-privileges --exit-on-error "$archive_file"
