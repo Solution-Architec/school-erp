@@ -16,6 +16,7 @@ BACKUP_ONCE=${BACKUP_ONCE:-false}
 VERIFY_DIR=""
 
 case "$BACKUP_INTERVAL_SECONDS" in ''|*[!0-9]*) echo "BACKUP_INTERVAL_SECONDS must be a positive integer" >&2; exit 2 ;; esac
+case "$BACKUP_PREFIX" in ""|*[!A-Za-z0-9_-]*) echo "BACKUP_PREFIX may contain only letters, digits, underscores, and hyphens" >&2; exit 2 ;; esac
 case "$BACKUP_RETENTION_DAYS" in ''|*[!0-9]*) echo "BACKUP_RETENTION_DAYS must be a non-negative integer" >&2; exit 2 ;; esac
 [ "$BACKUP_INTERVAL_SECONDS" -gt 0 ] || { echo "BACKUP_INTERVAL_SECONDS must be greater than zero" >&2; exit 2; }
 
@@ -24,6 +25,14 @@ mkdir -p "$BACKUP_DIR"
 
 log() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
+}
+
+write_attempt() {
+  attempt_status=$1
+  attempt_time=$(date -u +%Y%m%dT%H%M%SZ)
+  attempt_tmp="$BACKUP_DIR/.backup-attempt.$.tmp"
+  printf '{"status":"%s","last_attempt_utc":"%s"}\\n' "$attempt_status" "$attempt_time" > "$attempt_tmp"
+  mv "$attempt_tmp" "$BACKUP_DIR/backup-attempt.json"
 }
 
 cleanup_verify() {
