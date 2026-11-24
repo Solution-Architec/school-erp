@@ -182,7 +182,9 @@ def main():
         old_failures = previous.get("failures", {})
         new_failures = {k: v for k, v in failures.items() if k not in old_failures}
         recovered = [k for k in old_failures if k not in failures]
-        current["overall"] = "critical" if any(v.get("status") == "critical" for v in failures.values()) else "warning" if failures else "healthy"
+        unconfigured = [k for k, v in current.items() if isinstance(v, dict) and v.get("status") == "not_configured"]
+        current["not_configured"] = unconfigured
+        current["overall"] = "critical" if any(v.get("status") == "critical" for v in failures.values()) else "warning" if failures else "partial" if unconfigured else "healthy"
         current["failures"] = failures
         save_state(current)
         if new_failures or recovered:
