@@ -42,6 +42,13 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
     user = db.get(User, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User is inactive or does not exist")
+    # Enforce tenant suspension on every authenticated request, including
+    # already-issued access tokens, not only on the next login attempt.
+    user_school_id = getattr(user, "school_id", None)
+    if user.role != "super_admin" and user_school_id is not None:
+        tenant_school = db.get(School, user_school_id)
+        if not tenant_school or not tenant_school.is_active or tenant_school.approval_status == "archived":
+            raise HTTPException(status_code=403, detail="This institution is paused or archived. Contact EduNexus support.")
     workspace_school_id = payload.get("workspace_school_id")
     if workspace_school_id is not None:
         if user.role != "super_admin":

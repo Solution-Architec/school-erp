@@ -6,6 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import models
@@ -13,6 +14,22 @@ from .database import get_db
 from .security import current_user, require_roles, create_access_token
 
 router = APIRouter(prefix="/api/platform", tags=["platform-control"])
+
+
+class ClientInstitutionInput(BaseModel):
+    name: str = Field(min_length=2, max_length=180)
+    code: str = Field(min_length=2, max_length=40)
+    institution_type: Literal["school", "college", "university", "coaching_centre", "training_institute", "other"] = "school"
+
+
+class ClientInstitutionUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=180)
+    code: str = Field(min_length=2, max_length=40)
+    institution_type: Literal["school", "college", "university", "coaching_centre", "training_institute", "other"]
+
+
+class ClientLifecycleAction(BaseModel):
+    action: Literal["pause", "reactivate", "archive", "restore"]
 
 
 class ClientProfileInput(BaseModel):
@@ -159,6 +176,104 @@ def platform_overview(db: Session = Depends(get_db), user: models.User = Depends
         "received_amount": received,
         "open_support_tickets": count(models.ClientSupportTicket, models.ClientSupportTicket.status.in_(["open", "in_progress", "waiting_client"])),
     }
+
+
+@router.post("/clients")
+def create_client_institution(payload: ClientInstitutionInput, db: Session = Depends(get_db),
+                              user: models.User = Depends(require_roles("super_admin"))):
+    name = payload.name.strip()
+    code = payload.code.strip().upper()
+    if db.scalar(select(models.School.id).where((models.School.name == name) | (models.School.code == code))):
+        raise HTTPException(status_code=409, detail="An institution with this name or code already exists")
+    school = models.School(name=name, code=code, institution_type=payload.institution_type,
+                           is_active=True, approval_status="approved")
+    db.add(school)
+    try:
+        db.flush()
+        db.add(models.PlatformClientProfile(school_id=school.id))
+        db.add(models.AuditLog(actor_user_id=user.id, event_type="platform.client.created",
+                               target_type="school", target_id=str(school.id),
+                               details=f"Created {payload.institution_type} client '{name}' ({code})"))
+        db.commit()
+        db.refresh(school)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Institution name or code already exists")
+    return {"id": school.id, "name": school.name, "code": school.code,
+            "institution_type": school.institution_type, "is_active": school.is_active,
+            "approval_status": school.approval_status, "created_at": school.created_at}
+
+
+@router.put("/clients/{school_id}")
+def update_client_institution(school_id: int, payload: ClientInstitutionUpdate,
+                              db: Session = Depends(get_db),
+                              user: models.User = Depends(require_roles("super_admin"))):
+    school = _school_or_404(db, school_id)
+    if school.approval_status == "archived":
+        raise HTTPException(status_code=409, detail="Restore this archived client before editing")
+    name = payload.name.strip()
+    code = payload.code.strip().upper()
+    duplicate = db.scalar(select(models.School.id).where(
+        models.School.id != school_id,
+        (models.School.name == name) | (models.School.code == code)))
+    if duplicate:
+        raise HTTPException(status_code=409, detail="Another institution already uses this name or code")
+    old = {"name": school.name, "code": school.code, "institution_type": school.institution_type}
+    school.name, school.code, school.institution_type = name, code, payload.institution_type
+    db.add(models.AuditLog(actor_user_id=user.id, event_type="platform.client.updated",
+                           target_type="school", target_id=str(school_id),
+                           details=f"Updated institution details from {old} to {payload.model_dump()}"))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Institution name or code already exists")
+    db.refresh(school)
+    return {"id": school.id, "name": school.name, "code": school.code,
+            "institution_type": school.institution_type, "is_active": school.is_active,
+            "approval_status": school.approval_status}
+
+
+@router.patch("/clients/{school_id}/lifecycle")
+def change_client_lifecycle(school_id: int, payload: ClientLifecycleAction,
+                            db: Session = Depends(get_db),
+                            user: models.User = Depends(require_roles("super_admin"))):
+    school = _school_or_404(db, school_id)
+    action = payload.action
+    if action == "pause":
+        if school.approval_status == "archived":
+            raise HTTPException(status_code=409, detail="Restore the archived client before pausing it")
+        if not school.is_active:
+            raise HTTPException(status_code=409, detail="This client is already inactive")
+        school.is_active = False
+        event = "platform.client.paused"
+    elif action == "reactivate":
+        if school.approval_status == "archived":
+            raise HTTPException(status_code=409, detail="Restore the archived client before reactivating it")
+        if school.is_active:
+            raise HTTPException(status_code=409, detail="This client is already active")
+        school.is_active = True
+        school.approval_status = "approved"
+        event = "platform.client.reactivated"
+    elif action == "archive":
+        if school.approval_status == "archived":
+            raise HTTPException(status_code=409, detail="This client is already archived")
+        school.is_active = False
+        school.approval_status = "archived"
+        event = "platform.client.archived"
+    else:
+        if school.approval_status != "archived":
+            raise HTTPException(status_code=409, detail="Only archived clients can be restored")
+        school.approval_status = "approved"
+        school.is_active = True
+        event = "platform.client.restored"
+    db.add(models.AuditLog(actor_user_id=user.id, event_type=event, target_type="school",
+                           target_id=str(school_id),
+                           details=f"Client '{school.name}' lifecycle action: {action}. No tenant data was deleted."))
+    db.commit()
+    db.refresh(school)
+    return {"id": school.id, "name": school.name, "is_active": school.is_active,
+            "approval_status": school.approval_status, "action": action}
 
 
 @router.get("/clients")
