@@ -1324,7 +1324,7 @@ def create_school(payload: schemas.SchoolIn, db: Session = Depends(get_db),
 
 
 @app.get("/api/users", response_model=list[schemas.UserOut], tags=["users"])
-def list_users(db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin"))):
+def list_users(db: Session = Depends(get_db), user: models.User = Depends(require_roles("super_admin", "admin"))):
     stmt = select(models.User).order_by(models.User.id.desc())
     if user.role != "super_admin":
         if not user.school_id:
@@ -1335,12 +1335,14 @@ def list_users(db: Session = Depends(get_db), user: models.User = Depends(requir
 
 @app.post("/api/users", response_model=schemas.UserOut, tags=["users"])
 def create_user(payload: dict, db: Session = Depends(get_db),
-                user: models.User = Depends(require_roles("super_admin"))):
+                user: models.User = Depends(require_roles("super_admin", "admin"))):
     name, email, password, role = payload.get("name"), payload.get("email"), payload.get("password"), payload.get("role", "user")
-    school_id = payload.get("school_id")
-    allowed = {"user", "parent"}
+    school_id = payload.get("school_id") if user.role == "super_admin" else user.school_id
+    allowed = (set(STANDARD_ROLES) | {"parent"}) - {"super_admin"}
     if not name or not email or not password or len(password) < 12 or role not in allowed or not school_id:
         raise HTTPException(status_code=422, detail="Name, email, school, role and password of at least 12 characters are required")
+    if user.role != "super_admin" and int(payload.get("school_id") or user.school_id) != user.school_id:
+        raise HTTPException(status_code=403, detail="You can only create accounts for your own institution")
     if not db.get(models.School, int(school_id)):
         raise HTTPException(status_code=404, detail="School not found")
     user_obj = models.User(name=name, email=email, password_hash=hash_password(password),
