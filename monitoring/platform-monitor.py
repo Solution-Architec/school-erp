@@ -63,6 +63,19 @@ def domain_check(domain):
     return {"status": "ok" if days > 30 else "warning" if days > 14 else "critical",
             "expires_at": expiry.isoformat(), "days_remaining": days}
 
+def app_health_check():
+    base = os.getenv("MONITOR_APP_URL", "").rstrip("/")
+    if not base:
+        raise RuntimeError("MONITOR_APP_URL is not configured")
+    code, body = request(base + "/api/health")
+    if code != 200:
+        raise RuntimeError(f"Application health endpoint returned HTTP {code}")
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        payload = {}
+    return {"status": "ok", "http_status": code, "database": payload.get("database", "reported by API")}
+
 def smtp_check():
     host = os.getenv("SMTP_HOST", "").strip()
     if not host:
@@ -150,8 +163,8 @@ def run_checks():
         key = "domain:" + domain.strip()
         try: results[key] = domain_check(domain)
         except Exception as exc: results[key] = {"status": "critical", "error": str(exc)}
-    for key, fn in (("smtp", smtp_check), ("razorpay_api", razorpay_check), ("razorpay_webhook", webhook_check)):
-        enabled = {"smtp": bool(os.getenv("SMTP_HOST")), "razorpay_api": bool(os.getenv("RAZORPAY_KEY_ID") and os.getenv("RAZORPAY_KEY_SECRET")), "razorpay_webhook": bool(os.getenv("MONITOR_APP_URL"))}[key]
+    for key, fn in (("application", app_health_check), ("smtp", smtp_check), ("razorpay_api", razorpay_check), ("razorpay_webhook", webhook_check)):
+        enabled = {"application": bool(os.getenv("MONITOR_APP_URL")), "smtp": bool(os.getenv("SMTP_HOST")), "razorpay_api": bool(os.getenv("RAZORPAY_KEY_ID") and os.getenv("RAZORPAY_KEY_SECRET")), "razorpay_webhook": bool(os.getenv("MONITOR_APP_URL"))}[key]
         if not enabled:
             results[key] = {"status": "not_configured"}
             continue
