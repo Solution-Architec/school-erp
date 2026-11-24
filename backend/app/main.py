@@ -607,6 +607,8 @@ def _demo_login_enabled(email: str) -> bool:
 def login(payload: schemas.LoginInput, db: Session = Depends(get_db)):
     school_code = (payload.school_code or "").strip().upper()
     email = str(payload.email).strip().lower()
+    if email == "demo.developer@jovoo.in":
+        raise HTTPException(status_code=403, detail="This legacy demo account is retired. Use an authorized platform-owner account.")
     # A blank school code is accepted only for the global Super Admin account.
     # Tenant users must provide an active school's code; no tenant lookup is
     # attempted without it. The configured platform code remains supported.
