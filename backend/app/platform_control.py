@@ -383,7 +383,7 @@ def platform_activity(db: Session = Depends(get_db), user: models.User = Depends
         "user_id": activity.user_id, "name": account.name, "email": account.email,
         "role": account.role, "school_id": activity.school_id,
         "institution": school.name if school else "Platform",
-        "last_seen_at": activity.last_seen_at,
+        "last_seen_at": activity.last_seen_at.isoformat() + "Z",
         "online": activity.last_seen_at >= cutoff,
     } for activity, account, school in rows]
 
