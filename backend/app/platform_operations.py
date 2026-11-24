@@ -689,7 +689,8 @@ def _backup_health(backup_dir: str | None, now: float | None = None,
             max_age_hours = max(1.0, float(os.getenv("BACKUP_MAX_AGE_HOURS", "26")))
         except ValueError:
             max_age_hours = 26.0
-    verified = latest.suffix.lower() == ".dump"
+    # The sidecar is written only after a full restore into a temporary database.
+    verified = latest.suffix.lower() == ".dump" and Path(str(latest) + ".verified").is_file()
     status = "stale" if age_hours > max_age_hours else ("healthy" if verified else "verification_unknown")
     return {"configured": True, "status": status, "latest_file": latest.name,
             "age_hours": round(age_hours, 1), "verified": verified,
