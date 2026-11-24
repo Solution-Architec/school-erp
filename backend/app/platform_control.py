@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from . import models
 from .database import get_db
-from .security import current_user, require_roles
+from .security import current_user, require_roles, create_access_token
 
 router = APIRouter(prefix="/api/platform", tags=["platform-control"])
 
@@ -199,7 +199,11 @@ def platform_client_detail(school_id: int, db: Session = Depends(get_db),
         "institution_type": school.institution_type, "is_active": school.is_active,
         "approval_status": school.approval_status, "created_at": school.created_at,
         "profile": _profile_dict(profile),
-        "users": db.scalars(select(models.User).where(models.User.school_id == school_id).order_by(models.User.name)).all(),
+        "users": [{
+            "id": account.id, "name": account.name, "email": account.email,
+            "role": account.role, "is_active": account.is_active,
+            "approval_status": account.approval_status, "created_at": account.created_at,
+        } for account in db.scalars(select(models.User).where(models.User.school_id == school_id).order_by(models.User.name)).all()],
         "students_count": db.scalar(select(func.count()).select_from(models.Student).where(models.Student.school_id == school_id)) or 0,
         "staff_count": db.scalar(select(func.count()).select_from(models.Staff).where(models.Staff.school_id == school_id)) or 0,
     }
@@ -323,9 +327,15 @@ def list_support_tickets(school_id: int | None = None, status: str | None = None
 
 @router.post("/support-tickets")
 def create_support_ticket(payload: SupportTicketInput, db: Session = Depends(get_db),
-                          user: models.User = Depends(require_roles("super_admin"))):
+                          user: models.User = Depends(current_user)):
     _school_or_404(db, payload.school_id)
-    ticket = models.ClientSupportTicket(**payload.model_dump(), created_by=user.id)
+    if user.role != "super_admin" and user.school_id != payload.school_id:
+        raise HTTPException(status_code=403, detail="You can only submit support requests for your own institution")
+    ticket_data = payload.model_dump()
+    if user.role != "super_admin":
+        ticket_data["requester_name"] = user.name
+        ticket_data["requester_email"] = user.email
+    ticket = models.ClientSupportTicket(**ticket_data, created_by=user.id)
     db.add(ticket)
     db.flush()
     db.add(models.AuditLog(actor_user_id=user.id, event_type="platform.support_ticket.created",
@@ -372,3 +382,47 @@ def platform_activity(db: Session = Depends(get_db), user: models.User = Depends
         "last_seen_at": activity.last_seen_at,
         "online": activity.last_seen_at >= cutoff,
     } for activity, account, school in rows]
+
+
+@router.post("/clients/{school_id}/workspace")
+def enter_client_workspace(school_id: int, db: Session = Depends(get_db),
+                           user: models.User = Depends(require_roles("super_admin"))):
+    school = _school_or_404(db, school_id)
+    if not school.is_active:
+        raise HTTPException(status_code=409, detail="This client institution is inactive")
+    token = create_access_token(user, workspace_school_id=school.id)
+    db.add(models.AuditLog(
+        actor_user_id=user.id, event_type="platform.client_workspace.entered",
+        target_type="school", target_id=str(school.id),
+        details=f"Platform owner entered the client workspace for {school.name}",
+    ))
+    db.commit()
+    return {
+        "access_token": token, "token_type": "bearer",
+        "user": {"id": user.id, "name": user.name, "email": user.email,
+                 "role": "admin", "school_id": school.id, "platform_workspace": True},
+        "institution": {"id": school.id, "name": school.name, "code": school.code},
+    }
+
+
+@router.post("/workspace/exit")
+def exit_client_workspace(db: Session = Depends(get_db),
+                          user=Depends(current_user)):
+    if not getattr(user, "is_platform_workspace", False):
+        raise HTTPException(status_code=409, detail="You are not inside a client workspace")
+    platform_owner = db.get(models.User, user.platform_owner_id)
+    if not platform_owner or not platform_owner.is_active or platform_owner.role != "super_admin":
+        raise HTTPException(status_code=401, detail="Platform owner account is unavailable")
+    db.add(models.AuditLog(
+        actor_user_id=platform_owner.id, event_type="platform.client_workspace.exited",
+        target_type="school", target_id=str(user.school_id),
+        details=f"Platform owner exited the client workspace for {user.platform_school_name}",
+    ))
+    db.commit()
+    token = create_access_token(platform_owner)
+    return {
+        "access_token": token, "token_type": "bearer",
+        "user": {"id": platform_owner.id, "name": platform_owner.name,
+                 "email": platform_owner.email, "role": platform_owner.role,
+                 "school_id": None, "platform_workspace": False},
+    }
