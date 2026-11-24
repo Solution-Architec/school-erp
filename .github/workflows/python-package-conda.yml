@@ -67,4 +67,4 @@ jobs:
             -e PGDATABASE=school_erp -e PGUSER=school_erp \
             -e PGPASSWORD=ci-backup-test-password \
             -e BACKUP_DIR=/backups -e BACKUP_ONCE=true \
-            postgres:16-alpine sh /opt/backup/backup-postgres.sh
+            postgres:16-alpine sh -c "mkdir -p /backups && chown postgres:postgres /backups && exec su-exec postgres sh /opt/backup/backup-postgres.sh"
