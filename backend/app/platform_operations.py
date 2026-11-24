@@ -666,6 +666,37 @@ def create_maintenance_window(payload: MaintenanceWindowInput, db: Session = Dep
     return item
 
 
+def _backup_health(backup_dir: str | None, now: float | None = None,
+                   max_age_hours: float | None = None) -> dict:
+    """Describe the newest local backup; .dump files are published only after restore testing."""
+    if not backup_dir:
+        return {"configured": False, "status": "not_configured", "latest_file": None,
+                "age_hours": None, "verified": False, "verification": "unknown"}
+    path = Path(backup_dir)
+    if not path.is_dir():
+        return {"configured": True, "status": "directory_missing", "latest_file": None,
+                "age_hours": None, "verified": False, "verification": "unknown"}
+    files = [p for p in path.iterdir() if p.is_file() and p.suffix.lower() in
+             {".sql", ".dump", ".backup", ".gz"}]
+    if not files:
+        return {"configured": True, "status": "awaiting_first_backup", "latest_file": None,
+                "age_hours": None, "verified": False, "verification": "unknown"}
+    latest = max(files, key=lambda p: p.stat().st_mtime)
+    current_time = time.time() if now is None else now
+    age_hours = max(0.0, (current_time - latest.stat().st_mtime) / 3600)
+    if max_age_hours is None:
+        try:
+            max_age_hours = max(1.0, float(os.getenv("BACKUP_MAX_AGE_HOURS", "26")))
+        except ValueError:
+            max_age_hours = 26.0
+    # The sidecar is written only after a full restore into a temporary database.
+    verified = latest.suffix.lower() == ".dump" and Path(str(latest) + ".verified").is_file()
+    status = "stale" if age_hours > max_age_hours else ("healthy" if verified else "verification_unknown")
+    return {"configured": True, "status": status, "latest_file": latest.name,
+            "age_hours": round(age_hours, 1), "verified": verified,
+            "verification": "restore_tested" if verified else "unknown"}
+
+
 @router.get("/infrastructure-health")
 def infrastructure_health(db: Session = Depends(get_db), user=platform_owner):
     started = time.perf_counter()
@@ -684,14 +715,7 @@ def infrastructure_health(db: Session = Depends(get_db), user=platform_owner):
                 "free_bytes": usage.free, "used_percent": round(usage.used / usage.total * 100, 1)}
     except OSError:
         disk = {"path": disk_path, "status": "unavailable"}
-    backup_dir = os.getenv("BACKUP_DIR")
-    backup = {"configured": bool(backup_dir), "latest_file": None, "age_hours": None}
-    if backup_dir and Path(backup_dir).is_dir():
-        files = [p for p in Path(backup_dir).iterdir() if p.is_file() and p.suffix.lower() in {".sql", ".dump", ".backup", ".gz"}]
-        if files:
-            latest = max(files, key=lambda p: p.stat().st_mtime)
-            backup = {"configured": True, "latest_file": latest.name,
-                      "age_hours": round((time.time() - latest.stat().st_mtime) / 3600, 1)}
+    backup = _backup_health(os.getenv("BACKUP_DIR"))
     load = os.getloadavg() if hasattr(os, "getloadavg") else None
     return {"api": "healthy", "database": database, "database_latency_ms": db_latency_ms,
             "disk": disk, "cpu_load_average": list(load) if load else None,

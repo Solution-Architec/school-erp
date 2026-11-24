@@ -7,6 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Validate PostgreSQL backup script syntax
+        run: sh -n scripts/postgres-backup.sh
       - name: Set up Python
         uses: actions/setup-python@v7
         with:

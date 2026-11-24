@@ -189,3 +189,33 @@ Commercial collection records are manual records only. They do not initiate or v
 All platform-control endpoints require the private platform-owner account, except the heartbeat endpoint and client-scoped support-ticket submission/listing. New platform tables are created by the application's SQLAlchemy metadata initialization. Back up the production database before deploying schema changes.
 
 The System & Audit view currently checks API reachability and a simple database query and displays recorded audit events. It does not yet inspect host CPU/RAM/disk, backup completion, SSL/domain expiry, or third-party integration health; those require deployment-specific monitoring integrations.
+
+
+## Automated PostgreSQL backups
+
+Docker Compose includes a dedicated PostgreSQL backup service. It creates a compressed custom-format dump immediately after the database becomes healthy, then repeats every 24 hours by default. Before publishing a `.dump` file, the service checks the archive and restores it into a temporary verification database; a dump that fails this restore test is not published as the latest backup.
+
+Backups are written to the host project's `./backups/` directory (excluded from Git) and mounted read-only into the API so the Developer Control Centre can report backup freshness and verification status. The default retention period is 30 days.
+
+Optional `.env` settings:
+
+```env
+BACKUP_INTERVAL_SECONDS=86400
+BACKUP_RETENTION_DAYS=30
+BACKUP_MAX_AGE_HOURS=26
+```
+
+Start or update the service with:
+
+```bash
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=100 backup
+ls -lh ./backups
+```
+
+A successful run logs that the dump passed a restore test. The infrastructure endpoint reports `healthy`, `stale`, `awaiting_first_backup`, or a configuration error and marks verified custom-format dumps as `restore_tested`.
+
+**Recovery procedure:** stop application writes, choose the desired verified dump, create/prepare a separate recovery database, and restore with `pg_restore --exit-on-error --no-owner --no-acl -d <recovery_database> <backup_file>`. Validate the restored database before directing the application to it. Never test a recovery by restoring over the live production database.
+
+The local backup directory is not an offsite backup. Production deployments must additionally copy encrypted backups to access-controlled offsite/object storage and periodically perform an independently witnessed recovery drill. Protect the host directory and do not commit backup files or share them publicly.
