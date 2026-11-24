@@ -11,6 +11,8 @@ daily_days = int(os.environ.get("BACKUP_DAILY_RETENTION_DAYS", "7"))
 weekly_weeks = int(os.environ.get("BACKUP_WEEKLY_RETENTION_WEEKS", "4"))
 monthly_months = int(os.environ.get("BACKUP_MONTHLY_RETENTION_MONTHS", "12"))
 pattern = re.compile(rf"^{re.escape(prefix)}_(\d{{8}}T\d{{6}}Z)_\d+_backup\.dump$")
+if min(daily_days, weekly_weeks, monthly_months) < 1:
+    raise ValueError("All tiered retention periods must be at least 1")
 now = datetime.now(timezone.utc)
 archives = []
 for path in root.glob(f"{prefix}_*_backup.dump"):
@@ -26,7 +28,9 @@ archives.sort(reverse=True)
 keep = set()
 daily_cutoff = now - timedelta(days=daily_days)
 weekly_cutoff = now - timedelta(weeks=weekly_weeks)
-monthly_cutoff = now - timedelta(days=monthly_months * 31)
+month_floor = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+month_index = month_floor.year * 12 + month_floor.month - 1 - max(0, monthly_months - 1)
+monthly_cutoff = (month_index // 12, month_index % 12 + 1)
 seen_days, seen_weeks, seen_months = set(), set(), set()
 for stamp, path in archives:
     day = stamp.date()
@@ -36,7 +40,7 @@ for stamp, path in archives:
         keep.add(path); seen_days.add(day)
     if stamp >= weekly_cutoff and week not in seen_weeks:
         keep.add(path); seen_weeks.add(week)
-    if stamp >= monthly_cutoff and month not in seen_months:
+    if month >= monthly_cutoff and month not in seen_months:
         keep.add(path); seen_months.add(month)
 for _, path in archives:
     if path not in keep:
