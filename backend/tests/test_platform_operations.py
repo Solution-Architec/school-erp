@@ -90,6 +90,7 @@ def test_backup_health_marks_restore_tested_dump_healthy_and_stale(tmp_path):
 
     dump = tmp_path / "school_erp_20261124T000000Z.dump"
     dump.write_bytes(b"test archive marker")
+    (tmp_path / (dump.name + ".verified")).write_text("restore_tested_at=2026-11-24T00:00:00Z")
     now = 1_800_000_000.0
     os.utime(dump, (now - 3600, now - 3600))
 
