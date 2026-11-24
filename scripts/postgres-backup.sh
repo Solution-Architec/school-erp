@@ -61,10 +61,10 @@ run_backup() {
 
     mv "$tmp" "$final"
     marker_tmp="$final.verified.tmp"
-    printf 'restore_tested_at=%s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$marker_tmp"
+    printf 'restore_tested_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$marker_tmp"
     mv "$marker_tmp" "$final.verified"
-    find "$BACKUP_DIR" -maxdepth 1 -type f \\
-        \\( -name "${POSTGRES_DB}_*.dump" -o -name "${POSTGRES_DB}_*.dump.verified" \\) \\
+    find "$BACKUP_DIR" -maxdepth 1 -type f \
+        \( -name "${POSTGRES_DB}_*.dump" -o -name "${POSTGRES_DB}_*.dump.verified" \) \
         -mtime "+$BACKUP_RETENTION_DAYS" -delete
     echo "SUCCESS: $file passed archive and full temporary-database restore verification"
 }
