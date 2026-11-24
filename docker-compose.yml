@@ -116,7 +116,6 @@ services:
 
 volumes:
   postgres_data:
-  postgres_backups:
   platform_monitor_state:
 
 networks:
