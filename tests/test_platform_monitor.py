@@ -32,3 +32,19 @@ def test_resource_thresholds_flag_disk_pressure(monkeypatch):
     })
     assert result["host_disk"]["status"] == "critical"
     assert result["backup_disk"]["status"] == "ok"
+
+
+def test_monitor_reports_unavailable_host_metrics_as_warning():
+    result = monitor.apply_resource_thresholds({}, {
+        "host_disk_used_percent": None, "backup_disk_used_percent": 20,
+        "memory_used_percent": 20, "cpu_load_per_core": 0.1,
+    })
+    assert result["host_disk"]["status"] == "warning"
+
+
+def test_monitor_detects_severity_escalation():
+    previous = {"failures": {"smtp": {"status": "warning"}}}
+    current = {"smtp": {"status": "critical"}}
+    _, new, recovered = monitor.classify_transitions(previous, current)
+    assert new["smtp"]["status"] == "critical"
+    assert recovered == []
