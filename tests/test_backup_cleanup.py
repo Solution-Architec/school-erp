@@ -19,12 +19,19 @@ def test_cleanup_removes_only_old_inactive_matching_partials(tmp_path):
     active_marker.write_text("running")
     os.utime(active_marker, (time.time(), time.time()))
     env = os.environ | {"BACKUP_DIR": str(tmp_path), "BACKUP_PREFIX": prefix, "BACKUP_PARTIAL_STALE_HOURS": "48"}
+
+    # A fresh shared marker means another container may be writing a partial:
+    # cleanup must leave every partial untouched in that case.
+    subprocess.run([sys.executable, "scripts/cleanup-stale-backups.py"], check=True, env=env)
+    assert stale.exists()
+    assert recent.exists()
+    assert unrelated.exists()
+    assert active.exists()
+
+    # Once the marker is gone, only old, matching, inactive partials are removed.
+    active_marker.unlink()
     subprocess.run([sys.executable, "scripts/cleanup-stale-backups.py"], check=True, env=env)
     assert not stale.exists()
     assert recent.exists()
     assert unrelated.exists()
     assert active.exists()
-    assert stale.exists()  # A live worker marker protects all partials across containers.
-    active_marker.unlink()
-    subprocess.run([sys.executable, "scripts/cleanup-stale-backups.py"], check=True, env=env)
-    assert not stale.exists()
