@@ -85,13 +85,5 @@ jobs:
             -e BACKUP_ONCE=true
           )
 
-          docker run --rm --network host \
-            -v "$GITHUB_WORKSPACE/scripts/backup-postgres.sh:/opt/backup/backup-postgres.sh:ro" \
-            -v "$GITHUB_WORKSPACE/scripts/backup-retention.py:/opt/backup/backup-retention.py:ro" \
-            -v "$GITHUB_WORKSPACE/scripts/cleanup-stale-backups.py:/opt/backup/cleanup-stale-backups.py:ro" \
-            -v "$RUNNER_TEMP/postgres-backups:/backups" \
-            -e PGHOST=127.0.0.1 -e PGPORT=5432 \
-            -e PGDATABASE=school_erp -e PGUSER=school_erp \
-            -e PGPASSWORD=ci-backup-test-password \
-            -e BACKUP_DIR=/backups -e BACKUP_ONCE=true \
-            school-erp-backup-ci sh -c "mkdir -p /backups && chown postgres:postgres /backups && exec su-exec postgres sh /opt/backup/backup-postgres.sh"
+          docker_args+=(school-erp-backup-ci sh -c "mkdir -p /backups && chown postgres:postgres /backups && exec su-exec postgres sh /opt/backup/backup-postgres.sh")
+          docker "${docker_args[@]}"
