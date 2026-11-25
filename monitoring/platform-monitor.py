@@ -13,6 +13,7 @@ import urllib.request
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
+import shutil
 
 STATE_DIR = Path(os.getenv("MONITOR_STATE_DIR", "/state"))
 STATE_FILE = STATE_DIR / "monitor-state.json"
@@ -141,6 +142,81 @@ def webhook_check():
         raise RuntimeError(f"Webhook signature-rejection probe expected HTTP 400, got HTTP {code}")
     return {"status": "ok", "endpoint_reachable": True, "signature_validation_enforced": True}
 
+def classify_transitions(previous, current):
+    failures = {k: v for k, v in current.items()
+                if isinstance(v, dict) and v.get("status") in ("critical", "warning")}
+    old_failures = previous.get("failures", {})
+    new_failures = {k: v for k, v in failures.items() if k not in old_failures}
+    recovered = [k for k in old_failures if k not in failures]
+    return failures, new_failures, recovered
+
+def overall_status(results):
+    states = [v.get("status") for v in results.values() if isinstance(v, dict)]
+    if "critical" in states: return "critical"
+    if "warning" in states: return "warning"
+    if "not_configured" in states: return "partial"
+    return "healthy"
+
+def _read_meminfo(path):
+    values = {}
+    with open(path, encoding="utf-8") as stream:
+        for line in stream:
+            key, raw = line.split(":", 1)
+            values[key] = int(raw.strip().split()[0]) * 1024
+    total, available = values.get("MemTotal", 0), values.get("MemAvailable", 0)
+    return round((total - available) / total * 100, 1) if total else None
+
+def host_metrics():
+    proc = Path("/host/proc")
+    root = Path("/host/root")
+    metrics = {}
+    try:
+        metrics["memory_used_percent"] = _read_meminfo(proc / "meminfo")
+    except (OSError, ValueError, KeyError):
+        metrics["memory_used_percent"] = None
+    try:
+        load = [float(x) for x in (proc / "loadavg").read_text().split()[:3]]
+        cpu_count = max(1, len((proc / "stat").read_text().splitlines()[0:1]) and
+                        sum(1 for line in (proc / "stat").read_text().splitlines() if line.startswith("cpu") and line[3:4].isdigit()))
+        metrics["cpu_load_average"] = load
+        metrics["cpu_load_per_core"] = round(load[0] / max(1, cpu_count), 2)
+    except (OSError, ValueError):
+        metrics["cpu_load_average"] = None
+        metrics["cpu_load_per_core"] = None
+    try:
+        disk = shutil.disk_usage(root)
+        metrics["host_disk_used_percent"] = round(disk.used / disk.total * 100, 1)
+    except OSError:
+        metrics["host_disk_used_percent"] = None
+    try:
+        disk = shutil.disk_usage("/backups")
+        metrics["backup_disk_used_percent"] = round(disk.used / disk.total * 100, 1)
+        metrics["backup_disk_free_bytes"] = disk.free
+    except OSError:
+        metrics["backup_disk_used_percent"] = None
+        metrics["backup_disk_free_bytes"] = None
+    return metrics
+
+def apply_resource_thresholds(results, metrics):
+    warning_disk = float(os.getenv("MONITOR_DISK_WARNING_PERCENT", "80"))
+    critical_disk = float(os.getenv("MONITOR_DISK_CRITICAL_PERCENT", "90"))
+    warning_mem = float(os.getenv("MONITOR_MEMORY_WARNING_PERCENT", "85"))
+    critical_mem = float(os.getenv("MONITOR_MEMORY_CRITICAL_PERCENT", "95"))
+    warning_cpu = float(os.getenv("MONITOR_CPU_LOAD_PER_CORE_WARNING", "1.5"))
+    critical_cpu = float(os.getenv("MONITOR_CPU_LOAD_PER_CORE_CRITICAL", "3.0"))
+    for name, value, warn, critical in (
+        ("host_disk", metrics.get("host_disk_used_percent"), warning_disk, critical_disk),
+        ("backup_disk", metrics.get("backup_disk_used_percent"), warning_disk, critical_disk),
+        ("host_memory", metrics.get("memory_used_percent"), warning_mem, critical_mem),
+        ("host_cpu_load", metrics.get("cpu_load_per_core"), warning_cpu, critical_cpu),
+    ):
+        if value is None:
+            results[name] = {"status": "unavailable"}
+        else:
+            state = "critical" if value >= critical else "warning" if value >= warn else "ok"
+            results[name] = {"status": state, "value": value}
+    return results
+
 def load_state():
     try:
         return json.loads(STATE_FILE.read_text())
@@ -152,6 +228,20 @@ def save_state(state):
     temp = STATE_FILE.with_suffix(".tmp")
     temp.write_text(json.dumps(state, indent=2))
     temp.replace(STATE_FILE)
+
+def backup_status():
+    path = Path("/backups/backup-status.json")
+    try:
+        status = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {"status": "not_configured"}
+    if status.get("offsite_status") == "failed":
+        return {"status": "critical", "reason": status.get("offsite_error", "offsite verification failed")}
+    if os.getenv("BACKUP_S3_URI") and status.get("offsite_status") != "restore_verified":
+        return {"status": "warning", "reason": "offsite copy is not independently restore-verified"}
+    if status.get("restore_verified") is not True:
+        return {"status": "critical", "reason": "latest local archive has not passed restore verification"}
+    return {"status": "ok", "archive": status.get("archive"), "offsite_status": status.get("offsite_status", "not_configured")}
 
 def run_checks():
     results = {}
@@ -170,6 +260,10 @@ def run_checks():
             continue
         try: results[key] = fn()
         except Exception as exc: results[key] = {"status": "critical", "error": str(exc)}
+    metrics = host_metrics()
+    apply_resource_thresholds(results, metrics)
+    results["host_metrics"] = metrics
+    results["backup"] = backup_status()
     results["checked_at"] = utcnow().isoformat()
     return results
 
@@ -179,14 +273,28 @@ def main():
         current = run_checks()
         failures = {k: v for k, v in current.items()
                     if isinstance(v, dict) and v.get("status") in ("critical", "warning")}
-        old_failures = previous.get("failures", {})
-        new_failures = {k: v for k, v in failures.items() if k not in old_failures}
-        recovered = [k for k in old_failures if k not in failures]
+        failures, new_failures, recovered = classify_transitions(previous, current)
         unconfigured = [k for k, v in current.items() if isinstance(v, dict) and v.get("status") == "not_configured"]
         current["not_configured"] = unconfigured
-        current["overall"] = "critical" if any(v.get("status") == "critical" for v in failures.values()) else "warning" if failures else "partial" if unconfigured else "healthy"
+        current["overall"] = overall_status(current)
         current["failures"] = failures
         save_state(current)
+        incident_token = os.getenv("MONITOR_INTERNAL_TOKEN", "")
+        if incident_token:
+            for key, details in new_failures.items():
+                try:
+                    request(os.getenv("MONITOR_APP_URL", "").rstrip("/") + "/api/platform/ops/internal/monitor-events",
+                            method="POST", headers={"Content-Type": "application/json", "X-Monitor-Token": incident_token},
+                            data=json.dumps({"check": key, "status": details.get("status"), "message": details.get("error") or str(details)}).encode())
+                except Exception as exc:
+                    print(f"INCIDENT CREATION FAILED for {key}: {type(exc).__name__}: {exc}", flush=True)
+            for key in recovered:
+                try:
+                    request(os.getenv("MONITOR_APP_URL", "").rstrip("/") + "/api/platform/ops/internal/monitor-events",
+                            method="POST", headers={"Content-Type": "application/json", "X-Monitor-Token": incident_token},
+                            data=json.dumps({"check": key, "status": "ok", "message": "Monitoring check recovered"}).encode())
+                except Exception as exc:
+                    print(f"INCIDENT RECOVERY UPDATE FAILED for {key}: {type(exc).__name__}: {exc}", flush=True)
         if new_failures or recovered:
             lines = ["EduNexus platform monitoring update", "", "New alerts:"]
             lines += [f"- {k}: {v.get('error') or v}" for k, v in new_failures.items()] or ["- None"]
