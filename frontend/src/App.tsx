@@ -241,7 +241,11 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
  const [fees,setFees]=useState<any[]>([]);
  const [attendance,setAttendance]=useState<any[]>([]);
  const [error,setError]=useState('');
+ const [feesError,setFeesError]=useState('');
+ const [attendanceError,setAttendanceError]=useState('');
  const [loading,setLoading]=useState(true);
+ const [feesLoading,setFeesLoading]=useState(false);
+ const [attendanceLoading,setAttendanceLoading]=useState(false);
 
  useEffect(()=>{
   if(userRole!=='parent'){
@@ -266,21 +270,25 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
 
  useEffect(()=>{
   let active=true;
-  setError('');
+  setFees([]);
+  setAttendance([]);
+  setFeesError('');
+  setAttendanceError('');
   if(childId&&userRole==='parent'){
-   setFees([]);
-   setAttendance([]);
-   Promise.all([
-    request('/api/parent/children/'+childId+'/fees'),
-    request('/api/parent/children/'+childId+'/attendance?limit=90'),
-   ]).then(([feeData,attendanceData])=>{
-    if(!active)return;
-    setFees(feeData);
-    setAttendance(attendanceData);
-   }).catch((e:any)=>{if(active)setError(e.message)});
+   setFeesLoading(true);
+   setAttendanceLoading(true);
+   const encodedChildId=encodeURIComponent(childId);
+   request('/api/parent/children/'+encodedChildId+'/fees')
+    .then((data:any[])=>{if(active)setFees(data)})
+    .catch((e:any)=>{if(active)setFeesError(e.message)})
+    .finally(()=>{if(active)setFeesLoading(false)});
+   request('/api/parent/children/'+encodedChildId+'/attendance?limit=90')
+    .then((data:any[])=>{if(active)setAttendance(data)})
+    .catch((e:any)=>{if(active)setAttendanceError(e.message)})
+    .finally(()=>{if(active)setAttendanceLoading(false)});
   }else{
-   setFees([]);
-   setAttendance([]);
+   setFeesLoading(false);
+   setAttendanceLoading(false);
   }
   return()=>{active=false};
  },[childId,userRole,refreshKey]);
@@ -302,32 +310,35 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
    </label>
    <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Recent attendance</h4><p>Latest attendance records for the selected student.</p></div></div>
-    <div className="table-wrap">
+    {attendanceError?<div className="error" role="alert">{attendanceError}</div>
+    :<div className="table-wrap">
      <table>
       <thead><tr><th>Date</th><th>Status</th></tr></thead>
       <tbody>
        {attendance.map(record=><tr key={record.id}><td>{record.attendance_date}</td><td><span className="status-badge">{record.status}</span></td></tr>)}
-       {!attendance.length&&<tr><td colSpan={2}>No attendance records found.</td></tr>}
+       {attendanceLoading&&<tr><td colSpan={2}>Loading attendance…</td></tr>}
+       {!attendanceLoading&&!attendance.length&&<tr><td colSpan={2}>No attendance records found.</td></tr>}
       </tbody>
      </table>
-    </div>
+    </div>}
    </section>
    <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Fee balances</h4><p>Fee information for the selected student.</p></div></div>
-    <div className="table-wrap">
+    {feesError?<div className="error" role="alert">{feesError}</div>
+    :<div className="table-wrap">
      <table>
       <thead><tr><th>Fee category</th><th>Academic year</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
       <tbody>
        {fees.map(f=><tr key={f.fee_id}><td>{f.category}</td><td>{f.academic_year}</td><td>{money(f.total)}</td><td>{money(f.paid)}</td><td><strong>{money(f.balance)}</strong></td><td><span className="status-badge">{f.status}</span></td></tr>)}
-       {!fees.length&&<tr><td colSpan={6}>No fee records found.</td></tr>}
+       {feesLoading&&<tr><td colSpan={6}>Loading fee balances…</td></tr>}
+       {!feesLoading&&!fees.length&&<tr><td colSpan={6}>No fee records found.</td></tr>}
       </tbody>
      </table>
-    </div>
+    </div>}
    </section>
   </>}
  </div>
 }
-
 function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Promise<any>}) {
  const [question,setQuestion]=useState(''),[messages,setMessages]=useState<{q:string,a:string}[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState('');
  async function ask(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!question.trim()||busy)return;const q=question.trim();setQuestion('');setBusy(true);setError('');try{const result=await request('/api/chatbot/faq',{method:'POST',body:JSON.stringify({question:q})});setMessages(old=>[...old,{q,a:result.answer}])}catch(err:any){setError(err.message)}finally{setBusy(false)}}
