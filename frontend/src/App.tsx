@@ -240,12 +240,22 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
  const [childId,setChildId]=useState('');
  const [fees,setFees]=useState<any[]>([]);
  const [attendance,setAttendance]=useState<any[]>([]);
+ const [examResults,setExamResults]=useState<any[]>([]);
+ const [certificateApplications,setCertificateApplications]=useState<any[]>([]);
  const [error,setError]=useState('');
  const [feesError,setFeesError]=useState('');
  const [attendanceError,setAttendanceError]=useState('');
+ const [examResultsError,setExamResultsError]=useState('');
+ const [certificateError,setCertificateError]=useState('');
+ const [certificateMessage,setCertificateMessage]=useState('');
+ const [certificateType,setCertificateType]=useState('bonafide');
+ const [certificatePurpose,setCertificatePurpose]=useState('');
+ const [certificateSubmitting,setCertificateSubmitting]=useState(false);
  const [loading,setLoading]=useState(true);
  const [feesLoading,setFeesLoading]=useState(false);
  const [attendanceLoading,setAttendanceLoading]=useState(false);
+ const [examResultsLoading,setExamResultsLoading]=useState(false);
+ const [certificateApplicationsLoading,setCertificateApplicationsLoading]=useState(false);
 
  useEffect(()=>{
   if(userRole!=='parent'){
@@ -272,8 +282,13 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   let active=true;
   setFees([]);
   setAttendance([]);
+  setExamResults([]);
+  setCertificateApplications([]);
   setFeesError('');
   setAttendanceError('');
+  setExamResultsError('');
+  setCertificateError('');
+  setCertificateMessage('');
   if(childId&&userRole==='parent'){
    setFeesLoading(true);
    setAttendanceLoading(true);
@@ -286,13 +301,42 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
     .then((data:any[])=>{if(active)setAttendance(data)})
     .catch((e:any)=>{if(active)setAttendanceError(e.message)})
     .finally(()=>{if(active)setAttendanceLoading(false)});
+   setExamResultsLoading(true);
+   request('/api/parent/children/'+encodedChildId+'/exam-results')
+    .then((data:any[])=>{if(active)setExamResults(data)})
+    .catch((e:any)=>{if(active)setExamResultsError(e.message)})
+    .finally(()=>{if(active)setExamResultsLoading(false)});
+   setCertificateApplicationsLoading(true);
+   request('/api/parent/children/'+encodedChildId+'/certificate-applications')
+    .then((data:any[])=>{if(active)setCertificateApplications(data)})
+    .catch((e:any)=>{if(active)setCertificateError(e.message)})
+    .finally(()=>{if(active)setCertificateApplicationsLoading(false)});
   }else{
    setFeesLoading(false);
    setAttendanceLoading(false);
+   setExamResultsLoading(false);
+   setCertificateApplicationsLoading(false);
   }
   return()=>{active=false};
  },[childId,userRole,refreshKey]);
 
+ async function submitCertificate(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();
+  if(!childId||!certificatePurpose.trim()||certificateSubmitting)return;
+  setCertificateSubmitting(true);
+  setCertificateError('');
+  setCertificateMessage('');
+  try{
+   const result=await request('/api/parent/children/'+encodeURIComponent(childId)+'/certificate-applications',{
+    method:'POST',
+    body:JSON.stringify({student_id:Number(childId),certificate_type:certificateType,purpose:certificatePurpose.trim()})
+   });
+   setCertificateApplications(old=>[result,...old]);
+   setCertificatePurpose('');
+   setCertificateMessage('Certificate application submitted. Your school will review it and update the status here.');
+  }catch(err:any){setCertificateError(err.message||'Could not submit certificate application')}
+  finally{setCertificateSubmitting(false)}
+ }
  return <div className="panel">
   <div className="panel-heading">
    <div><h3>Family Portal</h3><p>View information for students linked to your parent account.</p></div>
@@ -335,6 +379,40 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
       </tbody>
      </table>
     </div>}
+   </section>
+   <section className="parent-portal-section">
+    <div className="panel-heading"><div><h4>Recent exam results</h4><p>Published marks and result status for the selected student.</p></div></div>
+    {examResultsError?<div className="error" role="alert">{examResultsError}</div>
+    :<div className="table-wrap">
+     <table>
+      <thead><tr><th>Exam</th><th>Subject</th><th>Date</th><th>Academic year</th><th>Marks</th><th>Pass marks</th><th>Result</th></tr></thead>
+      <tbody>
+       {examResults.map(result=><tr key={result.id}><td>{result.exam_name}</td><td>{result.subject}</td><td>{result.exam_date}</td><td>{result.academic_year||'—'}</td><td><strong>{result.marks_obtained}</strong> / {result.max_marks}</td><td>{result.pass_marks}</td><td><span className={'status-badge '+result.result}>{result.result}</span></td></tr>)}
+       {examResultsLoading&&<tr><td colSpan={7}>Loading exam results…</td></tr>}
+       {!examResultsLoading&&!examResults.length&&<tr><td colSpan={7}>No exam results have been published for this student yet.</td></tr>}
+      </tbody>
+     </table>
+    </div>}
+   </section>
+   <section className="parent-portal-section">
+    <div className="panel-heading"><div><h4>Certificate applications</h4><p>Apply for school certificates and track the school's decision.</p></div></div>
+    <form className="parent-certificate-form" onSubmit={submitCertificate}>
+     <label>Certificate type<select value={certificateType} onChange={e=>setCertificateType(e.target.value)}><option value="study">Study certificate</option><option value="bonafide">Bonafide certificate</option><option value="conduct">Conduct certificate</option><option value="transfer">Transfer certificate</option><option value="other">Other certificate</option></select></label>
+     <label>Purpose<textarea required minLength={3} maxLength={500} value={certificatePurpose} onChange={e=>setCertificatePurpose(e.target.value)} placeholder="Tell the school why this certificate is needed."/></label>
+     <button className="primary" disabled={certificateSubmitting||!certificatePurpose.trim()}>{certificateSubmitting?'Submitting…':'Submit certificate request'}</button>
+    </form>
+    {certificateError&&<div className="error" role="alert">{certificateError}</div>}
+    {certificateMessage&&<div className="success" role="status">{certificateMessage}</div>}
+    <div className="table-wrap">
+     <table>
+      <thead><tr><th>Certificate</th><th>Purpose</th><th>Applied on</th><th>Status</th><th>School note</th></tr></thead>
+      <tbody>
+       {certificateApplications.map(application=><tr key={application.id}><td>{({study:'Study',bonafide:'Bonafide',conduct:'Conduct',transfer:'Transfer',other:'Other'} as Record<string,string>)[application.certificate_type]||application.certificate_type}</td><td>{application.purpose}</td><td>{new Date(application.created_at).toLocaleDateString('en-IN')}</td><td><span className={'status-badge '+application.status}>{application.status}</span></td><td>{application.reviewer_note||'—'}</td></tr>)}
+       {certificateApplicationsLoading&&<tr><td colSpan={5}>Loading certificate applications…</td></tr>}
+       {!certificateApplicationsLoading&&!certificateApplications.length&&<tr><td colSpan={5}>No certificate applications submitted yet.</td></tr>}
+      </tbody>
+     </table>
+    </div>
    </section>
   </>}
  </div>
