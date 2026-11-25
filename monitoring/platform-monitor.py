@@ -246,11 +246,15 @@ def backup_status():
 
 def run_checks():
     results = {}
-    for host in filter(None, os.getenv("MONITOR_TLS_HOSTS", "").split(",")):
+    tls_hosts = [x.strip() for x in os.getenv("MONITOR_TLS_HOSTS", "").split(",") if x.strip()]
+    domains = [x.strip() for x in os.getenv("MONITOR_DOMAINS", "").split(",") if x.strip()]
+    results["tls_monitoring"] = {"status": "not_configured"} if not tls_hosts else {"status": "configured"}
+    results["domain_monitoring"] = {"status": "not_configured"} if not domains else {"status": "configured"}
+    for host in tls_hosts:
         key = "tls:" + host.strip()
         try: results[key] = tls_check(host)
         except Exception as exc: results[key] = {"status": "critical", "error": str(exc)}
-    for domain in filter(None, os.getenv("MONITOR_DOMAINS", "").split(",")):
+    for domain in domains:
         key = "domain:" + domain.strip()
         try: results[key] = domain_check(domain)
         except Exception as exc: results[key] = {"status": "critical", "error": str(exc)}
