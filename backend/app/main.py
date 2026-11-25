@@ -1665,6 +1665,44 @@ def parent_children(db: Session = Depends(get_db),
             for student, link in db.execute(stmt).all()]
 
 
+@app.get("/api/parent/children/{student_id}/attendance", tags=["parent-portal"])
+def parent_child_attendance(
+    student_id: int,
+    limit: int = Query(90, ge=1, le=365),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("parent")),
+):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
+
+    # An active parent-student relationship is the only source of access.
+    if not _linked_parent_student(db, user, student_id):
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    records = db.scalars(
+        select(models.AttendanceRecord)
+        .where(
+            models.AttendanceRecord.school_id == user.school_id,
+            models.AttendanceRecord.student_id == student_id,
+        )
+        .order_by(
+            models.AttendanceRecord.attendance_date.desc(),
+            models.AttendanceRecord.id.desc(),
+        )
+        .limit(limit)
+    ).all()
+
+    # Keep internal remarks and staff identifiers private from parent accounts.
+    return [
+        {
+            "id": record.id,
+            "attendance_date": record.attendance_date.isoformat(),
+            "status": record.status,
+        }
+        for record in records
+    ]
+
+
 @app.get("/api/parent/children/{student_id}/fees", tags=["parent-portal"])
 def parent_child_fees(student_id: int, db: Session = Depends(get_db),
                       user: models.User = Depends(require_roles("parent"))):
@@ -1703,7 +1741,7 @@ def chatbot_faq(payload: dict, user: models.User = Depends(require_module_permis
         (("admission", "enroll", "enrollment"), "Admissions are managed from Students → Add Student. Please contact your school office for required documents and admission dates."),
         (("transport", "bus", "route"), "Transport routes and vehicle details are maintained in the Transport module. Contact your school transport manager for route allocation."),
         (("hostel", "room", "boarding"), "Hostel occupancy and room records are maintained in the Hostel module. Contact your school hostel warden for availability."),
-        (("attendance", "absent", "present"), "Attendance tracking is planned but is not yet available in this release. Please contact your class teacher for attendance records."),
+        (("attendance", "absent", "present"), "Parents can view attendance history for actively linked students in the Family Portal. Open the Parent Portal and select a student to see recent attendance records."),
         (("timetable", "schedule", "class time"), "Timetable management is planned for a future release. Please contact the academic office for the current timetable."),
         (("password", "login", "sign in", "account"), "If you cannot sign in, contact your school administrator to reset or reactivate your account. Never share your password or OTP."),
     ]
