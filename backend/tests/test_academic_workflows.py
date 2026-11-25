@@ -178,6 +178,36 @@ def academic_api_context():
             subject="Inactive relationship", body="No longer visible after unlinking.",
         )
         db.add_all([message_linked, message_other_parent, message_inactive_link])
+
+        attendance_linked_recent = models.AttendanceRecord(
+            school_id=school.id, student_id=linked_student.id,
+            attendance_date=date(2026, 11, 24), status="absent",
+            remarks="Internal note must not be visible to parents.", marked_by=teacher.id,
+        )
+        attendance_linked_older = models.AttendanceRecord(
+            school_id=school.id, student_id=linked_student.id,
+            attendance_date=date(2026, 11, 20), status="present",
+            remarks="Staff-only note.", marked_by=teacher.id,
+        )
+        attendance_unlinked = models.AttendanceRecord(
+            school_id=school.id, student_id=unlinked_student.id,
+            attendance_date=date(2026, 11, 24), status="late",
+            remarks="Unlinked student.", marked_by=teacher.id,
+        )
+        attendance_inactive_link = models.AttendanceRecord(
+            school_id=school.id, student_id=inactive_link_student.id,
+            attendance_date=date(2026, 11, 24), status="leave",
+            remarks="Inactive relationship.", marked_by=teacher.id,
+        )
+        attendance_cross_school = models.AttendanceRecord(
+            school_id=other_school.id, student_id=cross_school_student.id,
+            attendance_date=date(2026, 11, 24), status="present",
+            remarks="Other tenant.", marked_by=teacher.id,
+        )
+        db.add_all([
+            attendance_linked_recent, attendance_linked_older,
+            attendance_unlinked, attendance_inactive_link, attendance_cross_school,
+        ])
         db.commit()
 
         ids = {
@@ -194,6 +224,11 @@ def academic_api_context():
             "leave_unlinked_id": leave_unlinked.id,
             "leave_cross_school_id": leave_cross_school.id,
             "message_linked_id": message_linked.id,
+            "attendance_linked_recent_id": attendance_linked_recent.id,
+            "attendance_linked_older_id": attendance_linked_older.id,
+            "attendance_unlinked_id": attendance_unlinked.id,
+            "attendance_inactive_link_id": attendance_inactive_link.id,
+            "attendance_cross_school_id": attendance_cross_school.id,
         }
 
     actor["user"] = SimpleNamespace(
@@ -308,3 +343,61 @@ def test_parent_messages_only_show_active_linked_student_conversations(academic_
         "body": "This should be rejected.",
     })
     assert response.status_code == 404
+
+
+def test_parent_attendance_is_limited_to_active_linked_student_and_safe_fields(academic_api_context):
+    actor, ids, api_request = academic_api_context
+
+    response = api_request(
+        "GET",
+        f"/api/parent/children/{ids['linked_student_id']}/attendance?limit=1",
+    )
+    assert response.status_code == 200
+    records = response.json()
+    assert len(records) == 1
+    assert records[0] == {
+        "id": ids["attendance_linked_recent_id"],
+        "attendance_date": "2026-11-24",
+        "status": "absent",
+    }
+    assert "remarks" not in records[0]
+    assert "marked_by" not in records[0]
+
+    response = api_request(
+        "GET",
+        f"/api/parent/children/{ids['linked_student_id']}/attendance",
+    )
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == [
+        ids["attendance_linked_recent_id"],
+        ids["attendance_linked_older_id"],
+    ]
+
+
+def test_parent_attendance_rejects_unlinked_inactive_and_cross_school_students(academic_api_context):
+    actor, ids, api_request = academic_api_context
+
+    for student_key in (
+        "unlinked_student_id",
+        "inactive_link_student_id",
+        "cross_school_student_id",
+    ):
+        response = api_request(
+            "GET",
+            f"/api/parent/children/{ids[student_key]}/attendance",
+        )
+        assert response.status_code == 404
+
+
+def test_parent_cannot_use_staff_attendance_crud(academic_api_context):
+    actor, ids, api_request = academic_api_context
+
+    response = api_request("GET", "/api/attendance")
+    assert response.status_code == 403
+
+    response = api_request(
+        "GET",
+        f"/api/attendance/{ids['attendance_linked_recent_id']}",
+    )
+    assert response.status_code == 403
+
