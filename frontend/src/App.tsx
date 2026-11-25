@@ -236,21 +236,98 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
 }
 
 function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(url:string,options?:RequestInit)=>Promise<any>;userRole:string;refreshKey:number;onLoadingChange:(loading:boolean)=>void}) {
- const [children,setChildren]=useState<any[]>([]),[childId,setChildId]=useState(''),[fees,setFees]=useState<any[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true);
+ const [children,setChildren]=useState<any[]>([]);
+ const [childId,setChildId]=useState('');
+ const [fees,setFees]=useState<any[]>([]);
+ const [attendance,setAttendance]=useState<any[]>([]);
+ const [error,setError]=useState('');
+ const [loading,setLoading]=useState(true);
+
  useEffect(()=>{
-  if(userRole!=='parent'){setLoading(false);onLoadingChange(false);return}
-  let active=true;setLoading(true);setError('');onLoadingChange(true);
-  request('/api/parent/children').then((data:any[])=>{if(!active)return;setChildren(data);setChildId(current=>data.some(child=>String(child.id)===current)?current:(data.length?String(data[0].id):''))}).catch((e:any)=>{if(active)setError(e.message)}).finally(()=>{if(active){setLoading(false);onLoadingChange(false)}});
+  if(userRole!=='parent'){
+   setLoading(false);
+   onLoadingChange(false);
+   return;
+  }
+  let active=true;
+  setLoading(true);
+  setError('');
+  onLoadingChange(true);
+  request('/api/parent/children')
+   .then((data:any[])=>{
+    if(!active)return;
+    setChildren(data);
+    setChildId(current=>data.some(child=>String(child.id)===current)?current:(data.length?String(data[0].id):''));
+   })
+   .catch((e:any)=>{if(active)setError(e.message)})
+   .finally(()=>{if(active){setLoading(false);onLoadingChange(false)}});
   return()=>{active=false};
  },[userRole,refreshKey]);
+
  useEffect(()=>{
-  let active=true;setError('');
-  if(childId&&userRole==='parent')request('/api/parent/children/'+childId+'/fees').then(data=>{if(active)setFees(data)}).catch((e:any)=>{if(active)setError(e.message)});
-  else setFees([]);
+  let active=true;
+  setError('');
+  if(childId&&userRole==='parent'){
+   setFees([]);
+   setAttendance([]);
+   Promise.all([
+    request('/api/parent/children/'+childId+'/fees'),
+    request('/api/parent/children/'+childId+'/attendance?limit=90'),
+   ]).then(([feeData,attendanceData])=>{
+    if(!active)return;
+    setFees(feeData);
+    setAttendance(attendanceData);
+   }).catch((e:any)=>{if(active)setError(e.message)});
+  }else{
+   setFees([]);
+   setAttendance([]);
+  }
   return()=>{active=false};
  },[childId,userRole,refreshKey]);
- return <div className="panel"><div className="panel-heading"><div><h3>Family Portal</h3><p>View information for students linked to your parent account.</p></div><Users size={20}/></div>{userRole!=='parent'?<div className="empty-state"><strong>Parent account required</strong><p>The Parent Portal is available only to Parent accounts. Switch to a Parent demo account to view linked students and fee balances.</p></div>:loading?<div className="empty-state"><strong>Loading linked students…</strong><p>Your family information will appear here shortly.</p></div>:error?<div className="error" role="alert">{error}</div>:children.length===0?<div className="empty-state"><strong>No student profiles linked</strong><p>Ask your school administrator to link your parent account to your child.</p></div>:<><label className="parent-child-select">Student<select value={childId} onChange={e=>setChildId(e.target.value)}>{children.map(c=><option key={c.id} value={c.id}>{c.full_name} · {c.admission_no} · {c.class_name} {c.section}</option>)}</select></label><div className="table-wrap"><table><thead><tr><th>Fee category</th><th>Academic year</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead><tbody>{fees.map(f=><tr key={f.fee_id}><td>{f.category}</td><td>{f.academic_year}</td><td>{money(f.total)}</td><td>{money(f.paid)}</td><td><strong>{money(f.balance)}</strong></td><td><span className="status-badge">{f.status}</span></td></tr>)}{!fees.length&&<tr><td colSpan={6}>No fee records found.</td></tr>}</tbody></table></div></>}</div>
+
+ return <div className="panel">
+  <div className="panel-heading">
+   <div><h3>Family Portal</h3><p>View information for students linked to your parent account.</p></div>
+   <Users size={20}/>
+  </div>
+  {userRole!=='parent'?<div className="empty-state"><strong>Parent account required</strong><p>The Parent Portal is available only to Parent accounts. Switch to a Parent demo account to view linked students, attendance, and fee balances.</p></div>
+  :loading?<div className="empty-state"><strong>Loading linked students…</strong><p>Your family information will appear here shortly.</p></div>
+  :error?<div className="error" role="alert">{error}</div>
+  :children.length===0?<div className="empty-state"><strong>No student profiles linked</strong><p>Ask your school administrator to link your parent account to your child.</p></div>
+  :<>
+   <label className="parent-child-select">Student
+    <select value={childId} onChange={e=>setChildId(e.target.value)}>
+     {children.map(c=><option key={c.id} value={c.id}>{c.full_name} · {c.admission_no} · {c.class_name} {c.section}</option>)}
+    </select>
+   </label>
+   <section className="parent-portal-section">
+    <div className="panel-heading"><div><h4>Recent attendance</h4><p>Latest attendance records for the selected student.</p></div></div>
+    <div className="table-wrap">
+     <table>
+      <thead><tr><th>Date</th><th>Status</th></tr></thead>
+      <tbody>
+       {attendance.map(record=><tr key={record.id}><td>{record.attendance_date}</td><td><span className="status-badge">{record.status}</span></td></tr>)}
+       {!attendance.length&&<tr><td colSpan={2}>No attendance records found.</td></tr>}
+      </tbody>
+     </table>
+    </div>
+   </section>
+   <section className="parent-portal-section">
+    <div className="panel-heading"><div><h4>Fee balances</h4><p>Fee information for the selected student.</p></div></div>
+    <div className="table-wrap">
+     <table>
+      <thead><tr><th>Fee category</th><th>Academic year</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
+      <tbody>
+       {fees.map(f=><tr key={f.fee_id}><td>{f.category}</td><td>{f.academic_year}</td><td>{money(f.total)}</td><td>{money(f.paid)}</td><td><strong>{money(f.balance)}</strong></td><td><span className="status-badge">{f.status}</span></td></tr>)}
+       {!fees.length&&<tr><td colSpan={6}>No fee records found.</td></tr>}
+      </tbody>
+     </table>
+    </div>
+   </section>
+  </>}
+ </div>
 }
+
 function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Promise<any>}) {
  const [question,setQuestion]=useState(''),[messages,setMessages]=useState<{q:string,a:string}[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState('');
  async function ask(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!question.trim()||busy)return;const q=question.trim();setQuestion('');setBusy(true);setError('');try{const result=await request('/api/chatbot/faq',{method:'POST',body:JSON.stringify({question:q})});setMessages(old=>[...old,{q,a:result.answer}])}catch(err:any){setError(err.message)}finally{setBusy(false)}}
