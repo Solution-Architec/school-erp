@@ -1,2 +1,2 @@
 FROM postgres:16-alpine
-RUN apk add --no-cache python3
+RUN apk add --no-cache python3 aws-cli
