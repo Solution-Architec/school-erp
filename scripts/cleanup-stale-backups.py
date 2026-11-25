@@ -11,6 +11,20 @@ stale_hours = max(1, int(os.getenv("BACKUP_PARTIAL_STALE_HOURS", "48")))
 pattern = re.compile(rf"^{re.escape(prefix)}_(\d{{8}}T\d{{6}}Z)_(\d+)_backup\.dump\.partial$")
 cutoff = time.time() - stale_hours * 3600
 removed = 0
+active_markers = list(root.glob(".backup-active-*"))
+active = False
+for marker in active_markers:
+    try:
+        if marker.stat().st_mtime >= cutoff:
+            active = True
+        else:
+            marker.unlink()
+    except FileNotFoundError:
+        continue
+if active:
+    print("Active backup worker detected; stale partial cleanup skipped")
+    raise SystemExit(0)
+
 for path in root.glob(f"{prefix}_*.dump.partial"):
     match = pattern.match(path.name)
     if not match:
