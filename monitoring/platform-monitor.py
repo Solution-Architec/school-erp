@@ -212,7 +212,7 @@ def apply_resource_thresholds(results, metrics):
         ("host_cpu_load", metrics.get("cpu_load_per_core"), warning_cpu, critical_cpu),
     ):
         if value is None:
-            results[name] = {"status": "unavailable"}
+            results[name] = {"status": "warning", "reason": "host metric is unavailable"}
         else:
             state = "critical" if value >= critical else "warning" if value >= warn else "ok"
             results[name] = {"status": state, "value": value}
@@ -236,13 +236,19 @@ def backup_status():
         status = json.loads(path.read_text())
     except (OSError, ValueError):
         return {"status": "warning", "reason": "no verified backup status file is available"}
-    if status.get("offsite_status") == "failed":
-        return {"status": "critical", "reason": status.get("offsite_error", "offsite verification failed")}
-    if os.getenv("BACKUP_S3_URI") and status.get("offsite_status") != "restore_verified":
-        return {"status": "warning", "reason": "offsite copy is not independently restore-verified"}
     if status.get("restore_verified") is not True:
         return {"status": "critical", "reason": "latest local archive has not passed restore verification"}
-    return {"status": "ok", "archive": status.get("archive"), "offsite_status": status.get("offsite_status", "not_configured")}
+    try:
+        stamp = datetime.strptime(status["last_success_utc"], "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+        age_hours = (utcnow() - stamp).total_seconds() / 3600
+        max_age = float(os.getenv("BACKUP_MAX_AGE_HOURS", "26"))
+        if age_hours > max_age:
+            return {"status": "warning", "reason": f"latest verified backup is {age_hours:.1f} hours old",
+                    "archive": status.get("archive"), "age_hours": round(age_hours, 1)}
+    except (KeyError, TypeError, ValueError):
+        return {"status": "warning", "reason": "backup success timestamp is missing or invalid"}
+    return {"status": "ok", "archive": status.get("archive"), "offsite_status": status.get("offsite_status", "not_configured"),
+            "age_hours": round(age_hours, 1)}
 
 def run_checks():
     results = {}
@@ -269,6 +275,16 @@ def run_checks():
     apply_resource_thresholds(results, metrics)
     results["host_metrics"] = metrics
     results["backup"] = backup_status()
+    if not os.getenv("BACKUP_S3_URI"):
+        results["offsite_backup"] = {"status": "not_configured"}
+    else:
+        try:
+            backup_meta = json.loads(Path("/backups/backup-status.json").read_text())
+            offsite = backup_meta.get("offsite_status")
+            results["offsite_backup"] = {"status": "ok" if offsite == "restore_verified" else "critical",
+                                          "reason": backup_meta.get("offsite_error", "offsite copy is not restore-verified") if offsite != "restore_verified" else ""}
+        except (OSError, ValueError):
+            results["offsite_backup"] = {"status": "warning", "reason": "backup status file unavailable"}
     results["checked_at"] = utcnow().isoformat()
     return results
 
@@ -288,16 +304,20 @@ def main():
         if incident_token:
             for key, details in new_failures.items():
                 try:
-                    request(os.getenv("MONITOR_APP_URL", "").rstrip("/") + "/api/platform/ops/internal/monitor-events",
-                            method="POST", headers={"Content-Type": "application/json", "X-Monitor-Token": incident_token},
-                            data=json.dumps({"check": key, "status": details.get("status"), "message": details.get("error") or str(details)}).encode())
+                    code, _ = request(os.getenv("MONITOR_APP_URL", "").rstrip("/") + "/api/platform/ops/internal/monitor-events",
+                                      method="POST", headers={"Content-Type": "application/json", "X-Monitor-Token": incident_token},
+                                      data=json.dumps({"check": key, "status": details.get("status"), "message": details.get("error") or str(details)}).encode())
+                    if code != 200:
+                        raise RuntimeError(f"incident endpoint returned HTTP {code}")
                 except Exception as exc:
                     print(f"INCIDENT CREATION FAILED for {key}: {type(exc).__name__}: {exc}", flush=True)
             for key in recovered:
                 try:
-                    request(os.getenv("MONITOR_APP_URL", "").rstrip("/") + "/api/platform/ops/internal/monitor-events",
-                            method="POST", headers={"Content-Type": "application/json", "X-Monitor-Token": incident_token},
-                            data=json.dumps({"check": key, "status": "ok", "message": "Monitoring check recovered"}).encode())
+                    code, _ = request(os.getenv("MONITOR_APP_URL", "").rstrip("/") + "/api/platform/ops/internal/monitor-events",
+                                      method="POST", headers={"Content-Type": "application/json", "X-Monitor-Token": incident_token},
+                                      data=json.dumps({"check": key, "status": "ok", "message": "Monitoring check recovered"}).encode())
+                    if code != 200:
+                        raise RuntimeError(f"incident recovery endpoint returned HTTP {code}")
                 except Exception as exc:
                     print(f"INCIDENT RECOVERY UPDATE FAILED for {key}: {type(exc).__name__}: {exc}", flush=True)
         if new_failures or recovered:
