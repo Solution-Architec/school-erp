@@ -8,7 +8,7 @@ from pathlib import Path
 root = Path(os.getenv("BACKUP_DIR", "/backups"))
 prefix = os.getenv("BACKUP_PREFIX", "school_erp")
 stale_hours = max(1, int(os.getenv("BACKUP_PARTIAL_STALE_HOURS", "48")))
-pattern = re.compile(rf"^{re.escape(prefix)}_\\d{{8}}T\\d{{6}}Z_(\\d+)_backup\\.dump\\.partial$")
+pattern = re.compile(rf"^{re.escape(prefix)}_(\d{{8}}T\d{{6}}Z)_(\d+)_backup\.dump\.partial$")
 cutoff = time.time() - stale_hours * 3600
 removed = 0
 for path in root.glob(f"{prefix}_*.dump.partial"):
