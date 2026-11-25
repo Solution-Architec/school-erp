@@ -124,7 +124,7 @@ if os.environ.get("OFFSITE_ERROR"):
     payload["offsite_error"] = os.environ["OFFSITE_ERROR"]
 with open(path, "w", encoding="utf-8") as stream:
     json.dump(payload, stream, separators=(",", ":"))
-    stream.write("\\n")
+    stream.write("\n")
 PY
 
   mv "$status_tmp" "$BACKUP_DIR/backup-status.json" || { write_attempt "failed" || true; return 1; }
