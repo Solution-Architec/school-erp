@@ -63,7 +63,7 @@ verify_restore() {
   VERIFY_DIR=""
 }
 
-run_backup() {
+run_backup_inner() {
   timestamp=$(date -u +%Y%m%dT%H%M%SZ)
   filename="${BACKUP_PREFIX}_${timestamp}_$$_backup.dump"
   archive_file="$BACKUP_DIR/$filename"
@@ -138,6 +138,27 @@ PY
     log "Local and offsite backup independently restore-verified"
   fi
   log "Backup verified and stored: $filename ($size_bytes bytes)"
+}
+
+run_backup() {
+  marker="$BACKUP_DIR/.backup-active-$"
+  : > "$marker"
+  (
+    while [ -f "$marker" ]; do
+      touch "$marker"
+      sleep 60
+    done
+  ) &
+  heartbeat_pid=$!
+  if run_backup_inner; then
+    result=0
+  else
+    result=$?
+  fi
+  rm -f "$marker"
+  kill "$heartbeat_pid" >/dev/null 2>&1 || true
+  wait "$heartbeat_pid" 2>/dev/null || true
+  return "$result"
 }
 
 run_cycle() {
