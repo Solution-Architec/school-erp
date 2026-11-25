@@ -18,7 +18,7 @@ for path in root.glob(f"{prefix}_*.dump.partial"):
     try:
         if path.stat().st_mtime >= cutoff:
             continue
-        pid = int(match.group(1))
+        pid = int(match.group(2))
         try:
             os.kill(pid, 0)
             continue
