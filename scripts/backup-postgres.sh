@@ -29,14 +29,14 @@ umask 027
 mkdir -p "$BACKUP_DIR"
 
 log() {
-  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
+  printf '%s %s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
 }
 
 write_attempt() {
   attempt_status=$1
   attempt_time=$(date -u +%Y%m%dT%H%M%SZ)
   attempt_tmp="$BACKUP_DIR/.backup-attempt.$$.tmp"
-  printf '{"status":"%s","last_attempt_utc":"%s"}\n' "$attempt_status" "$attempt_time" > "$attempt_tmp"
+  printf '{"status":"%s","last_attempt_utc":"%s"}\\n' "$attempt_status" "$attempt_time" > "$attempt_tmp"
   mv "$attempt_tmp" "$BACKUP_DIR/backup-attempt.json"
 }
 
@@ -56,7 +56,7 @@ verify_restore() {
   initdb -D "$VERIFY_DIR/data" --username=postgres --auth-local=trust --auth-host=trust --no-instructions >/dev/null || return 1
   pg_ctl -D "$VERIFY_DIR/data" -o "-h 127.0.0.1 -k $VERIFY_DIR -p 55432" -w start >/dev/null || return 1
   createdb -h "$VERIFY_DIR" -p 55432 -U postgres backup_restore_check || return 1
-  pg_restore --host "$VERIFY_DIR" --port 55432 --username postgres \
+  pg_restore --host "$VERIFY_DIR" --port 55432 --username postgres \\
     --dbname backup_restore_check --no-owner --no-privileges --exit-on-error "$archive_file" || return 1
   pg_ctl -D "$VERIFY_DIR/data" -m fast -w stop >/dev/null || return 1
   rm -rf "$VERIFY_DIR"
@@ -124,7 +124,7 @@ if os.environ.get("OFFSITE_ERROR"):
     payload["offsite_error"] = os.environ["OFFSITE_ERROR"]
 with open(path, "w", encoding="utf-8") as stream:
     json.dump(payload, stream, separators=(",", ":"))
-    stream.write("\n")
+    stream.write("\\n")
 PY
 
   mv "$status_tmp" "$BACKUP_DIR/backup-status.json" || { write_attempt "failed" || true; return 1; }
@@ -141,7 +141,8 @@ PY
 }
 
 run_backup() {
-  marker="$BACKUP_DIR/.backup-active-$"
+  # A shared, per-process marker protects partials across Docker PID namespaces.
+  marker="$BACKUP_DIR/.backup-active-$$"
   : > "$marker"
   (
     while [ -f "$marker" ]; do
