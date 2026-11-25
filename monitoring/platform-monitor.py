@@ -146,7 +146,8 @@ def classify_transitions(previous, current):
     failures = {k: v for k, v in current.items()
                 if isinstance(v, dict) and v.get("status") in ("critical", "warning")}
     old_failures = previous.get("failures", {})
-    new_failures = {k: v for k, v in failures.items() if k not in old_failures}
+    new_failures = {k: v for k, v in failures.items()
+                    if k not in old_failures or old_failures[k].get("status") != v.get("status")}
     recovered = [k for k in old_failures if k not in failures]
     return failures, new_failures, recovered
 
@@ -234,7 +235,7 @@ def backup_status():
     try:
         status = json.loads(path.read_text())
     except (OSError, ValueError):
-        return {"status": "not_configured"}
+        return {"status": "warning", "reason": "no verified backup status file is available"}
     if status.get("offsite_status") == "failed":
         return {"status": "critical", "reason": status.get("offsite_error", "offsite verification failed")}
     if os.getenv("BACKUP_S3_URI") and status.get("offsite_status") != "restore_verified":
