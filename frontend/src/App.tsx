@@ -8,7 +8,7 @@ type User = { id:number; name:string; email:string; role:string; school_id?:numb
 type ModuleDef = { key:string; label:string; icon:any; endpoint?:string; fields?:{key:string;label:string;type?:string;required?:boolean;options?:string[]}[]; description:string }
 const modules: ModuleDef[] = [
  {key:'dashboard',label:'Dashboard',icon:LayoutDashboard,description:'School overview and operational alerts'},
- {key:'parent-portal',label:'Parent Portal',icon:Users,description:'Family view of linked students and fee balances'},
+ {key:'parent-portal',label:'Parent Portal',icon:Users,description:'Family attendance, exam results, certificates and fee balances'},
  {key:'chatbot',label:'Help Assistant',icon:Activity,description:'School FAQ and guided help'},
  {key:'approvals',label:'Staff Approvals',icon:Users,description:'Review verified staff account requests'},
  {key:'schools',label:'Schools',icon:Building2,endpoint:'/api/schools',description:'Register schools and assign school-owner accounts',fields:[{key:'name',label:'School name',required:true},{key:'code',label:'School code',required:true}]},
@@ -396,7 +396,7 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
    </section>
    <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Certificate applications</h4><p>Apply for school certificates and track the school's decision.</p></div></div>
-    <form className="parent-certificate-form" onSubmit={submitCertificate}>
+    <form className="record-form parent-certificate-form" onSubmit={submitCertificate}>
      <label>Certificate type<select value={certificateType} onChange={e=>setCertificateType(e.target.value)}><option value="study">Study certificate</option><option value="bonafide">Bonafide certificate</option><option value="conduct">Conduct certificate</option><option value="transfer">Transfer certificate</option><option value="other">Other certificate</option></select></label>
      <label>Purpose<textarea required minLength={3} maxLength={500} value={certificatePurpose} onChange={e=>setCertificatePurpose(e.target.value)} placeholder="Tell the school why this certificate is needed."/></label>
      <button className="primary" disabled={certificateSubmitting||!certificatePurpose.trim()}>{certificateSubmitting?'Submitting…':'Submit certificate request'}</button>
