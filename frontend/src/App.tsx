@@ -317,7 +317,7 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
       <tbody>
        {attendance.map(record=><tr key={record.id}><td>{record.attendance_date}</td><td><span className="status-badge">{record.status}</span></td></tr>)}
        {attendanceLoading&&<tr><td colSpan={2}>Loading attendance…</td></tr>}
-       {!attendanceLoading&&!attendance.length&&<tr><td colSpan={2}>No attendance records found.</td></tr>}
+       {!attendanceLoading&&!attendance.length&&<tr><td colSpan={2}>No attendance has been recorded for this student yet. Once school staff mark attendance, it will appear here.</td></tr>}
       </tbody>
      </table>
     </div>}
