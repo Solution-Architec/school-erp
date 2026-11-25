@@ -53,11 +53,10 @@ trap 'exit 1' HUP INT TERM
 verify_restore() {
   archive_file=$1
   VERIFY_DIR=$(mktemp -d /tmp/pg-restore-check.XXXXXX)
-  initdb -D "$VERIFY_DIR/data" --username=postgres --auth-local=trust --auth-host=trust --no-instructions >/dev/null || return 1
+  initdb -D "$VERIFY_DIR/data" --username=postgres --auth-local=trust --auth-host=trust --no-instructions --locale=C >/dev/null || return 1
   pg_ctl -D "$VERIFY_DIR/data" -o "-h 127.0.0.1 -k $VERIFY_DIR -p 55432" -w start >/dev/null || return 1
   createdb -h "$VERIFY_DIR" -p 55432 -U postgres backup_restore_check || return 1
-  pg_restore --host "$VERIFY_DIR" --port 55432 --username postgres \\
-    --dbname backup_restore_check --no-owner --no-privileges --exit-on-error "$archive_file" || return 1
+  pg_restore --host "$VERIFY_DIR" --port 55432 --username postgres --dbname backup_restore_check --no-owner --no-privileges --exit-on-error "$archive_file" || return 1
   pg_ctl -D "$VERIFY_DIR/data" -m fast -w stop >/dev/null || return 1
   rm -rf "$VERIFY_DIR"
   VERIFY_DIR=""
@@ -141,7 +140,6 @@ PY
 }
 
 run_backup() {
-  # A shared, per-process marker protects partials across Docker PID namespaces.
   marker="$BACKUP_DIR/.backup-active-$$"
   : > "$marker"
   (
