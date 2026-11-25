@@ -92,7 +92,12 @@ def academic_api_context():
             password_hash="unused", role="parent", school_id=school.id,
             is_active=True, approval_status="approved",
         )
-        db.add_all([parent, teacher, other_parent])
+        school_admin = models.User(
+            name="School Admin", email="admin.academic@example.test",
+            password_hash="unused", role="admin", school_id=school.id,
+            is_active=True, approval_status="approved",
+        )
+        db.add_all([parent, teacher, other_parent, school_admin])
         db.flush()
 
         linked_student = models.Student(
@@ -208,6 +213,30 @@ def academic_api_context():
             attendance_linked_recent, attendance_linked_older,
             attendance_unlinked, attendance_inactive_link, attendance_cross_school,
         ])
+        exam_linked = models.Exam(
+            school_id=school.id, name="Term 1", class_name="5", section="A",
+            subject="Science", exam_date=date(2026, 11, 18),
+            max_marks=100, pass_marks=35, academic_year="2026-27",
+        )
+        exam_unlinked = models.Exam(
+            school_id=school.id, name="Term 1", class_name="5", section="B",
+            subject="Maths", exam_date=date(2026, 11, 18),
+            max_marks=100, pass_marks=35, academic_year="2026-27",
+        )
+        db.add_all([exam_linked, exam_unlinked])
+        db.flush()
+        report_linked = models.ReportCard(
+            school_id=school.id, student_id=linked_student.id,
+            exam_id=exam_linked.id, marks_obtained=82,
+            remarks="Good progress",
+        )
+        report_unlinked = models.ReportCard(
+            school_id=school.id, student_id=unlinked_student.id,
+            exam_id=exam_unlinked.id, marks_obtained=28,
+            remarks="Needs support",
+        )
+        db.add_all([report_linked, report_unlinked])
+
         db.commit()
 
         ids = {
@@ -216,6 +245,7 @@ def academic_api_context():
             "parent_id": parent.id,
             "teacher_id": teacher.id,
             "other_parent_id": other_parent.id,
+            "school_admin_id": school_admin.id,
             "linked_student_id": linked_student.id,
             "unlinked_student_id": unlinked_student.id,
             "inactive_link_student_id": inactive_link_student.id,
@@ -229,6 +259,8 @@ def academic_api_context():
             "attendance_unlinked_id": attendance_unlinked.id,
             "attendance_inactive_link_id": attendance_inactive_link.id,
             "attendance_cross_school_id": attendance_cross_school.id,
+            "report_linked_id": report_linked.id,
+            "report_unlinked_id": report_unlinked.id,
         }
 
     actor["user"] = SimpleNamespace(
@@ -401,3 +433,87 @@ def test_parent_cannot_use_staff_attendance_crud(academic_api_context):
     )
     assert response.status_code == 403
 
+
+
+
+def test_parent_exam_results_are_limited_to_active_linked_student(academic_api_context):
+    actor, ids, api_request = academic_api_context
+
+    response = api_request("GET", f"/api/parent/children/{ids['linked_student_id']}/exam-results")
+    assert response.status_code == 200
+    assert response.json() == [{
+        "id": ids["report_linked_id"],
+        "exam_id": response.json()[0]["exam_id"],
+        "exam_name": "Term 1",
+        "subject": "Science",
+        "exam_date": "2026-11-18",
+        "academic_year": "2026-27",
+        "max_marks": 100.0,
+        "pass_marks": 35.0,
+        "marks_obtained": 82.0,
+        "result": "passed",
+        "remarks": "Good progress",
+    }]
+
+    for student_key in ("unlinked_student_id", "inactive_link_student_id", "cross_school_student_id"):
+        denied = api_request("GET", f"/api/parent/children/{ids[student_key]}/exam-results")
+        assert denied.status_code == 404
+
+
+def test_parent_certificate_application_requires_active_link_and_can_be_reviewed(academic_api_context):
+    actor, ids, api_request = academic_api_context
+    payload = {
+        "student_id": ids["linked_student_id"],
+        "certificate_type": "bonafide",
+        "purpose": "Bank account documentation",
+    }
+    response = api_request(
+        "POST",
+        f"/api/parent/children/{ids['linked_student_id']}/certificate-applications",
+        payload,
+    )
+    assert response.status_code == 200
+    application = response.json()
+    assert application["status"] == "pending"
+    assert application["certificate_type"] == "bonafide"
+    assert application["school_id"] == ids["school_id"]
+
+    listed = api_request(
+        "GET",
+        f"/api/parent/children/{ids['linked_student_id']}/certificate-applications",
+    )
+    assert listed.status_code == 200
+    assert [row["id"] for row in listed.json()] == [application["id"]]
+
+    denied = api_request(
+        "POST",
+        f"/api/parent/children/{ids['unlinked_student_id']}/certificate-applications",
+        {**payload, "student_id": ids["unlinked_student_id"]},
+    )
+    assert denied.status_code == 404
+
+    parent_review = api_request(
+        "POST",
+        f"/api/certificate-applications/{application['id']}/review",
+        {"status": "approved", "reviewer_note": "Approved"},
+    )
+    assert parent_review.status_code == 403
+
+    actor["user"] = type(actor["user"])(
+        id=ids["school_admin_id"], role="admin", school_id=ids["school_id"], is_active=True,
+    )
+    approved = api_request(
+        "POST",
+        f"/api/certificate-applications/{application['id']}/review",
+        {"status": "approved", "reviewer_note": "Ready for school office collection"},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["reviewer_note"] == "Ready for school office collection"
+
+    repeated = api_request(
+        "POST",
+        f"/api/certificate-applications/{application['id']}/review",
+        {"status": "rejected", "reviewer_note": "No"},
+    )
+    assert repeated.status_code == 409
