@@ -608,6 +608,53 @@ async def razorpay_payment_webhook(request: Request,
     return {"received": True, "recorded": True}
 
 
+class MonitorEventInput(BaseModel):
+    check: str = Field(min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_.:-]+$")
+    status: Literal["critical", "warning", "ok"]
+    message: str = Field(default="", max_length=4000)
+
+
+@router.post("/internal/monitor-events")
+def ingest_monitor_event(payload: MonitorEventInput, request: Request,
+                         x_monitor_token: str = Header(default=""),
+                         db: Session = Depends(get_db)):
+    configured = os.getenv("MONITOR_INTERNAL_TOKEN", "")
+    if not configured or not hmac.compare_digest(x_monitor_token, configured):
+        raise HTTPException(status_code=401, detail="Invalid monitoring service token")
+    actor = db.scalar(select(models.User).where(models.User.role == "super_admin").order_by(models.User.id))
+    if not actor:
+        raise HTTPException(status_code=503, detail="No platform owner is available for incident attribution")
+    title = f"Automated monitor: {payload.check}"
+    item = db.scalar(select(PlatformIncident).where(
+        PlatformIncident.title == title,
+        PlatformIncident.status.notin_(["resolved", "closed"])
+    ).order_by(PlatformIncident.created_at.desc()))
+    if payload.status == "ok":
+        if item:
+            item.status = "resolved"
+            item.resolution_notes = (payload.message or "Monitoring check recovered")[:12000]
+            item.updated_at = datetime.utcnow()
+            _audit(db, actor, "platform.incident.monitor_recovered", "platform_incident", str(item.id),
+                   {"check": payload.check})
+            db.commit()
+        return {"recorded": True, "recovered": bool(item), "incident_id": item.id if item else None}
+    severity = "critical" if payload.status == "critical" else "medium"
+    if item:
+        item.severity = severity
+        item.description = payload.message
+        item.updated_at = datetime.utcnow()
+    else:
+        item = PlatformIncident(title=title, description=payload.message, severity=severity,
+                                status="open", affected_scope="platform", created_by=actor.id)
+        db.add(item)
+        db.flush()
+    _audit(db, actor, "platform.incident.monitor_alert", "platform_incident", str(item.id),
+           {"check": payload.check, "status": payload.status})
+    db.commit()
+    db.refresh(item)
+    return {"recorded": True, "incident_id": item.id, "status": item.status}
+
+
 @router.get("/incidents")
 def list_platform_incidents(db: Session = Depends(get_db), user=platform_owner):
     return db.scalars(select(PlatformIncident).order_by(PlatformIncident.created_at.desc()).limit(300)).all()

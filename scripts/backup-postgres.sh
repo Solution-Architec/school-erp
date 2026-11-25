@@ -14,6 +14,8 @@ BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
 BACKUP_DAILY_RETENTION_DAYS=${BACKUP_DAILY_RETENTION_DAYS:-7}
 BACKUP_WEEKLY_RETENTION_WEEKS=${BACKUP_WEEKLY_RETENTION_WEEKS:-4}
 BACKUP_MONTHLY_RETENTION_MONTHS=${BACKUP_MONTHLY_RETENTION_MONTHS:-12}
+BACKUP_S3_URI=${BACKUP_S3_URI:-}
+BACKUP_PARTIAL_STALE_HOURS=${BACKUP_PARTIAL_STALE_HOURS:-48}
 BACKUP_RUN_ON_START=${BACKUP_RUN_ON_START:-true}
 BACKUP_ONCE=${BACKUP_ONCE:-false}
 VERIFY_DIR=""
@@ -27,14 +29,14 @@ umask 027
 mkdir -p "$BACKUP_DIR"
 
 log() {
-  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
+  printf '%s %s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
 }
 
 write_attempt() {
   attempt_status=$1
   attempt_time=$(date -u +%Y%m%dT%H%M%SZ)
   attempt_tmp="$BACKUP_DIR/.backup-attempt.$$.tmp"
-  printf '{"status":"%s","last_attempt_utc":"%s"}\n' "$attempt_status" "$attempt_time" > "$attempt_tmp"
+  printf '{"status":"%s","last_attempt_utc":"%s"}\\n' "$attempt_status" "$attempt_time" > "$attempt_tmp"
   mv "$attempt_tmp" "$BACKUP_DIR/backup-attempt.json"
 }
 
@@ -51,17 +53,16 @@ trap 'exit 1' HUP INT TERM
 verify_restore() {
   archive_file=$1
   VERIFY_DIR=$(mktemp -d /tmp/pg-restore-check.XXXXXX)
-  initdb -D "$VERIFY_DIR/data" --username=postgres --auth-local=trust --auth-host=trust --no-instructions >/dev/null || return 1
+  initdb -D "$VERIFY_DIR/data" --username=postgres --auth-local=trust --auth-host=trust --no-instructions --locale=C >/dev/null || return 1
   pg_ctl -D "$VERIFY_DIR/data" -o "-h 127.0.0.1 -k $VERIFY_DIR -p 55432" -w start >/dev/null || return 1
   createdb -h "$VERIFY_DIR" -p 55432 -U postgres backup_restore_check || return 1
-  pg_restore --host "$VERIFY_DIR" --port 55432 --username postgres \
-    --dbname backup_restore_check --no-owner --no-privileges --exit-on-error "$archive_file" || return 1
+  pg_restore --host "$VERIFY_DIR" --port 55432 --username postgres --dbname backup_restore_check --no-owner --no-privileges --exit-on-error "$archive_file" || return 1
   pg_ctl -D "$VERIFY_DIR/data" -m fast -w stop >/dev/null || return 1
   rm -rf "$VERIFY_DIR"
   VERIFY_DIR=""
 }
 
-run_backup() {
+run_backup_inner() {
   timestamp=$(date -u +%Y%m%dT%H%M%SZ)
   filename="${BACKUP_PREFIX}_${timestamp}_$$_backup.dump"
   archive_file="$BACKUP_DIR/$filename"
@@ -91,16 +92,72 @@ run_backup() {
     return 1
   fi
 
+  offsite_status="not_configured"
+  offsite_error=""
+  if [ -n "$BACKUP_S3_URI" ]; then
+    remote_uri="${BACKUP_S3_URI%/}/$filename"
+    remote_copy=$(mktemp /tmp/remote-backup-check.XXXXXX.dump)
+    if aws s3 cp "$partial_file" "$remote_uri" --sse AES256; then
+      if aws s3 cp "$remote_uri" "$remote_copy" && pg_restore --list "$remote_copy" >/dev/null 2>&1 && verify_restore "$remote_copy"; then
+        offsite_status="restore_verified"
+      else
+        offsite_status="failed"
+        offsite_error="remote download, archive validation, or isolated restore failed"
+      fi
+    else
+      offsite_status="failed"
+      offsite_error="remote upload failed"
+    fi
+    rm -f "$remote_copy"
+  fi
+
   mv "$partial_file" "$archive_file" || { write_attempt "failed" || true; return 1; }
   size_bytes=$(wc -c < "$archive_file" | tr -d ' ')
-  printf '{"status":"verified","last_success_utc":"%s","archive":"%s","size_bytes":%s,"restore_verified":true}\n' \
-    "$timestamp" "$filename" "$size_bytes" > "$status_tmp" || { write_attempt "failed" || true; return 1; }
+  OFFSITE_STATUS="$offsite_status" OFFSITE_ERROR="$offsite_error" python3 - "$status_tmp" "$timestamp" "$filename" "$size_bytes" <<'PY'
+import json, os, sys
+path, timestamp, filename, size = sys.argv[1:]
+payload = {"status": "verified", "last_success_utc": timestamp, "archive": filename,
+           "size_bytes": int(size), "restore_verified": True,
+           "offsite_status": os.environ["OFFSITE_STATUS"]}
+if os.environ.get("OFFSITE_ERROR"):
+    payload["offsite_error"] = os.environ["OFFSITE_ERROR"]
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(payload, stream, separators=(",", ":"))
+    stream.write("\\n")
+PY
+
   mv "$status_tmp" "$BACKUP_DIR/backup-status.json" || { write_attempt "failed" || true; return 1; }
   write_attempt "verified" || return 1
 
   BACKUP_DAILY_RETENTION_DAYS="$BACKUP_DAILY_RETENTION_DAYS" BACKUP_WEEKLY_RETENTION_WEEKS="$BACKUP_WEEKLY_RETENTION_WEEKS" BACKUP_MONTHLY_RETENTION_MONTHS="$BACKUP_MONTHLY_RETENTION_MONTHS" python3 /opt/backup/backup-retention.py || return 1
 
+  if [ "$offsite_status" = "failed" ]; then
+    log "Local backup verified; offsite copy FAILED: $offsite_error"
+  elif [ "$offsite_status" = "restore_verified" ]; then
+    log "Local and offsite backup independently restore-verified"
+  fi
   log "Backup verified and stored: $filename ($size_bytes bytes)"
+}
+
+run_backup() {
+  marker="$BACKUP_DIR/.backup-active-$$"
+  : > "$marker"
+  (
+    while [ -f "$marker" ]; do
+      touch "$marker"
+      sleep 60
+    done
+  ) &
+  heartbeat_pid=$!
+  if run_backup_inner; then
+    result=0
+  else
+    result=$?
+  fi
+  rm -f "$marker"
+  kill "$heartbeat_pid" >/dev/null 2>&1 || true
+  wait "$heartbeat_pid" 2>/dev/null || true
+  return "$result"
 }
 
 run_cycle() {
@@ -109,6 +166,8 @@ run_cycle() {
   fi
   return 1
 }
+
+python3 /opt/backup/cleanup-stale-backups.py || true
 
 if [ "$BACKUP_RUN_ON_START" = "true" ] || [ "$BACKUP_ONCE" = "true" ]; then
   run_cycle || {

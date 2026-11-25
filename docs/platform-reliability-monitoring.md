@@ -4,18 +4,19 @@
 
 The backup job keeps the newest verified recovery point per UTC day for 7 days, per ISO week for 4 weeks, and per calendar month for 12 months. Configure `BACKUP_DAILY_RETENTION_DAYS`, `BACKUP_WEEKLY_RETENTION_WEEKS`, and `BACKUP_MONTHLY_RETENTION_MONTHS`.
 
-For offsite S3-compatible storage, configure the following in the untracked project-root `.env` file:
+Local storage remains the default. Offsite S3/S3-compatible storage is optional; leave `BACKUP_S3_URI` empty to use local backups only. To enable independently verified offsite copies, configure these values in the untracked project-root `.env` file:
 
 ```dotenv
 BACKUP_S3_URI=s3://your-private-bucket/edunexus/postgres
-AWS_DEFAULT_REGION=ap-south-1
+AWS_DEFAULT_REGION=ap-southeast-2
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 # Optional for S3-compatible storage:
 AWS_ENDPOINT_URL=https://s3.example-provider.com
+BACKUP_PARTIAL_STALE_HOURS=48
 ```
 
-Use a dedicated least-privilege bucket identity. Never commit credentials. Uploads request server-side AES256 encryption; the job downloads the remote object again, validates the archive and restores it into a temporary isolated PostgreSQL instance before reporting success. A failed upload or remote restore leaves the attempt failed. Configure independent bucket versioning/lifecycle retention; local retention does not remove remote objects.
+Use a dedicated least-privilege identity with bucket listing and object get/put permissions. Never commit credentials. The backup worker uploads with server-side AES256 encryption, downloads the exact object again, validates the archive, and restores it into a temporary isolated PostgreSQL instance. `backup-status.json` reports `offsite_status=restore_verified` only after that drill succeeds. An offsite failure is separately recorded and raised as a monitor alert; the verified local archive is retained. Configure bucket versioning/lifecycle retention independently; local retention never deletes remote objects. S3-compatible providers may require `AWS_ENDPOINT_URL`.
 
 ## Platform monitoring
 
@@ -36,6 +37,11 @@ MONITOR_TLS_HOSTS=school.example.com,api.school.example.com
 MONITOR_DOMAINS=school.example.com
 MONITOR_ALERT_EMAIL=developer@example.com
 MONITOR_SMTP_TEST_EMAIL=developer@example.com
+MONITOR_INTERNAL_TOKEN=generate-a-long-random-secret
+MONITOR_DISK_WARNING_PERCENT=80
+MONITOR_DISK_CRITICAL_PERCENT=90
+MONITOR_MEMORY_WARNING_PERCENT=85
+MONITOR_MEMORY_CRITICAL_PERCENT=95
 ```
 
 The monitor reuses `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_USE_SSL`, and `SMTP_USE_TLS`. Razorpay checks run only when `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are configured. Email alerts are sent on new warning/critical states and recovery transitions. State is persisted in the `platform_monitor_state` volume.
@@ -56,5 +62,6 @@ docker compose exec db-backup cat /backups/backup-status.json
 - SMTP alerting depends on SMTP itself; it cannot report SMTP failure through itself.
 - Offsite verification becomes active only after an operator supplies a real bucket and credentials. CI cannot validate cloud-account configuration without secrets.
 - The monitor does not inspect Razorpay's webhook delivery queue or prove that a real payment webhook was delivered; it verifies API access and the local webhook endpoint's signature rejection behavior.
-- Automatic Developer Control Centre incident creation and host-level CPU/disk monitoring are not included.
+- Host CPU load, memory pressure, host disk and backup-volume disk usage are monitored by the platform monitor. It needs read-only host mounts in Docker Compose.
+- When `MONITOR_INTERNAL_TOKEN` is configured, new warning/critical checks create or update Developer Control Centre platform incidents; recovered checks resolve their open automated incident.
 - Validate certificate/domain alerts, SMTP delivery and cloud restore against the actual production environment before relying on them.
