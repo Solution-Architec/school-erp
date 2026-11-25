@@ -12,7 +12,7 @@ This is a host bind mount (`./backups:/backups`), not a Docker named volume. You
 
 The service creates a compressed PostgreSQL 16 custom-format dump, validates it, restores it into a disposable isolated PostgreSQL instance, and publishes it only after restore verification succeeds. It then writes `backup-status.json` and applies daily, weekly, and monthly retention.
 
-No AWS account, S3 bucket, AWS CLI, or AWS credentials are required.
+No AWS account, S3 bucket, or AWS credentials are required for local-only backups. Optional offsite S3/S3-compatible replication can be enabled with `BACKUP_S3_URI` and credentials in the untracked `.env` file; see [platform reliability monitoring](platform-reliability-monitoring.md).
 
 ## Host directory permissions
 
@@ -42,7 +42,9 @@ ls -lah backups
 cat backups/backup-status.json
 ```
 
-A successful backup has a `*_backup.dump` archive and a status file containing `"restore_verified":true`.
+A successful local backup has a `*_backup.dump` archive and a status file containing `"restore_verified":true`. When offsite storage is configured, also require `"offsite_status":"restore_verified"` before treating the remote copy as recoverable.
+
+Abandoned `.partial` files older than `BACKUP_PARTIAL_STALE_HOURS` (default 48) are cleaned at backup-worker startup only when the PID embedded in the filename is no longer running. Recent or active partials are left untouched.
 
 The service runs a backup at startup by default, then repeats every 24 hours. To trigger a one-time backup without waiting for the schedule:
 
