@@ -21,6 +21,11 @@ ALLOWED_SCOPES = {
 
 
 def _school_admin(db: Session, *, school_id: int, actor_user_id: int) -> models.User:
+    # Resolve the requested tenant first so callers get a consistent not-found
+    # response for an invalid or inactive institution, without weakening auth.
+    school = db.get(models.School, school_id)
+    if school is None or not school.is_active:
+        raise ValueError("Active institution not found")
     actor = db.get(models.User, actor_user_id)
     if (
         actor is None
@@ -29,9 +34,6 @@ def _school_admin(db: Session, *, school_id: int, actor_user_id: int) -> models.
         or actor.school_id != school_id
     ):
         raise ValueError("An active administrator from this institution is required")
-    school = db.get(models.School, school_id)
-    if school is None or not school.is_active:
-        raise ValueError("Active institution not found")
     return actor
 
 
@@ -156,10 +158,12 @@ def assign_institution_role(
     _school_admin(db, school_id=school_id, actor_user_id=actor_user_id)
     user = db.get(models.User, user_id)
     role = db.get(models.InstitutionRole, role_id)
+    # Explicitly reject platform identities before tenant-membership checks:
+    # platform accounts intentionally have no institution school_id.
+    if user is not None and user.role == "super_admin":
+        raise ValueError("Platform administrators cannot receive institution roles")
     if user is None or not user.is_active or user.school_id != school_id:
         raise ValueError("Active user from this institution not found")
-    if user.role == "super_admin":
-        raise ValueError("Platform administrators cannot receive institution roles")
     if role is None or role.school_id != school_id or not role.is_active:
         raise ValueError("Active role from this institution not found")
 
