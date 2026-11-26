@@ -32,6 +32,7 @@ from .parent_services import router as parent_services_router
 from .notifications import router as notifications_router, create_event_notification
 from .rbac_catalog import seed_rbac_catalog
 from .rbac_template_api import router as rbac_template_router
+from .rbac_institution_api import router as rbac_institution_router
 
 # Explicit legacy school roles used by route-level fallback authorization.
 STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "security_guard", "others")
@@ -130,6 +131,7 @@ app.include_router(platform_operations_router)
 app.include_router(parent_services_router)
 app.include_router(notifications_router)
 app.include_router(rbac_template_router)
+app.include_router(rbac_institution_router)
 origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "http://localhost,http://localhost:5173").split(",") if x.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
