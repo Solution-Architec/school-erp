@@ -192,6 +192,7 @@ def assign_institution_role(
         assignment.assigned_by = actor_user_id
         event = "rbac.role_assignment.reactivated"
 
+    db.flush()
     db.add(models.AuditLog(
         actor_user_id=actor_user_id,
         event_type=event,
