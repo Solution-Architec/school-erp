@@ -238,6 +238,9 @@ function Login({onLogin}:{onLogin:(token:string,user:User)=>void}) {
 
 function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange}:{request:(url:string,options?:RequestInit)=>Promise<any>;userRole:string;currentUserId:number;refreshKey:number;onLoadingChange:(loading:boolean)=>void}) {
  const [children,setChildren]=useState<any[]>([]);
+ const [activeParentSection,setActiveParentSection]=useState('home');
+ const [parentChatQuestion,setParentChatQuestion]=useState('');
+ const [parentChatReply,setParentChatReply]=useState('');
  const [childId,setChildId]=useState('');
  const [fees,setFees]=useState<any[]>([]);
  const [attendance,setAttendance]=useState<any[]>([]);
@@ -510,11 +513,47 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
   :children.length===0?<div className="empty-state"><strong>No student profiles linked</strong><p>Ask your school administrator to link your parent account to your child.</p></div>
   :<>
    <label className="parent-child-select">Student
-    <select value={childId} onChange={e=>setChildId(e.target.value)}>
+    <select value={childId} onChange={e=>{setChildId(e.target.value);setActiveParentSection('home')}}>
      {children.map(c=><option key={c.id} value={c.id}>{c.full_name} · {c.admission_no} · {c.class_name} {c.section}</option>)}
     </select>
    </label>
-   <section className="parent-portal-section">
+   <div className="parent-workspace-layout">
+    <aside className="parent-workspace-sidebar" aria-label="Parent portal navigation">
+     <div className="parent-sidebar-heading"><span>FAMILY SPACE</span><strong>My child</strong></div>
+     {[
+      {key:'home',label:'Overview',icon:LayoutDashboard,count:0},
+      {key:'attendance',label:'Attendance',icon:CalendarCheck,count:attendance.length},
+      {key:'homework',label:'Homework',icon:BookOpen,count:homework.length},
+      {key:'timetable',label:'Timetable',icon:CalendarDays,count:timetable.length},
+      {key:'fees',label:'Fee balances',icon:Wallet,count:fees.length},
+      {key:'academic',label:'Academic progress',icon:Award,count:examResults.length},
+      {key:'leave',label:'Leave applications',icon:ClipboardList,count:leaveRequests.length},
+      {key:'messages',label:'Teacher messages',icon:MessageCircle,count:parentMessages.length},
+      {key:'facilities',label:'Transport & hostel',icon:Bus,count:0},
+      {key:'certificates',label:'Certificates',icon:FileText,count:certificateApplications.length}
+     ].map(item=>{const Icon=item.icon;return <button type="button" key={item.key} className={'parent-sidebar-link '+(activeParentSection===item.key?'active':'')} onClick={()=>setActiveParentSection(item.key)}><Icon size={17}/><span>{item.label}</span>{item.count>0&&<small>{item.count}</small>}</button>})}
+     <div className="parent-sidebar-foot"><span className="parent-online-dot"/> School workspace connected</div>
+    </aside>
+    <main className="parent-workspace-content">
+     {activeParentSection==='home'&&<section className="parent-chat-home">
+      <div className="parent-chat-welcome"><div className="parent-chat-avatar"><GraduationCap size={22}/></div><div><span>EDUNEXUS FAMILY ASSISTANT</span><h3>Hello! How can I help with {children.find(c=>String(c.id)===String(childId))?.full_name||'your child'} today?</h3><p>Ask a question or choose a service from the family menu. I’ll show information published by your school.</p></div></div>
+      <div className="parent-chat-summary">
+       <button type="button" onClick={()=>setActiveParentSection('attendance')}><CalendarCheck size={18}/><span>Attendance</span><strong>{attendance.length} records</strong></button>
+       <button type="button" onClick={()=>setActiveParentSection('homework')}><BookOpen size={18}/><span>Homework</span><strong>{homework.length} assignments</strong></button>
+       <button type="button" onClick={()=>setActiveParentSection('academic')}><Award size={18}/><span>Exam results</span><strong>{examResults.length} published</strong></button>
+       <button type="button" onClick={()=>setActiveParentSection('fees')}><Wallet size={18}/><span>Fee records</span><strong>{fees.length} records</strong></button>
+      </div>
+      <div className="parent-chat-thread">
+       <div className="parent-chat-message assistant"><span className="parent-chat-mini-avatar"><MessageCircle size={15}/></span><div><strong>EduNexus Assistant</strong><p>Welcome to your family dashboard. You can ask me to open your child’s attendance, homework, timetable, fees, academic progress, leave, messages, transport, hostel or certificate information.</p></div></div>
+       {parentChatReply&&<div className="parent-chat-message assistant"><span className="parent-chat-mini-avatar"><MessageCircle size={15}/></span><div><strong>EduNexus Assistant</strong><p>{parentChatReply}</p></div></div>}
+      </div>
+      <form className="parent-chat-composer" onSubmit={e=>{e.preventDefault();const q=parentChatQuestion.trim().toLowerCase();if(!q)return;const routes:[string,string,string][]=[['attendance','attendance','attendance'],['homework','homework','homework'],['assignment','homework','homework'],['timetable','timetable','timetable'],['class schedule','timetable','timetable'],['fee','fees','fee'],['payment','fees','fee'],['exam','academic','academic progress'],['mark','academic','academic progress'],['result','academic','academic progress'],['leave','leave','leave applications'],['message','messages','teacher messages'],['teacher','messages','teacher messages'],['transport','facilities','transport and hostel'],['hostel','facilities','transport and hostel'],['certificate','certificates','certificates']];const match=routes.find(([word])=>q.includes(word));if(match){setActiveParentSection(match[1]);setParentChatReply('Opening '+match[2]+' for '+(children.find(c=>String(c.id)===String(childId))?.full_name||'your child')+'. The page will show the school records available to your account.')}else{setParentChatReply('I can help navigate your family portal. Try asking about attendance, homework, timetable, fees, exam results, leave, teacher messages, transport, hostel or certificates. For school decisions or personal questions, send a message to an approved teacher.')}setParentChatQuestion('')}}>
+       <input value={parentChatQuestion} onChange={e=>setParentChatQuestion(e.target.value)} placeholder="Ask about attendance, homework, fees, exam results…" aria-label="Ask the family assistant"/>
+       <button className="primary" disabled={!parentChatQuestion.trim()}><MessageCircle size={17}/> Send</button>
+      </form>
+      <div className="parent-chat-suggestions"><span>TRY ASKING</span>{['Show attendance','Any homework?','Show exam results','Check fee balance','Apply for leave'].map((q,i)=><button type="button" key={q} onClick={()=>{const route=['attendance','homework','academic','fees','leave'][i];setActiveParentSection(route);setParentChatReply('Opening '+q.toLowerCase()+'.')}}>{q}</button>)}</div>
+     </section>}
+   {activeParentSection==='attendance'&&(   <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Recent attendance</h4><p>Latest attendance records for the selected student.</p></div></div>
     {attendanceError?<div className="error" role="alert">{attendanceError}</div>
     :<div className="table-wrap">
@@ -527,8 +566,9 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
       </tbody>
      </table>
     </div>}
-   </section>
-   <section className="parent-portal-section parent-homework-section">
+   </section>)}
+
+   {activeParentSection==='homework'&&(   <section className="parent-portal-section parent-homework-section">
     <div className="panel-heading"><div><h4>Homework and assignments</h4><p>Class and section assignments, instructions, due dates and teacher-shared attachments.</p></div></div>
     {homeworkError?<div className="error" role="alert">{homeworkError}</div>:<div className="table-wrap">
      <table><thead><tr><th>Subject</th><th>Assignment</th><th>Instructions</th><th>Due date</th><th>Attachment</th></tr></thead>
@@ -539,8 +579,9 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
       </tbody>
      </table>
     </div>}
-   </section>
-   <section className="parent-portal-section parent-timetable-section">
+   </section>)}
+
+   {activeParentSection==='timetable'&&(   <section className="parent-portal-section parent-timetable-section">
     <div className="panel-heading"><div><h4>Class timetable</h4><p>Weekly periods for the selected student's class and section.</p></div></div>
     {timetableError?<div className="error" role="alert">{timetableError}</div>:<div className="table-wrap">
      <table><thead><tr><th>Day</th><th>Period</th><th>Time</th><th>Subject</th><th>Teacher</th><th>Room</th></tr></thead>
@@ -551,8 +592,9 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
       </tbody>
      </table>
     </div>}
-   </section>
-   <section className="parent-portal-section">
+   </section>)}
+
+   {activeParentSection==='fees'&&(   <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Fee balances</h4><p>Fee information for the selected student.</p></div></div>
     {feesError?<div className="error" role="alert">{feesError}</div>
     :<div className="table-wrap">
@@ -565,8 +607,9 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
       </tbody>
      </table>
     </div>}
-   </section>
-   <section className="parent-portal-section parent-academic-report">
+   </section>)}
+
+   {activeParentSection==='academic'&&(   <section className="parent-portal-section parent-academic-report">
     <div className="panel-heading"><div><h4>Student academic progress</h4><p>Explore published marks by academic year, month, exam or subject.</p></div><Award size={20}/></div>
     {examResultsError?<div className="error" role="alert">{examResultsError}</div>:<>
      <div className="academic-chat">
@@ -603,8 +646,9 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
       </>}
      </>}
     </>}
-   </section>
-   <section className="parent-portal-section parent-leave-section">
+   </section>)}
+
+   {activeParentSection==='leave'&&(   <section className="parent-portal-section parent-leave-section">
     <div className="panel-heading"><div><h4>Leave applications</h4><p>Apply for leave for the selected student and follow the school’s decision.</p></div><CalendarDays size={20}/></div>
     {leaveError&&<div className="error" role="alert">{leaveError}</div>}
     {leaveMessage&&<div className="success" role="status">{leaveMessage}</div>}
@@ -620,8 +664,9 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
      {leaveRequests.map(item=><tr key={item.id}><td>{item.start_date}</td><td>{item.end_date}</td><td>{item.reason}</td><td>{item.created_at?new Date(item.created_at).toLocaleDateString('en-IN'):'—'}</td><td><span className={'status-badge '+item.status}>{item.status}</span></td><td>{item.reviewer_note||'—'}</td></tr>)}
      {!leaveRequests.length&&<tr><td colSpan={6}>No leave applications for this student yet.</td></tr>}
     </tbody></table></div>
-   </section>
-   <section className="parent-portal-section parent-messages-section">
+   </section>)}
+
+   {activeParentSection==='messages'&&(   <section className="parent-portal-section parent-messages-section">
     <div className="panel-heading"><div><h4>Messages to school</h4><p>Contact an approved teacher or school administrator about this student.</p></div><MessageCircle size={20}/></div>
     {messageError&&<div className="error" role="alert">{messageError}</div>}
     {messageNotice&&<div className="success" role="status">{messageNotice}</div>}
@@ -641,8 +686,9 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
       {!parentMessages.length&&<div className="empty-state">No messages yet. Send a message to start a conversation with the school.</div>}
      </div>
     </>}
-   </section>
-   <section className="parent-portal-section parent-facilities-section">
+   </section>)}
+
+   {activeParentSection==='facilities'&&(   <section className="parent-portal-section parent-facilities-section">
     <div className="panel-heading"><div><h4>Transport and hostel</h4><p>View school-approved allocations and request changes. Only authorized staff can change official records.</p></div><Bus size={20}/></div>
     {facilityError&&<div className="error" role="alert">{facilityError}</div>}
     {facilityMessage&&<div className="success" role="status">{facilityMessage}</div>}
@@ -681,8 +727,9 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
      {facilityRequests.map(item=><tr key={item.id}><td>{item.facility_type}</td><td>{item.request_type.replaceAll('_',' ')}</td><td>{new Date(item.created_at).toLocaleDateString('en-IN')}</td><td><span className={'status-badge '+item.status}>{item.status}</span></td><td>{item.reviewer_note||'—'}</td></tr>)}
      {!facilityLoading&&!facilityRequests.length&&<tr><td colSpan={5}>No transport or hostel requests yet.</td></tr>}
     </tbody></table></div>
-   </section>
-   <section className="parent-portal-section">
+   </section>)}
+
+   {activeParentSection==='certificates'&&(   <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Certificate applications</h4><p>Apply for school certificates and track the school's decision.</p></div></div>
     <form className="record-form parent-certificate-form" onSubmit={submitCertificate}>
      <label>Certificate type<select value={certificateType} onChange={e=>setCertificateType(e.target.value)}><option value="study">Study certificate</option><option value="bonafide">Bonafide certificate</option><option value="conduct">Conduct certificate</option><option value="transfer">Transfer certificate</option><option value="other">Other certificate</option></select></label>
@@ -701,7 +748,10 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
       </tbody>
      </table>
     </div>
-   </section>
+   </section>)}
+
+    </main>
+   </div>
   </>}
  </div>
 }
