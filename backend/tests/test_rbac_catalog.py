@@ -87,3 +87,10 @@ def test_catalog_exposes_legacy_action_combinations_without_granting_permissions
     finally:
         db.close()
         engine.dispose()
+
+
+
+def test_catalog_module_keys_match_the_existing_authorization_registry():
+    from backend.app.main import RBAC_MODULES
+
+    assert {item[0] for item in MODULES} == RBAC_MODULES
