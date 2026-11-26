@@ -508,6 +508,16 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
   }catch(err:any){setCertificateError(err.message||'Could not submit certificate application')}
   finally{setCertificateSubmitting(false)}
  }
+ async function downloadParentCertificate(application:any){
+  if(!application.certificate_number)return;
+  setCertificateError('');
+  try{
+   const response=await fetch(API+'/api/parent/certificates/'+application.issue_id+'/download',{headers:{Authorization:'Bearer '+token}});
+   if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.detail||'Certificate download failed')}
+   const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=application.certificate_number+'.pdf';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+  }catch(err:any){setCertificateError(err.message||'Could not download certificate')}
+ }
+
  return <div className="panel">
   <div className="panel-heading">
    <div><h3>Parent Workspace</h3><p>One secure place to view school information for every child linked to your parent account.</p></div>
@@ -743,16 +753,7 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
 
    {activeParentSection==='notifications'&&<ParentNotifications request={request}/>}
 
-   async function downloadParentCertificate(application:any){
-  if(!application.certificate_number)return;
-  setCertificateError('');
-  try{
-   const response=await fetch(API+'/api/parent/certificates/'+application.issue_id+'/download',{headers:{Authorization:'Bearer '+token}});
-   if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.detail||'Certificate download failed')}
-   const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=application.certificate_number+'.pdf';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
-  }catch(err:any){setCertificateError(err.message||'Could not download certificate')}
- }
- {activeParentSection==='certificates'&&(   <section className="parent-portal-section">
+   {activeParentSection==='certificates'&&(   <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Certificate applications</h4><p>Apply for school certificates and track the school's decision.</p></div></div>
     <form className="record-form parent-certificate-form" onSubmit={submitCertificate}>
      <label>Certificate type<select value={certificateType} onChange={e=>setCertificateType(e.target.value)}><option value="study">Study certificate</option><option value="bonafide">Bonafide certificate</option><option value="conduct">Conduct certificate</option><option value="transfer">Transfer certificate</option><option value="other">Other certificate</option></select></label>
