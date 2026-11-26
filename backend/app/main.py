@@ -469,7 +469,8 @@ def my_module_permissions(db: Session = Depends(get_db), user: models.User = Dep
     action_keys = ("View", "Create", "Edit", "Delete", "Approve", "Export", "Publish", "Assign", "Import", "Print", "Download", "Manage", "Reject")
     effective = {
         f"{module_key}:{action_key}": resolve_effective_permission(
-            db, user, module_key, action_key
+            db, user, module_key, action_key,
+            fallback_roles=("admin",) if module_key == "institution-role-builder" else (),
         ).allowed
         for module_key in sorted(module_keys)
         for action_key in action_keys
