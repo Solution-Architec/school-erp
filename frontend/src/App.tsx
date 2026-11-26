@@ -107,7 +107,7 @@ const roleModuleAccess:Record<string,string[]> = {
  admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests','parent-relationships','notifications'],
  principal:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests','notifications'],
  vice_principal:['dashboard','chatbot','students','staff','classes','documents','maintenance','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests','notifications'],
- teacher:['dashboard','chatbot','students','classes','documents','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','notifications'],
+ teacher:['dashboard','chatbot','students','classes','documents','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages'],
  account:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
  accountant:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
  clerk:['dashboard','chatbot','students','student-fees','payments','documents'],
