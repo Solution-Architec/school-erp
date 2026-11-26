@@ -23,7 +23,7 @@ class SchoolNotification(Base):
     __tablename__ = "school_notifications"
     id: Mapped[int] = mapped_column(primary_key=True)
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
-    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str] = mapped_column(String(30), default="announcement", index=True)
