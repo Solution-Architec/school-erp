@@ -30,6 +30,7 @@ from .platform_control import router as platform_control_router
 from .platform_operations import router as platform_operations_router
 from .parent_services import router as parent_services_router
 from .notifications import router as notifications_router, create_event_notification
+from .rbac_catalog import seed_rbac_catalog
 
 # Explicit legacy school roles used by route-level fallback authorization.
 STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "security_guard", "others")
@@ -99,6 +100,10 @@ async def lifespan(app: FastAPI):
     # SQLite is supported for fresh local-development databases. The production
     # schema-upgrade path above is PostgreSQL-specific; use PostgreSQL for upgrades.
 
+
+    with SessionLocal() as db:
+        seed_rbac_catalog(db)
+        db.commit()
 
     with SessionLocal() as db:
         has_super_admin = db.scalar(
