@@ -2062,6 +2062,7 @@ def list_certificate_applications(
             "created_at": application.created_at,
             "reviewed_at": application.reviewed_at,
             "certificate_number": issue.certificate_number if issue else None,
+            "certificate_issue_id": issue.id if issue else None,
             "issued_at": issue.issued_at if issue else None,
         }
         for application, student, parent, issue in rows
