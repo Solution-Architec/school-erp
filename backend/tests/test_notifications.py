@@ -80,6 +80,24 @@ def test_parent_notification_inbox_requires_active_same_school_link_and_tracks_r
             again = await client.get("/api/parent/notifications")
             assert again.json()[0]["is_read"] is True
 
+            defaults = await client.get("/api/parent/notification-preferences")
+            assert defaults.status_code == 200
+            assert defaults.json()["in_app_enabled"] is True
+            assert defaults.json()["announcement"] is True
+            saved = await client.patch(
+                "/api/parent/notification-preferences", json={"announcement": False}
+            )
+            assert saved.status_code == 200
+            assert saved.json()["announcement"] is False
+            muted = await client.get("/api/parent/notifications")
+            assert muted.status_code == 200
+            assert muted.json() == []
+            restored = await client.patch(
+                "/api/parent/notification-preferences", json={"announcement": True}
+            )
+            assert restored.status_code == 200
+            assert (await client.get("/api/parent/notifications")).json()[0]["title"] == "School circular"
+
             with SessionLocal() as db:
                 db.get(models.ParentStudentLink, link_id).is_active = False
                 db.commit()
