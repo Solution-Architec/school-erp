@@ -25,7 +25,8 @@ jobs:
         env:
           # Test-only signing key. Never reuse this value outside CI.
           JWT_SECRET_KEY: "ci-only-test-signing-key-0123456789abcdef0123456789abcdef"
-          PYTHONPATH: .
+          # Support both legacy app.* and repository-qualified backend.app.* test imports.
+          PYTHONPATH: .:backend
         run: pytest -q backend/tests
   frontend:
     runs-on: ubuntu-latest
