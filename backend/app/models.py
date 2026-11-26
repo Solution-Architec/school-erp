@@ -253,6 +253,86 @@ class RolePermission(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class InstitutionRole(Base):
+    """Institution-owned custom role bounded by a published Developer template."""
+    __tablename__ = "institution_roles"
+    __table_args__ = (
+        UniqueConstraint("school_id", "role_key", name="uq_institution_role_school_key"),
+        CheckConstraint("length(trim(name)) > 0", name="ck_institution_role_name_nonblank"),
+        Index("ix_institution_role_school_active", "school_id", "is_active"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    role_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    source_template_version_id: Mapped[int] = mapped_column(
+        ForeignKey("rbac_role_template_versions.id"), nullable=False, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
+class InstitutionRolePermission(Base):
+    """A local role's enabled permission, constrained by its source template."""
+    __tablename__ = "institution_role_permissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "school_id", "role_id", "module_key", "action_key",
+            name="uq_institution_role_permission",
+        ),
+        CheckConstraint(
+            "scope IN ('own', 'assigned', 'class_section', 'department', 'institution', 'selected_records', 'parent_student_relationship')",
+            name="ck_institution_role_permission_scope",
+        ),
+        Index("ix_institution_role_permission_role", "school_id", "role_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey("institution_roles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    module_key: Mapped[str] = mapped_column(
+        String(60), ForeignKey("rbac_modules.key"), nullable=False
+    )
+    action_key: Mapped[str] = mapped_column(
+        String(30), ForeignKey("rbac_actions.key"), nullable=False
+    )
+    scope: Mapped[str] = mapped_column(String(40), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class UserRoleAssignment(Base):
+    """An institution-scoped assignment; multiple active roles per user are supported."""
+    __tablename__ = "user_role_assignments"
+    __table_args__ = (
+        UniqueConstraint("school_id", "user_id", "role_id", name="uq_user_role_assignment"),
+        CheckConstraint("ends_at IS NULL OR ends_at > starts_at", name="ck_user_role_assignment_dates"),
+        Index("ix_user_role_assignment_user_active", "school_id", "user_id", "is_active"),
+        Index("ix_user_role_assignment_role_active", "school_id", "role_id", "is_active"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("institution_roles.id"), nullable=False, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    assigned_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[int] = mapped_column(primary_key=True)
