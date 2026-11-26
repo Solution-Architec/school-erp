@@ -116,8 +116,12 @@ def _facility_payload(db: Session, student: models.Student):
         StudentHostelAssignment.student_id == student.id,
         StudentHostelAssignment.is_active.is_(True),
     ))
-    vehicle = db.get(models.Vehicle, transport.vehicle_id) if transport and transport.vehicle_id else None
-    hostel_record = db.get(models.Hostel, hostel.hostel_id) if hostel and hostel.hostel_id else None
+    vehicle = db.scalar(select(models.Vehicle).where(
+        models.Vehicle.id == transport.vehicle_id, models.Vehicle.school_id == student.school_id,
+    )) if transport and transport.vehicle_id else None
+    hostel_record = db.scalar(select(models.Hostel).where(
+        models.Hostel.id == hostel.hostel_id, models.Hostel.school_id == student.school_id,
+    )) if hostel and hostel.hostel_id else None
     return {
         "transport": ({
             "route_name": transport.route_name or (vehicle.route_name if vehicle else ""),
@@ -242,6 +246,11 @@ def review_facility_request(
         raise HTTPException(status_code=403, detail="Not authorized to review this facility")
     if row.status != "pending":
         raise HTTPException(status_code=409, detail="Request has already been reviewed")
+    student = db.scalar(select(models.Student).where(
+        models.Student.id == row.student_id, models.Student.school_id == user.school_id,
+    ))
+    if not student:
+        raise HTTPException(status_code=404, detail="Request not found")
 
     details = json.loads(row.details_json or "{}")
     if decision.status == "approved":
@@ -258,17 +267,23 @@ def review_facility_request(
             else:
                 vehicle_id = details.get("vehicle_id")
                 if vehicle_id is not None:
+                    try:
+                        vehicle_id = int(vehicle_id)
+                    except (TypeError, ValueError):
+                        raise HTTPException(status_code=422, detail="Vehicle ID must be a valid number")
                     vehicle = db.scalar(select(models.Vehicle).where(
-                        models.Vehicle.id == int(vehicle_id), models.Vehicle.school_id == user.school_id,
+                        models.Vehicle.id == vehicle_id, models.Vehicle.school_id == user.school_id,
                         models.Vehicle.status == "active",
                     ))
                     if not vehicle:
                         raise HTTPException(status_code=422, detail="Selected vehicle is not available in this school")
                     assignment.vehicle_id = vehicle.id
                     assignment.route_name = vehicle.route_name
-                for key in ("route_name", "pickup_point", "drop_point", "pickup_time", "drop_time"):
+                field_limits = {"route_name": 120, "pickup_point": 180, "drop_point": 180,
+                                "pickup_time": 10, "drop_time": 10}
+                for key, max_length in field_limits.items():
                     if key in details and details[key] is not None:
-                        setattr(assignment, key, str(details[key])[:180])
+                        setattr(assignment, key, str(details[key]).strip()[:max_length])
                 assignment.is_active = True
         else:
             assignment = db.scalar(select(StudentHostelAssignment).where(
@@ -283,8 +298,12 @@ def review_facility_request(
             else:
                 hostel_id = details.get("hostel_id")
                 if hostel_id is not None:
+                    try:
+                        hostel_id = int(hostel_id)
+                    except (TypeError, ValueError):
+                        raise HTTPException(status_code=422, detail="Hostel ID must be a valid number")
                     hostel_record = db.scalar(select(models.Hostel).where(
-                        models.Hostel.id == int(hostel_id), models.Hostel.school_id == user.school_id,
+                        models.Hostel.id == hostel_id, models.Hostel.school_id == user.school_id,
                         models.Hostel.status == "active",
                     ))
                     if not hostel_record:
