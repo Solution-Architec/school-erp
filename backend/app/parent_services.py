@@ -75,6 +75,7 @@ class FacilityRequestIn(BaseModel):
 class FacilityReviewIn(BaseModel):
     status: Literal["approved", "rejected"]
     reviewer_note: str = Field(default="", max_length=500)
+    details: dict[str, str | int | None] = Field(default_factory=dict)
 
 
 def _parent_link(db: Session, user: models.User, student_id: int):
@@ -253,6 +254,7 @@ def review_facility_request(
         raise HTTPException(status_code=404, detail="Request not found")
 
     details = json.loads(row.details_json or "{}")
+    details.update(decision.details)
     if decision.status == "approved":
         if row.facility_type == "transport":
             assignment = db.scalar(select(StudentTransportAssignment).where(
