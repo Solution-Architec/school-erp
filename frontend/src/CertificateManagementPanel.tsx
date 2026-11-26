@@ -94,7 +94,7 @@ export default function CertificateManagementPanel({request,token}:Props) {
       <td><div className="certificate-row-actions">
        {row.status==='pending'&&<><input aria-label={'Review note for '+row.student_name} placeholder="Optional note" value={notes[row.id]||''} onChange={e=>setNotes(old=>({...old,[row.id]:e.target.value}))}/><button className="primary" type="button" disabled={working===row.id} onClick={()=>review(row,'approved')}><CheckCircle2 size={14}/> Approve</button><button className="secondary" type="button" disabled={working===row.id} onClick={()=>review(row,'rejected')}><XCircle size={14}/> Reject</button></>}
        {row.status==='approved'&&!row.certificate_number&&<button className="primary" type="button" disabled={working===row.id} onClick={()=>issue(row)}><FileCheck2 size={14}/> Issue certificate</button>}
-       {row.certificate_number&&<button className="secondary" type="button" disabled={working===row.id} onClick={()=>download(row.id,row.certificate_number)}><Download size={14}/> Download PDF</button>}
+       {row.certificate_number&&<button className="secondary" type="button" disabled={working===row.id} onClick={()=>download(row.certificate_issue_id,row.certificate_number)}><Download size={14}/> Download PDF</button>}
        {working===row.id&&<span className="muted small">Working…</span>}
       </div></td>
      </tr>)}
