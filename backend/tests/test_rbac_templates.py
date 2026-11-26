@@ -9,7 +9,7 @@ from app.rbac_templates import (
     create_role_template,
     create_template_version,
     publish_template_version,
-    replace_draft_policy,
+    replace_draft_policy,\n    retire_template_version,\n    set_role_template_active,
 )
 
 
@@ -132,3 +132,29 @@ def test_draft_policy_can_be_replaced_and_template_key_is_unique(db):
             db, template_key="school_teacher", name="Duplicate",
             description="", category="academic", actor_user_id=user_id,
         )
+
+
+
+def test_published_version_can_be_retired_without_rewriting_policy(db):
+    template, user_id = _template(db)
+    version = create_template_version(
+        db, template_id=template.id, institution_types=["school"],
+        permissions=_policy(), change_summary="Ready for retirement",
+        actor_user_id=user_id,
+    )
+    publish_template_version(db, version_id=version.id, actor_user_id=user_id)
+    original_policy = list(version.permissions)
+    retired = retire_template_version(db, version_id=version.id, actor_user_id=user_id)
+    assert retired.status == "retired"
+    assert retired.permissions == original_policy
+    with pytest.raises(ValueError, match="Only a published"):
+        retire_template_version(db, version_id=version.id, actor_user_id=user_id)
+
+
+def test_template_can_be_deactivated_and_reactivated(db):
+    template, _ = _template(db)
+    assert template.is_active is True
+    set_role_template_active(db, template_id=template.id, is_active=False)
+    assert template.is_active is False
+    set_role_template_active(db, template_id=template.id, is_active=True)
+    assert template.is_active is True
