@@ -1054,18 +1054,16 @@ function ParentRelationshipPanel({request}:{request:(url:string,options?:Request
  async function load(){
   setBusy(true);setError('');
   try{
-   const suffix=status==='all'?'':'?active='+(status==='active'?'true':'false');
-   const result=await request('/api/parent-links'+suffix);
+   const result=await request('/api/parent-links');
    setLinks(Array.isArray(result)?result:[]);
   }catch(err:any){setError(err.message||'Could not load parent relationships')}
   finally{setBusy(false)}
  }
- useEffect(()=>{load()},[status]);
+ useEffect(()=>{load()},[]);
  const filtered=useMemo(()=>{
   const term=query.trim().toLowerCase();
-  if(!term)return links;
-  return links.filter(link=>[link.parent_name,link.parent_email,link.student_name,link.admission_no,link.class_name,link.section,link.relationship]
-   .some(value=>String(value||'').toLowerCase().includes(term)));
+  return links.filter(link=>(status==='all'||(status==='active'?Boolean(link.is_active):!link.is_active))&&(!term||[link.parent_name,link.parent_email,link.student_name,link.admission_no,link.class_name,link.section,link.relationship]
+   .some(value=>String(value||'').toLowerCase().includes(term))));
  },[links,query]);
  async function toggle(link:any){
   const next=!link.is_active;
