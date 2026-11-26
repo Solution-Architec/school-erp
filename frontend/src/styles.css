@@ -1182,3 +1182,9 @@ body{background:#050b1b;color:#e5edf8}
 .parent-facility-form textarea{min-height:76px;resize:vertical;line-height:1.5}
 .parent-facility-form>button{justify-self:start;min-height:38px;padding:0 15px}
 @media(max-width:640px){.parent-facility-grid,.parent-facility-fields{grid-template-columns:1fr}.parent-facility-form{padding:12px}.parent-facility-form>button{width:100%}}
+
+
+.facility-review-actions{display:flex;gap:6px;flex-wrap:wrap}
+.facility-review-actions button{min-height:30px;padding:0 9px;font-size:9px}
+.facility-review-actions button:disabled{opacity:.55;cursor:wait}
+.facility-review-actions~input,.table-wrap td input[aria-label^="Review note"]{width:150px;min-height:32px;padding:6px 8px;border:1px solid #263956;border-radius:7px;background:#071126;color:#e6efff;font-size:10px}
