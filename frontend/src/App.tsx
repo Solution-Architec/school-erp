@@ -918,7 +918,7 @@ function App(){
  const [paymentMethod,setPaymentMethod]=useState('cash')
  const defaultModuleKeys=roleModuleAccess[user?.role||'user']||roleModuleAccess.user
  const allowedModuleKeys=user?.role!=='super_admin'&&rbacPermissions!==null&&rbacPermissions.role===user?.role&&rbacPermissions.configured?modules.filter(m=>Boolean(rbacPermissions.permissions[m.key+':View'])).map(m=>m.key):[...defaultModuleKeys]
- if(user?.role==='admin'&&!user.platform_workspace&&!allowedModuleKeys.includes('institution-role-builder'))allowedModuleKeys.push('institution-role-builder')
+ if(user?.role==='admin'&&!user.platform_workspace&&rbacPermissions?.permissions?.['institution-role-builder:View']!==false&&!allowedModuleKeys.includes('institution-role-builder'))allowedModuleKeys.push('institution-role-builder')
  const availableModules=modules.filter(m=>allowedModuleKeys.includes(m.key))
  const selected=modules.find(m=>m.key===active)||modules[0]
  const roleLabel=user?.platform_workspace?'Developer · Client Workspace':(roleLabels[user?.role||'user']||'School User')
