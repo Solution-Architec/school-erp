@@ -14,7 +14,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from .database import Base, get_db
 from . import models
-from .security import current_user, require_roles
+from .security import current_user, require_roles, require_module_permission
 
 router = APIRouter(tags=["parent transport and hostel"])
 
@@ -147,7 +147,7 @@ def _facility_payload(db: Session, student: models.Student):
 def parent_facilities(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     student = _parent_link(db, user, student_id)
     return _facility_payload(db, student)
@@ -157,7 +157,7 @@ def parent_facilities(
 def parent_facility_requests(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     _parent_link(db, user, student_id)
     rows = db.scalars(select(ParentFacilityRequest).where(
@@ -178,7 +178,7 @@ def create_parent_facility_request(
     student_id: int,
     payload: FacilityRequestIn,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "Create", "parent")),
 ):
     _parent_link(db, user, student_id)
     allowed_types = {
@@ -206,7 +206,7 @@ def create_parent_facility_request(
 def list_facility_requests(
     facility_type: Literal["transport", "hostel"],
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("admin", "principal", "vice_principal", "transport_manager", "hostel_warden")),
+    user: models.User = Depends(require_module_permission("facility-requests", "View", "admin", "principal", "vice_principal", "transport_manager", "hostel_warden")),
 ):
     if not user.school_id:
         raise HTTPException(status_code=403, detail="School staff account required")
@@ -231,7 +231,7 @@ def review_facility_request(
     request_id: int,
     decision: FacilityReviewIn,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("admin", "principal", "vice_principal", "transport_manager", "hostel_warden")),
+    user: models.User = Depends(require_module_permission("facility-requests", "Approve", "admin", "principal", "vice_principal", "transport_manager", "hostel_warden")),
 ):
     if not user.school_id:
         raise HTTPException(status_code=403, detail="School staff account required")
