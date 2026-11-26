@@ -917,7 +917,7 @@ function App(){
  const [paymentAmount,setPaymentAmount]=useState('')
  const [paymentMethod,setPaymentMethod]=useState('cash')
  const defaultModuleKeys=roleModuleAccess[user?.role||'user']||roleModuleAccess.user
- const allowedModuleKeys=user?.role!=='super_admin'&&rbacPermissions!==null&&rbacPermissions.role===user?.role&&rbacPermissions.configured?modules.filter(m=>Boolean(rbacPermissions.permissions[m.key+':View'])).map(m=>m.key):defaultModuleKeys
+ const allowedModuleKeys=user?.role!=='super_admin'&&rbacPermissions!==null&&rbacPermissions.role===user?.role&&rbacPermissions.configured?modules.filter(m=>Boolean(rbacPermissions.permissions[m.key+':View'])).map(m=>m.key):[...defaultModuleKeys]
  if(user?.role==='admin'&&!allowedModuleKeys.includes('institution-role-builder'))allowedModuleKeys.push('institution-role-builder')
  const availableModules=modules.filter(m=>allowedModuleKeys.includes(m.key))
  const selected=modules.find(m=>m.key===active)||modules[0]
