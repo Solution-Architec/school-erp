@@ -9,6 +9,7 @@ type ModuleDef = { key:string; label:string; icon:any; endpoint?:string; fields?
 const modules: ModuleDef[] = [
  {key:'dashboard',label:'Dashboard',icon:LayoutDashboard,description:'School overview and operational alerts'},
  {key:'parent-portal',label:'Parent Portal',icon:Users,description:'Family attendance, exam results, certificates and fee balances'},
+ {key:'facility-requests',label:'Transport & Hostel Requests',icon:Bus,description:'Review parent transport and hostel allocation requests'},
  {key:'chatbot',label:'Help Assistant',icon:Activity,description:'School FAQ and guided help'},
  {key:'approvals',label:'Staff Approvals',icon:Users,description:'Review verified staff account requests'},
  {key:'schools',label:'Schools',icon:Building2,endpoint:'/api/schools',description:'Register schools and assign school-owner accounts',fields:[{key:'name',label:'School name',required:true},{key:'code',label:'School code',required:true}]},
@@ -561,6 +562,56 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   </>}
  </div>
 }
+function FacilityRequestsPanel({request,userRole,refreshKey}:{request:(url:string,options?:RequestInit)=>Promise<any>;userRole:string;refreshKey:number}) {
+ const allowedTypes=userRole==='transport_manager'?['transport']:userRole==='hostel_warden'?['hostel']:['transport','hostel'];
+ const [facilityType,setFacilityType]=useState<'transport'|'hostel'>(allowedTypes[0] as 'transport'|'hostel');
+ const [rows,setRows]=useState<any[]>([]);
+ const [loading,setLoading]=useState(false);
+ const [error,setError]=useState('');
+ const [note,setNote]=useState<Record<number,string>>({});
+ const [busy,setBusy]=useState<number|null>(null);
+ const [message,setMessage]=useState('');
+ useEffect(()=>{
+  let active=true;setLoading(true);setError('');
+  request('/api/facility-requests?facility_type='+facilityType)
+   .then((data:any[])=>{if(active)setRows(data)})
+   .catch((e:any)=>{if(active)setError(e.message||'Could not load requests')})
+   .finally(()=>{if(active)setLoading(false)});
+  return()=>{active=false};
+ },[facilityType,refreshKey]);
+ async function review(id:number,status:'approved'|'rejected'){
+  setBusy(id);setError('');setMessage('');
+  try{
+   await request('/api/facility-requests/'+id+'/review',{method:'POST',body:JSON.stringify({status,reviewer_note:note[id]||''})});
+   setRows(old=>old.map(row=>row.id===id?{...row,status,reviewer_note:note[id]||''}:row));
+   setMessage('Request '+status+'.');
+  }catch(e:any){setError(e.message||'Could not review request')}
+  finally{setBusy(null)}
+ }
+ return <div className="panel">
+  <div className="panel-heading"><div><h3>Parent facility requests</h3><p>Review parent requests. Approval updates the official student allocation.</p></div><ClipboardCheck size={20}/></div>
+  <label className="parent-child-select">Facility
+   <select value={facilityType} onChange={e=>setFacilityType(e.target.value as 'transport'|'hostel')}>
+    {allowedTypes.map(type=><option key={type} value={type}>{type==='transport'?'Transport':'Hostel'}</option>)}
+   </select>
+  </label>
+  {error&&<div className="error" role="alert">{error}</div>}
+  {message&&<div className="success" role="status">{message}</div>}
+  {loading?<div className="empty-state">Loading parent requests…</div>:<div className="table-wrap">
+   <table><thead><tr><th>Student ID</th><th>Request</th><th>Reason</th><th>Requested details</th><th>Status</th><th>Review note</th><th>Action</th></tr></thead><tbody>
+    {rows.map(row=><tr key={row.id}>
+     <td>{row.student_id}</td><td>{row.request_type.replaceAll('_',' ')}</td><td>{row.reason}</td>
+     <td>{Object.entries(row.details||{}).map(([k,v])=>String(v??'')).filter(Boolean).join(' · ')||'—'}</td>
+     <td><span className={'status-badge '+row.status}>{row.status}</span></td>
+     <td><input aria-label={'Review note for request '+row.id} value={note[row.id]??row.reviewer_note??''} onChange={e=>setNote(old=>({...old,[row.id]:e.target.value}))} maxLength={500}/></td>
+     <td>{row.status==='pending'?<div className="facility-review-actions"><button className="primary" disabled={busy===row.id} onClick={()=>review(row.id,'approved')}>Approve</button><button className="secondary" disabled={busy===row.id} onClick={()=>review(row.id,'rejected')}>Reject</button></div>:'Reviewed'}</td>
+    </tr>)}
+    {!rows.length&&<tr><td colSpan={7}>No {facilityType} requests found.</td></tr>}
+   </tbody></table>
+  </div>}
+ </div>
+}
+
 function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Promise<any>}) {
  const [question,setQuestion]=useState(''),[messages,setMessages]=useState<{q:string,a:string}[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState('');
  async function ask(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!question.trim()||busy)return;const q=question.trim();setQuestion('');setBusy(true);setError('');try{const result=await request('/api/chatbot/faq',{method:'POST',body:JSON.stringify({question:q})});setMessages(old=>[...old,{q,a:result.answer}])}catch(err:any){setError(err.message)}finally{setBusy(false)}}
@@ -696,7 +747,7 @@ function App(){
   <main className="main"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileNav(true)}><Menu/></button><div className="crumb">Workspace <span>/</span> <strong>{selected.label}</strong></div><span className="role-chip">{roleLabel}</span>{user.platform_workspace&&<button className="secondary" onClick={()=>returnToPlatformOwner()}>Return to Developer Control Centre</button>}{DEMO_MODE&&demoTestingActive&&user.role!=="super_admin"&&<button className="secondary" onClick={()=>{const password=window.prompt("Enter the shared demo password to return to Developer");if(password)switchDemoAccount("demo.developer@jovoo.in",password)}}>Return to Developer</button>}<div className="top-actions">{user.role!=='parent'&&<div className="student-global-search"><Search size={16}/><input aria-label="Find student across modules" placeholder="Find student by name / admission no." value={studentSearch} onChange={e=>setStudentSearch(e.target.value)}/>{studentResults.length>0&&<div className="student-search-results">{studentResults.map(s=><button type="button" key={s.id} onClick={()=>chooseStudent(s)}><strong>{s.full_name}</strong><span>{s.admission_no} · {s.class_name||'Class not set'} {s.section||''}</span></button>)}</div>}</div>}<div className="online-pill"><span/> System online</div><button className="icon-button" title="Notifications"><Bell size={19}/></button><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div></div></header>
   <div className="content">{loading&&<div className="workspace-refresh-overlay" role="status" aria-live="polite"><div className="workspace-refresh-indicator"><RefreshCw size={22}/><span>Refreshing workspace…</span></div></div>}{selectedStudent&&<div className="selected-student-context"><div><strong>Selected student: {selectedStudent.full_name}</strong><span>{selectedStudent.admission_no} · {selectedStudent.class_name||'Class not set'} {selectedStudent.section||''} · Guardian: {selectedStudent.guardian_name||'—'} · Phone: {selectedStudent.guardian_phone||'—'}</span></div><button type="button" className="secondary" onClick={()=>setSelectedStudent(null)}>Clear student</button></div>}<div className="page-heading"><div><p className="eyebrow">SCHOOL ERP / {selected.key.toUpperCase()}</p><h1>{selected.label}</h1><p className="muted">{selected.description}</p></div><div className="heading-actions"><button className="secondary" onClick={refreshCurrentView} disabled={loading} aria-label="Refresh current page"><RefreshCw size={16}/> {loading?'Refreshing…':'Refresh'}</button>{active==='students'&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<button className="secondary" onClick={downloadStudentTemplate}><Download size={16}/> Template</button><input id="student-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importStudents}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('student-bulk-file')?.click()}><Upload size={16}/> {importing?'Uploading…':'Bulk upload'}</button></>}{['staff','classes','vehicles','hostels','maintenance','fee-structures'].includes(active)&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<input id="module-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importModule}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('module-bulk-file')?.click()}><Upload size={16}/> {importing?'Importing…':'Import CSV / Excel'}</button></>}{selected.endpoint&&(user.role!=='super_admin'||active==='schools'||active==='staff'||['attendance','timetable','exams','report-cards','homework','student-leave','parent-messages'].includes(active))&&<button className="primary" onClick={()=>{setEditingRecordId(null);setForm(active==='student-fees'&&selectedStudent?{student_id:selectedStudent.id,term:'annual',discount:0}:{});setShowForm(true)}}><Plus size={17}/> Add record</button>}</div></div>
   {error&&<div className="error banner"><span>{error}</span><button onClick={()=>setError('')}><X size={16}/></button></div>}{notice&&<div className="success banner">{notice}<button onClick={()=>setNotice('')}><X size={16}/></button></div>}
-  {active==='parent-portal'?<ParentPortal request={request} userRole={user.role} refreshKey={refreshVersion} onLoadingChange={setLoading}/>:active==='chatbot'?<HelpAssistant request={request}/>:active==='developer-control'&&user.role==='super_admin'?<DeveloperControlCentre request={request} onEnterWorkspace={enterClientWorkspace} moduleList={modules} roles={roleCatalog}/>:active==='dashboard'?<>
+  {active==='parent-portal'?<ParentPortal request={request} userRole={user.role} refreshKey={refreshVersion} onLoadingChange={setLoading}/>:active==='facility-requests'?<FacilityRequestsPanel request={request} userRole={user.role} refreshKey={refreshVersion}/>:active==='chatbot'?<HelpAssistant request={request}/>:active==='developer-control'&&user.role==='super_admin'?<DeveloperControlCentre request={request} onEnterWorkspace={enterClientWorkspace} moduleList={modules} roles={roleCatalog}/>:active==='dashboard'?<>
     {DEMO_MODE&&demoTestingActive&&user.role==='super_admin'&&<div className="panel demo-role-testing-panel"><div className="panel-heading"><div><h3>Role testing workspace</h3><p>Open a real demo account to verify its dashboard and navigation. This does not change normal user access.</p></div><ShieldCheck size={20}/></div><div className="quick-grid"><label className="auth-field">Demo role<select value={demoTargetEmail} onChange={e=>setDemoTargetEmail(e.target.value)}><option value="">Choose a role to test…</option>{DEMO_USERS.filter(demo=>demo.email!=='demo.developer@jovoo.in').map(demo=><option key={demo.email} value={demo.email}>{demo.label}</option>)}</select></label><label className="auth-field">Shared demo password<input type="password" autoComplete="off" value={demoSwitchPassword} onChange={e=>setDemoSwitchPassword(e.target.value)} placeholder="Enter the password printed by the seeder"/></label><div><button className="primary" disabled={demoSwitchBusy||!demoTargetEmail||!demoSwitchPassword} onClick={()=>switchDemoAccount(demoTargetEmail)}>{demoSwitchBusy?'Opening workspace…':'Open selected role'}</button></div></div>{demoSwitchError&&<div className="error auth-message" role="alert">{demoSwitchError}</div>}</div>}
     <div className="welcome-panel"><div><span className="welcome-tag">{roleLabel.toUpperCase()} WORKSPACE</span><h2>Good to see you, {user.name.split(' ')[0]}</h2><p>{roleDescriptions[user.role]||'Your school workspace and assigned daily tasks.'} Use the options on the left to get started.</p></div><div className="welcome-icon"><GraduationCap size={44}/></div></div>
     <div className="stat-grid">{[{label:'Total students',key:'students',target:'students',icon:GraduationCap,tone:'teal'},{label:'Staff members',key:'staff',target:'staff',icon:Users,tone:'blue'},{label:'Classes & sections',key:'classes',target:'classes',icon:BookOpen,tone:'purple'},{label:'Transport vehicles',key:'vehicles',target:'vehicles',icon:Bus,tone:'orange'},{label:'Hostel rooms',key:'hostel_rooms',target:'hostels',icon:Building2,tone:'pink'},{label:'Open maintenance',key:'open_maintenance',target:'maintenance',icon:Wrench,tone:'red'},...(user.role==='super_admin'?[{label:'Schools',key:'schools',target:'schools',icon:Building2,tone:'purple'},{label:'Active accounts',key:'active_users',target:'schools',icon:Users,tone:'blue'}]:[])].filter(s=>hasModule(s.target)).map(s=>{const I=s.icon;return <div className="stat-card dashboard-link-card" key={s.key} role="link" tabIndex={0} onClick={()=>setActive(s.target)} onKeyDown={e=>{if(e.key==='Enter'){setActive(s.target)}}}><div className={`stat-icon ${s.tone}`}><I size={20}/></div><p>{s.label}</p><strong>{stats[s.key]??'—'}</strong><span className="stat-foot">{user.role==='super_admin'&&s.key==='schools'?stats.active_schools+' active · '+stats.inactive_schools+' inactive':'Current records · Click to open'}</span></div>})}</div>
