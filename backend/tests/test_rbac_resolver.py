@@ -122,3 +122,62 @@ def test_shadow_comparison_reports_parity_without_changing_authorization(resolve
     assert result["legacy_allowed"] is True
     assert result["proposed_allowed"] is True
     assert result["changed"] is False
+
+
+
+def test_core_route_guard_uses_active_custom_role_grant(resolver_db):
+    from app.security import require_module_permission
+
+    session, school, admin, teacher, version = resolver_db
+    role = _role(session, school, admin, version, "core_attendance_viewer", [
+        {"module_key": "attendance", "action_key": "View", "scope": "class_section"},
+    ])
+    assignment = assign_institution_role(
+        session, school_id=school.id, user_id=teacher.id,
+        role_id=role.id, actor_user_id=admin.id,
+    )
+    checker = require_module_permission("attendance", "View", "admin", "teacher")
+    assert checker(user=teacher, db=session).id == teacher.id
+
+    assignment.is_active = False
+    session.flush()
+    # With no decisive custom assignment, the legacy teacher default remains in force.
+    assert checker(user=teacher, db=session).id == teacher.id
+
+
+def test_core_route_guard_applies_custom_role_explicit_deny(resolver_db):
+    from fastapi import HTTPException
+    from app.security import require_module_permission
+
+    session, school, admin, teacher, version = resolver_db
+    allowed_role = _role(session, school, admin, version, "core_attendance_allow", [
+        {"module_key": "attendance", "action_key": "View", "scope": "class_section"},
+    ])
+    denied_role = _role(session, school, admin, version, "core_attendance_deny", [])
+    assign_institution_role(
+        session, school_id=school.id, user_id=teacher.id,
+        role_id=allowed_role.id, actor_user_id=admin.id,
+    )
+    assign_institution_role(
+        session, school_id=school.id, user_id=teacher.id,
+        role_id=denied_role.id, actor_user_id=admin.id,
+    )
+    session.add(models.InstitutionRolePermission(
+        school_id=school.id, role_id=denied_role.id,
+        module_key="attendance", action_key="View",
+        scope="class_section", enabled=False,
+    ))
+    session.flush()
+
+    checker = require_module_permission("attendance", "View", "admin", "teacher")
+    with pytest.raises(HTTPException) as exc:
+        checker(user=teacher, db=session)
+    assert exc.value.status_code == 403
+
+
+def test_core_route_guard_preserves_legacy_fallback_for_unassigned_user(resolver_db):
+    from app.security import require_module_permission
+
+    session, school, admin, teacher, version = resolver_db
+    checker = require_module_permission("homework", "View", "admin", "teacher")
+    assert checker(user=teacher, db=session).id == teacher.id
