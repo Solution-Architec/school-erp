@@ -1696,3 +1696,16 @@ body{background:#050b1b;color:#e5edf8}
   .parent-service-nav{grid-template-columns:1fr}
   .parent-workspace-content{padding:11px}
 }
+
+.certificate-management-workspace{display:flex;flex-direction:column;gap:16px;min-width:0}
+.certificate-management-hero{padding:20px}
+.certificate-management-hero .panel-heading h3{font-size:17px;margin-top:7px}
+.certificate-management-list{padding:0;overflow:hidden}
+.certificate-management-list .parent-relations-toolbar{padding:19px 20px 12px}
+.certificate-management-list .parent-relations-filters{padding:0 20px 14px}
+.certificate-management-list .parent-relations-table td{vertical-align:top;white-space:normal;min-width:110px}
+.certificate-management-list .parent-relations-table td small{display:block;color:#82919d;font-size:10px;margin-top:5px;max-width:230px;overflow-wrap:anywhere}
+.certificate-row-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:220px}
+.certificate-row-actions input{width:130px;min-width:0;border:1px solid #dfe8ec;border-radius:7px;padding:8px;font-size:10px}
+.certificate-row-actions button{padding:7px 9px;font-size:10px}
+@media(max-width:720px){.certificate-management-hero{padding:14px}.certificate-management-list .parent-relations-toolbar{padding:15px}.certificate-management-list .parent-relations-filters{padding:0 15px 12px}.certificate-row-actions{min-width:180px}}

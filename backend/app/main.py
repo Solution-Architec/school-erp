@@ -1,5 +1,8 @@
 import os
 import json
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 import secrets
 import hashlib
 import hmac
@@ -14,7 +17,7 @@ from uuid import uuid4
 from sqlalchemy import and_, or_
 from contextlib import asynccontextmanager
 from typing import Any
-from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Form, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -174,15 +177,15 @@ ROLE_INSTITUTION_TYPES = {
 RBAC_MODULES = {
     "dashboard", "parent-portal", "chatbot", "approvals", "schools", "students", "staff",
     "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures",
-    "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"
+    "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans", "certificate-management"
 }
 RBAC_ACTIONS = {"View", "Create", "Edit", "Delete", "Approve", "Export"}
 
 DEFAULT_ROLE_MODULES = {
     "user": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
-    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"],
+    "admin": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans","certificate-management"],
+    "principal": ["dashboard", "chatbot", "approvals", "students", "staff", "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans","certificate-management"],
+    "vice_principal": ["dashboard", "chatbot", "students", "staff", "classes", "documents", "maintenance", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans","certificate-management"],
     "teacher": ["dashboard", "chatbot", "students", "classes", "documents", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages"],
     "account": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
     "accountant": ["dashboard", "chatbot", "students", "fee-structures", "student-fees", "payments", "fee-reports"],
@@ -1954,13 +1957,33 @@ def parent_list_certificate_applications(
         raise HTTPException(status_code=403, detail="Parent account required")
     if not _linked_parent_student(db, user, student_id):
         raise HTTPException(status_code=404, detail="Student not found")
-    return list(db.scalars(
-        select(models.CertificateApplication).where(
+    rows = db.execute(
+        select(models.CertificateApplication, models.CertificateIssue)
+        .outerjoin(models.CertificateIssue, models.CertificateIssue.application_id == models.CertificateApplication.id)
+        .where(
             models.CertificateApplication.school_id == user.school_id,
             models.CertificateApplication.student_id == student_id,
             models.CertificateApplication.parent_user_id == user.id,
-        ).order_by(models.CertificateApplication.created_at.desc())
-    ).all())
+        )
+        .order_by(models.CertificateApplication.created_at.desc())
+    ).all()
+    return [
+        {
+            "id": application.id,
+            "school_id": application.school_id,
+            "student_id": application.student_id,
+            "certificate_type": application.certificate_type,
+            "purpose": application.purpose,
+            "status": application.status,
+            "reviewer_note": application.reviewer_note,
+            "created_at": application.created_at,
+            "reviewed_at": application.reviewed_at,
+            "certificate_number": issue.certificate_number if issue else None,
+            "certificate_issue_id": issue.id if issue else None,
+            "issued_at": issue.issued_at if issue else None,
+        }
+        for application, issue in rows
+    ]
 
 
 @app.post(
@@ -1999,6 +2022,53 @@ def parent_submit_certificate_application(
     return application
 
 
+@app.get(
+    "/api/certificate-applications",
+    response_model=list[schemas.CertificateApplicationStaffOut],
+    tags=["certificates"],
+)
+def list_certificate_applications(
+    status: str = Query(default="all", pattern="^(all|pending|approved|rejected)$"),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("admin", "principal", "vice_principal")),
+):
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="School staff account required")
+    statement = (
+        select(models.CertificateApplication, models.Student, models.User, models.CertificateIssue)
+        .join(models.Student, models.Student.id == models.CertificateApplication.student_id)
+        .join(models.User, models.User.id == models.CertificateApplication.parent_user_id)
+        .outerjoin(models.CertificateIssue, models.CertificateIssue.application_id == models.CertificateApplication.id)
+        .where(models.CertificateApplication.school_id == user.school_id)
+    )
+    if status != "all":
+        statement = statement.where(models.CertificateApplication.status == status)
+    rows = db.execute(statement.order_by(models.CertificateApplication.created_at.desc()).limit(500)).all()
+    return [
+        {
+            "id": application.id,
+            "school_id": application.school_id,
+            "student_id": student.id,
+            "student_name": student.full_name,
+            "admission_no": student.admission_no,
+            "class_name": student.class_name,
+            "section": student.section,
+            "parent_name": parent.name,
+            "parent_email": parent.email,
+            "certificate_type": application.certificate_type,
+            "purpose": application.purpose,
+            "status": application.status,
+            "reviewer_note": application.reviewer_note,
+            "created_at": application.created_at,
+            "reviewed_at": application.reviewed_at,
+            "certificate_number": issue.certificate_number if issue else None,
+            "certificate_issue_id": issue.id if issue else None,
+            "issued_at": issue.issued_at if issue else None,
+        }
+        for application, student, parent, issue in rows
+    ]
+
+
 @app.post(
     "/api/certificate-applications/{application_id}/review",
     response_model=schemas.CertificateApplicationOut,
@@ -2030,6 +2100,162 @@ def review_certificate_application(
     db.commit()
     db.refresh(application)
     return application
+
+
+@app.post(
+    "/api/certificate-applications/{application_id}/issue",
+    response_model=schemas.CertificateIssueOut,
+    tags=["certificates"],
+)
+def issue_certificate_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("admin", "principal", "vice_principal")),
+):
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="School staff account required")
+    application = db.scalar(
+        select(models.CertificateApplication)
+        .where(
+            models.CertificateApplication.id == application_id,
+            models.CertificateApplication.school_id == user.school_id,
+        )
+        .with_for_update()
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Certificate application not found")
+    if application.status != "approved":
+        raise HTTPException(status_code=409, detail="Only approved applications can be issued")
+    existing = db.scalar(select(models.CertificateIssue).where(
+        models.CertificateIssue.application_id == application.id,
+        models.CertificateIssue.school_id == user.school_id,
+    ))
+    if existing:
+        raise HTTPException(status_code=409, detail="This certificate has already been issued")
+    issued_at = datetime.utcnow()
+    certificate_number = f"EDU-{user.school_id}-{issued_at:%Y}-{application.id:06d}"
+    issue = models.CertificateIssue(
+        school_id=user.school_id,
+        application_id=application.id,
+        certificate_number=certificate_number,
+        issued_by=user.id,
+        issued_at=issued_at,
+    )
+    db.add(issue)
+    db.flush()
+    write_audit_log(
+        db, user, "certificate.issued", "certificate_issue", str(issue.id),
+        {"application_id": application.id, "student_id": application.student_id,
+         "certificate_number": certificate_number},
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This certificate has already been issued")
+    db.refresh(issue)
+    return issue
+
+
+def _certificate_pdf_response(db: Session, issue: models.CertificateIssue, audit_user):
+    application = db.get(models.CertificateApplication, issue.application_id)
+    student = db.get(models.Student, application.student_id) if application else None
+    school = db.get(models.School, issue.school_id)
+    issuer = db.get(models.User, issue.issued_by)
+    if not application or not student or not school or application.school_id != issue.school_id or student.school_id != issue.school_id:
+        raise HTTPException(status_code=404, detail="Certificate record not found")
+
+    def printable(value):
+        return str(value or "").encode("latin-1", "replace").decode("latin-1")
+
+    labels = {
+        "study": "Study Certificate",
+        "bonafide": "Bonafide Certificate",
+        "conduct": "Conduct Certificate",
+        "transfer": "Transfer Certificate",
+        "other": "Certificate",
+    }
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    pdf.setTitle(printable(issue.certificate_number))
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawCentredString(width / 2, height - 92, printable(school.name))
+    pdf.setFont("Helvetica", 11)
+    pdf.drawCentredString(width / 2, height - 116, "Official student certificate")
+    pdf.setLineWidth(1)
+    pdf.line(58, height - 132, width - 58, height - 132)
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawCentredString(width / 2, height - 178, printable(labels.get(application.certificate_type, "Certificate")))
+    pdf.setFont("Helvetica", 11)
+    pdf.drawString(64, height - 224, "Certificate number: " + printable(issue.certificate_number))
+    pdf.drawString(64, height - 248, "Issued on: " + issue.issued_at.strftime("%d %B %Y"))
+    pdf.drawString(64, height - 302, "Student name: " + printable(student.full_name))
+    pdf.drawString(64, height - 326, "Admission number: " + printable(student.admission_no))
+    class_label = " ".join(part for part in [student.class_name, student.section] if part)
+    pdf.drawString(64, height - 350, "Class / section: " + printable(class_label or "Not recorded"))
+    pdf.setFont("Helvetica", 11)
+    pdf.drawString(64, height - 408, "This certificate is issued by the institution following approval")
+    pdf.drawString(64, height - 426, "of the certificate application associated with this student.")
+    pdf.line(64, 112, 238, 112)
+    pdf.drawString(64, 94, "Authorized signatory")
+    pdf.drawRightString(width - 64, 94, "Issued by: " + printable(issuer.name if issuer else "School office"))
+    pdf.showPage()
+    pdf.save()
+    if audit_user:
+        write_audit_log(
+            db, audit_user, "certificate.downloaded", "certificate_issue", str(issue.id),
+            {"application_id": application.id, "certificate_number": issue.certificate_number},
+        )
+        db.commit()
+    filename = issue.certificate_number.replace("/", "-") + ".pdf"
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/certificate-issues/{issue_id}/download", tags=["certificates"])
+def download_certificate_for_staff(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("admin", "principal", "vice_principal")),
+):
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="School staff account required")
+    issue = db.scalar(select(models.CertificateIssue).where(
+        models.CertificateIssue.id == issue_id,
+        models.CertificateIssue.school_id == user.school_id,
+    ))
+    if not issue:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    return _certificate_pdf_response(db, issue, user)
+
+
+@app.get("/api/parent/certificates/{issue_id}/download", tags=["parent-portal"])
+def download_certificate_for_parent(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("parent")),
+):
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
+    issue = db.scalar(select(models.CertificateIssue).where(
+        models.CertificateIssue.id == issue_id,
+        models.CertificateIssue.school_id == user.school_id,
+    ))
+    if not issue:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    application = db.get(models.CertificateApplication, issue.application_id)
+    if (
+        not application
+        or application.parent_user_id != user.id
+        or application.school_id != user.school_id
+        or not _linked_parent_student(db, user, application.student_id)
+    ):
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    return _certificate_pdf_response(db, issue, user)
 
 
 @app.get("/api/parent/children/{student_id}/fees", tags=["parent-portal"])
