@@ -90,7 +90,10 @@ def test_developer_template_api_rejects_non_developer_users():
     teacher = _make_user("teacher")
     session.add(teacher)
     session.commit()
-    app.dependency_overrides[get_db] = lambda: iter([session])
+    def override_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[current_user] = lambda: teacher
     client = TestClient(app)
     try:
