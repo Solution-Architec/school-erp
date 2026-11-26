@@ -33,6 +33,7 @@ from .notifications import router as notifications_router, create_event_notifica
 from .rbac_catalog import seed_rbac_catalog
 from .rbac_template_api import router as rbac_template_router
 from .rbac_institution_api import router as rbac_institution_router
+from .rbac_resolver import resolve_effective_permission
 
 # Explicit legacy school roles used by route-level fallback authorization.
 STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "security_guard", "others")
@@ -457,9 +458,27 @@ def my_module_permissions(db: Session = Depends(get_db), user: models.User = Dep
     if user.role == "super_admin":
         return {"role": user.role, "configured": True, "permissions": {"*": True}}
     scope = _permission_scope_matrix(db, user.role, user.school_id)
+    # Return the same effective decisions used by live route guards. This includes
+    # active institution-role assignments, deny precedence and legacy fallback.
+    module_keys = set(RBAC_MODULES)
+    module_keys.update({
+        "parent-relationships", "notifications", "facility-requests",
+        "certificate-management", "institution-role-builder",
+        "developer-role-designer",
+    })
+    action_keys = ("View", "Create", "Edit", "Delete", "Approve", "Export", "Publish", "Assign", "Import", "Print", "Download", "Manage", "Reject")
+    effective = {
+        f"{module_key}:{action_key}": resolve_effective_permission(
+            db, user, module_key, action_key,
+            fallback_roles=("admin",) if module_key == "institution-role-builder" else (),
+        ).allowed
+        for module_key in sorted(module_keys)
+        for action_key in action_keys
+    }
+    # Retain scope metadata for clients already consuming the legacy matrix.
     return {"role": user.role, "school_id": user.school_id, "configured": True,
             "global_configured": scope["global_configured"], "school_configured": scope["school_configured"],
-            "permissions": scope["permissions"]}
+            "permissions": effective}
 
 
 @app.get("/api/rbac/audit-logs", tags=["rbac"])
