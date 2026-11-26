@@ -129,7 +129,7 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True
 RBAC_ROLES = {
     "user", "admin", "principal", "vice_principal", "teacher", "account", "accountant",
     "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator",
-    "transport_manager", "hostel_warden", "security_guard", "others", "parent",
+    "transport_manager", "hostel_warden", "security_guard", "others", "parent", "student",
     "school_hod", "class_teacher", "school_accountant", "admission_officer",
     "examination_controller", "school_counsellor", "school_receptionist", "school_student",
     "college_admin", "college_principal", "college_vice_principal", "dean", "college_hod",
@@ -198,6 +198,7 @@ DEFAULT_ROLE_MODULES = {
     "security_guard": ["dashboard", "chatbot", "students"],
     "others": ["dashboard", "chatbot"],
     "parent": ["parent-portal", "chatbot", "student-leave", "parent-messages"],
+    "student": ["dashboard", "chatbot", "student-leave", "homework", "timetable", "report-cards", "parent-messages"],
 }
 
 # Institution-specific starting permissions. Developers can still override every
@@ -288,6 +289,7 @@ def _default_permission_matrix(role: str) -> dict[str, bool]:
         "teacher", "class_teacher", "school_hod", "lecturer", "college_professor",
         "college_hod", "university_professor", "department_head", "research_supervisor",
         "academic_coordinator", "other_academic_coordinator", "batch_coordinator", "trainer",
+        "university_dean", "university_director",
     }
     finance = {
         "account", "accountant", "school_accountant", "accounts_officer",
@@ -297,8 +299,9 @@ def _default_permission_matrix(role: str) -> dict[str, bool]:
     operations = {"transport_manager", "hostel_warden", "lab_assistant", "lab_in_charge"}
     admissions = {
         "admission_officer", "college_admission_officer", "university_admission_officer",
-        "admission_counsellor", "admission_executive", "school_receptionist",
+        "admission_counsellor", "admission_executive", "school_receptionist", "registrar",
     }
+    examination = {"examination_controller", "college_exam_controller", "university_exam_controller"}
     teaching_modules = {
         "students", "classes", "attendance", "timetable", "exams", "report-cards",
         "homework", "student-leave", "parent-messages", "documents",
@@ -331,6 +334,11 @@ def _default_permission_matrix(role: str) -> dict[str, bool]:
                 "attendance", "timetable", "report-cards", "homework", "student-leave",
             }
             permissions[f"{module}:Approve"] = module == "student-leave" and role in {"teacher", "class_teacher"}
+        elif role in examination and module in {"exams", "report-cards", "students", "classes", "documents"}:
+            permissions[f"{module}:Create"] = module in {"exams", "report-cards"}
+            permissions[f"{module}:Edit"] = module in {"exams", "report-cards"}
+            permissions[f"{module}:Approve"] = module == "approvals"
+            permissions[f"{module}:Export"] = module in {"exams", "report-cards"}
         elif role in finance and module in finance_modules:
             permissions[f"{module}:Create"] = module in {"fee-structures", "student-fees", "payments"}
             permissions[f"{module}:Edit"] = module in {"fee-structures", "student-fees"}
@@ -349,6 +357,11 @@ def _default_permission_matrix(role: str) -> dict[str, bool]:
         elif role == "parent" and module in {"student-leave", "parent-messages"}:
             permissions[f"{module}:Create"] = True
 
+    if role == "parent" and "parent-portal" in allowed_modules:
+        # Parent inbox read receipts and notification preferences are self-service.
+        permissions["parent-portal:Edit"] = True
+    if role in {"admin", "principal", "vice_principal", "user"} and "notifications" in allowed_modules:
+        permissions["notifications:Edit"] = True
     return permissions
 
 
