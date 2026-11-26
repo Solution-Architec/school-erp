@@ -566,6 +566,8 @@ function FacilityRequestsPanel({request,userRole,refreshKey}:{request:(url:strin
  const allowedTypes=userRole==='transport_manager'?['transport']:userRole==='hostel_warden'?['hostel']:['transport','hostel'];
  const [facilityType,setFacilityType]=useState<'transport'|'hostel'>(allowedTypes[0] as 'transport'|'hostel');
  const [rows,setRows]=useState<any[]>([]);
+ const [assets,setAssets]=useState<any[]>([]);
+ const [selectedAsset,setSelectedAsset]=useState<Record<number,string>>({});
  const [loading,setLoading]=useState(false);
  const [error,setError]=useState('');
  const [note,setNote]=useState<Record<number,string>>({});
@@ -573,16 +575,22 @@ function FacilityRequestsPanel({request,userRole,refreshKey}:{request:(url:strin
  const [message,setMessage]=useState('');
  useEffect(()=>{
   let active=true;setLoading(true);setError('');
-  request('/api/facility-requests?facility_type='+facilityType)
-   .then((data:any[])=>{if(active)setRows(data)})
-   .catch((e:any)=>{if(active)setError(e.message||'Could not load requests')})
+  const inventoryUrl=facilityType==='transport'?'/api/vehicles':'/api/hostels';
+  Promise.all([
+   request('/api/facility-requests?facility_type='+facilityType),
+   request(inventoryUrl)
+  ]).then(([data,inventory])=>{if(active){setRows(data);setAssets(inventory)}})
+   .catch((e:any)=>{if(active)setError(e.message||'Could not load requests and allocation inventory')})
    .finally(()=>{if(active)setLoading(false)});
   return()=>{active=false};
  },[facilityType,refreshKey]);
  async function review(id:number,status:'approved'|'rejected'){
   setBusy(id);setError('');setMessage('');
+  const assetId=selectedAsset[id];
+  const details=status==='approved'&&assetId
+   ?(facilityType==='transport'?{vehicle_id:Number(assetId)}:{hostel_id:Number(assetId)}):{};
   try{
-   await request('/api/facility-requests/'+id+'/review',{method:'POST',body:JSON.stringify({status,reviewer_note:note[id]||''})});
+   await request('/api/facility-requests/'+id+'/review',{method:'POST',body:JSON.stringify({status,reviewer_note:note[id]||'',details})});
    setRows(old=>old.map(row=>row.id===id?{...row,status,reviewer_note:note[id]||''}:row));
    setMessage('Request '+status+'.');
   }catch(e:any){setError(e.message||'Could not review request')}
@@ -604,7 +612,13 @@ function FacilityRequestsPanel({request,userRole,refreshKey}:{request:(url:strin
      <td>{Object.entries(row.details||{}).map(([k,v])=>String(v??'')).filter(Boolean).join(' · ')||'—'}</td>
      <td><span className={'status-badge '+row.status}>{row.status}</span></td>
      <td><input aria-label={'Review note for request '+row.id} value={note[row.id]??row.reviewer_note??''} onChange={e=>setNote(old=>({...old,[row.id]:e.target.value}))} maxLength={500}/></td>
-     <td>{row.status==='pending'?<div className="facility-review-actions"><button className="primary" disabled={busy===row.id} onClick={()=>review(row.id,'approved')}>Approve</button><button className="secondary" disabled={busy===row.id} onClick={()=>review(row.id,'rejected')}>Reject</button></div>:'Reviewed'}</td>
+     <td>{row.status==='pending'?<div className="facility-review-actions">
+      <select aria-label={'Select official '+facilityType+' allocation for request '+row.id} value={selectedAsset[row.id]||''} onChange={e=>setSelectedAsset(old=>({...old,[row.id]:e.target.value}))}>
+       <option value="">Keep current / no new allocation</option>
+       {assets.filter((asset:any)=>asset.status==='active').map((asset:any)=><option key={asset.id} value={asset.id}>{facilityType==='transport'?asset.registration_no+' · '+(asset.route_name||'No route'):asset.name+' · '+(asset.building||'')+' · '+(asset.room_no||'')}</option>)}
+      </select>
+      <button className="primary" disabled={busy===row.id} onClick={()=>review(row.id,'approved')}>Approve</button><button className="secondary" disabled={busy===row.id} onClick={()=>review(row.id,'rejected')}>Reject</button>
+     </div>:'Reviewed'}</td>
     </tr>)}
     {!rows.length&&<tr><td colSpan={7}>No {facilityType} requests found.</td></tr>}
    </tbody></table>
