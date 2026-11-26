@@ -402,6 +402,38 @@ class CertificateApplicationOut(BaseModel):
     reviewer_note: str
     created_at: datetime
     reviewed_at: datetime | None
+    certificate_number: str | None = None
+    issued_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CertificateApplicationStaffOut(BaseModel):
+    id: int
+    school_id: int
+    student_id: int
+    student_name: str
+    admission_no: str
+    class_name: str = ""
+    section: str = ""
+    parent_name: str
+    parent_email: EmailStr
+    certificate_type: str
+    purpose: str
+    status: str
+    reviewer_note: str
+    created_at: datetime
+    reviewed_at: datetime | None
+    certificate_number: str | None = None
+    issued_at: datetime | None = None
+
+
+class CertificateIssueOut(BaseModel):
+    id: int
+    school_id: int
+    application_id: int
+    certificate_number: str
+    issued_by: int
+    issued_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
 
