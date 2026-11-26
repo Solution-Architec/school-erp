@@ -31,6 +31,9 @@ def resolver_db():
             permissions=[
                 {"module_key": "attendance", "actions": ["View", "Edit"], "scope": "class_section"},
                 {"module_key": "homework", "actions": ["View"], "scope": "assigned"},
+                {"module_key": "certificate-management", "actions": ["View", "Approve"], "scope": "institution"},
+                {"module_key": "notifications", "actions": ["View", "Edit"], "scope": "institution"},
+                {"module_key": "student-leave", "actions": ["Approve"], "scope": "institution"},
             ],
             change_summary="Resolver tests", actor_user_id=admin.id,
         )
@@ -181,3 +184,50 @@ def test_core_route_guard_preserves_legacy_fallback_for_unassigned_user(resolver
     session, school, admin, teacher, version = resolver_db
     checker = require_module_permission("homework", "View", "admin", "teacher")
     assert checker(user=teacher, db=session).id == teacher.id
+
+
+
+@pytest.mark.parametrize(
+    ("module_key", "action"),
+    [
+        ("certificate-management", "Approve"),
+        ("certificate-management", "View"),
+        ("notifications", "Edit"),
+        ("student-leave", "Approve"),
+    ],
+)
+def test_service_route_guards_accept_explicit_custom_role_grants(resolver_db, module_key, action):
+    from app.security import require_module_permission
+
+    session, school, admin, teacher, version = resolver_db
+    role = _role(session, school, admin, version, f"service_{module_key.replace('-', '_')}_{action.lower()}", [
+        {"module_key": module_key, "action_key": action, "scope": "institution"},
+    ])
+    assign_institution_role(
+        session, school_id=school.id, user_id=teacher.id,
+        role_id=role.id, actor_user_id=admin.id,
+    )
+    checker = require_module_permission(module_key, action, "admin", "principal", "vice_principal", "teacher")
+    assert checker(user=teacher, db=session).id == teacher.id
+
+
+def test_service_route_guard_explicit_deny_blocks_certificate_action(resolver_db):
+    from fastapi import HTTPException
+    from app.security import require_module_permission
+
+    session, school, admin, teacher, version = resolver_db
+    role = _role(session, school, admin, version, "service_certificate_deny", [])
+    assign_institution_role(
+        session, school_id=school.id, user_id=teacher.id,
+        role_id=role.id, actor_user_id=admin.id,
+    )
+    session.add(models.InstitutionRolePermission(
+        school_id=school.id, role_id=role.id,
+        module_key="certificate-management", action_key="Approve",
+        scope="institution", enabled=False,
+    ))
+    session.flush()
+    checker = require_module_permission("certificate-management", "Approve", "admin", "principal", "vice_principal")
+    with pytest.raises(HTTPException) as exc:
+        checker(user=teacher, db=session)
+    assert exc.value.status_code == 403
