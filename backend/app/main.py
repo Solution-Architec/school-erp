@@ -26,7 +26,7 @@ from .security import JWT_SECRET_KEY, hash_password, verify_password, create_acc
 from .platform_control import router as platform_control_router
 from .platform_operations import router as platform_operations_router
 from .parent_services import router as parent_services_router
-from .notifications import router as notifications_router
+from .notifications import router as notifications_router, create_event_notification
 
 # Explicit legacy school roles used by route-level fallback authorization.
 STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "security_guard", "others")
@@ -1094,6 +1094,43 @@ def register_crud(path, model, schema_in, schema_out, roles):
             validate_related_records(values, user, db)
         obj = model(**values)
         db.add(obj)
+        if model is models.AttendanceRecord:
+            student = db.get(models.Student, obj.student_id)
+            if student:
+                create_event_notification(
+                    db, school_id=obj.school_id, actor_user_id=user.id,
+                    title="Attendance update",
+                    body=f"Attendance marked {obj.status} for {student.full_name} on {obj.attendance_date.isoformat()}.",
+                    category="attendance", student_id=student.id,
+                )
+        elif model is models.Homework:
+            create_event_notification(
+                db, school_id=obj.school_id, actor_user_id=user.id,
+                title=f"New homework: {obj.subject}",
+                body=f"{obj.title} — due {obj.due_date.isoformat()}. {obj.description}".strip(),
+                category="homework", class_name=obj.class_name, section=obj.section,
+            )
+        elif model is models.ReportCard:
+            student = db.get(models.Student, obj.student_id)
+            exam = db.get(models.Exam, obj.exam_id)
+            if student and exam:
+                create_event_notification(
+                    db, school_id=obj.school_id, actor_user_id=user.id,
+                    title="Examination result published",
+                    body=f"{exam.name} · {exam.subject}: {obj.marks_obtained} / {exam.max_marks} for {student.full_name}.",
+                    category="examination", student_id=student.id,
+                )
+        elif model is models.StudentFee:
+            student = db.get(models.Student, obj.student_id)
+            balance = Decimal(str(obj.total_amount)) - Decimal(str(obj.discount))
+            if student and balance > 0:
+                due_text = f" Due date: {obj.due_date.isoformat()}." if obj.due_date else ""
+                create_event_notification(
+                    db, school_id=obj.school_id, actor_user_id=user.id,
+                    title="New fee assigned",
+                    body=f"{obj.category} fee of ₹{balance:.2f} assigned for {student.full_name} ({obj.academic_year}).{due_text}",
+                    category="fees", student_id=student.id,
+                )
         if model is models.StudentLeaveRequest:
             db.flush()
             write_audit_log(db, user, "student.leave.submitted", "student_leave_request", str(obj.id),
@@ -1140,6 +1177,11 @@ def register_crud(path, model, schema_in, schema_out, roles):
             if obj.status != "pending":
                 raise HTTPException(status_code=409, detail="Only pending leave requests can be edited")
         values = payload.model_dump()
+        previous_attendance_status = obj.status if model is models.AttendanceRecord else None
+        previous_attendance_date = obj.attendance_date if model is models.AttendanceRecord else None
+        previous_report_marks = obj.marks_obtained if model is models.ReportCard else None
+        previous_homework = (obj.title, obj.description, obj.due_date) if model is models.Homework else None
+        previous_fee = (obj.total_amount, obj.discount, obj.due_date) if model is models.StudentFee else None
         if model is models.Staff:
             if values.pop("create_account", False) or values.pop("account_password", None):
                 raise HTTPException(status_code=422, detail="Create login accounts when adding a staff record, not while editing")
@@ -1166,6 +1208,45 @@ def register_crud(path, model, schema_in, schema_out, roles):
             validate_related_records(values, user, db)
         for key, value in values.items():
             setattr(obj, key, value)
+        if model is models.AttendanceRecord and (
+            obj.status != previous_attendance_status or obj.attendance_date != previous_attendance_date
+        ):
+            student = db.get(models.Student, obj.student_id)
+            if student:
+                create_event_notification(
+                    db, school_id=obj.school_id, actor_user_id=user.id,
+                    title="Attendance updated",
+                    body=f"Attendance for {student.full_name} is now {obj.status} on {obj.attendance_date.isoformat()}.",
+                    category="attendance", student_id=student.id,
+                )
+        elif model is models.Homework and (obj.title, obj.description, obj.due_date) != previous_homework:
+            create_event_notification(
+                db, school_id=obj.school_id, actor_user_id=user.id,
+                title=f"Homework updated: {obj.subject}",
+                body=f"{obj.title} — due {obj.due_date.isoformat()}. {obj.description}".strip(),
+                category="homework", class_name=obj.class_name, section=obj.section,
+            )
+        elif model is models.ReportCard and obj.marks_obtained != previous_report_marks:
+            student = db.get(models.Student, obj.student_id)
+            exam = db.get(models.Exam, obj.exam_id)
+            if student and exam:
+                create_event_notification(
+                    db, school_id=obj.school_id, actor_user_id=user.id,
+                    title="Examination result updated",
+                    body=f"{exam.name} · {exam.subject}: {obj.marks_obtained} / {exam.max_marks} for {student.full_name}.",
+                    category="examination", student_id=student.id,
+                )
+        elif model is models.StudentFee and (obj.total_amount, obj.discount, obj.due_date) != previous_fee:
+            student = db.get(models.Student, obj.student_id)
+            balance = Decimal(str(obj.total_amount)) - Decimal(str(obj.discount))
+            if student and balance > 0:
+                due_text = f" Due date: {obj.due_date.isoformat()}." if obj.due_date else ""
+                create_event_notification(
+                    db, school_id=obj.school_id, actor_user_id=user.id,
+                    title="Fee details updated",
+                    body=f"{obj.category} fee balance is ₹{balance:.2f} for {student.full_name}.{due_text}",
+                    category="fees", student_id=student.id,
+                )
         try:
             db.commit()
             db.refresh(obj)
