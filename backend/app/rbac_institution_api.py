@@ -1,5 +1,4 @@
 """Institution-admin APIs for local custom roles and multiple role assignments."""
-import json
 from datetime import datetime, timezone
 from typing import Any
 
