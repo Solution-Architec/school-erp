@@ -665,3 +665,75 @@ def test_parent_relationship_governance_rejects_invalid_updates_and_tenant_escap
     assert denied.status_code == 404
     wrong_school_list = api_request("GET", f"/api/parent-links?school_id={ids['school_id']}")
     assert wrong_school_list.status_code == 404
+
+
+def test_certificate_issue_queue_pdf_download_and_tenant_authorization(academic_api_context):
+    actor, ids, api_request = academic_api_context
+    payload = {
+        "student_id": ids["linked_student_id"],
+        "certificate_type": "bonafide",
+        "purpose": "Bank account documentation",
+    }
+    created = api_request(
+        "POST",
+        f"/api/parent/children/{ids['linked_student_id']}/certificate-applications",
+        payload,
+    )
+    assert created.status_code == 200
+    application_id = created.json()["id"]
+
+    assert api_request("GET", "/api/certificate-applications").status_code == 403
+    actor["user"] = type(actor["user"])(
+        id=ids["school_admin_id"], role="admin", school_id=ids["school_id"], is_active=True,
+    )
+    queue = api_request("GET", "/api/certificate-applications?status=pending")
+    assert queue.status_code == 200
+    assert queue.json()[0]["student_name"] == "Linked Child"
+    assert queue.json()[0]["parent_name"] == "Linked Parent"
+
+    not_approved = api_request("POST", f"/api/certificate-applications/{application_id}/issue")
+    assert not_approved.status_code == 409
+
+    approved = api_request(
+        "POST", f"/api/certificate-applications/{application_id}/review",
+        {"status": "approved", "reviewer_note": "Approved for issuance"},
+    )
+    assert approved.status_code == 200
+
+    issued = api_request("POST", f"/api/certificate-applications/{application_id}/issue")
+    assert issued.status_code == 200
+    issue = issued.json()
+    assert issue["certificate_number"].startswith(f"EDU-{ids['school_id']}-")
+    assert api_request("POST", f"/api/certificate-applications/{application_id}/issue").status_code == 409
+
+    staff_pdf = api_request("GET", f"/api/certificate-issues/{issue['id']}/download")
+    assert staff_pdf.status_code == 200
+    assert staff_pdf.headers["content-type"].startswith("application/pdf")
+    assert staff_pdf.content.startswith(b"%PDF")
+
+    actor["user"] = type(actor["user"])(
+        id=ids["parent_id"], role="parent", school_id=ids["school_id"], is_active=True,
+    )
+    parent_rows = api_request(
+        "GET", f"/api/parent/children/{ids['linked_student_id']}/certificate-applications",
+    )
+    assert parent_rows.status_code == 200
+    assert parent_rows.json()[0]["certificate_number"] == issue["certificate_number"]
+    parent_pdf = api_request("GET", f"/api/parent/certificates/{issue['id']}/download")
+    assert parent_pdf.status_code == 200
+    assert parent_pdf.content.startswith(b"%PDF")
+
+    actor["user"] = type(actor["user"])(
+        id=ids["other_parent_id"], role="parent", school_id=ids["school_id"], is_active=True,
+    )
+    assert api_request("GET", f"/api/parent/certificates/{issue['id']}/download").status_code == 404
+
+    actor["user"] = type(actor["user"])(
+        id=ids["teacher_id"], role="teacher", school_id=ids["school_id"], is_active=True,
+    )
+    assert api_request("GET", "/api/certificate-applications").status_code == 403
+
+    actor["user"] = type(actor["user"])(
+        id=ids["school_admin_id"], role="admin", school_id=ids["other_school_id"], is_active=True,
+    )
+    assert api_request("GET", f"/api/certificate-issues/{issue['id']}/download").status_code == 404
