@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from .database import Base, SessionLocal, engine
@@ -147,10 +147,19 @@ def process_due_reminders(db, *, now: datetime | None = None) -> dict[str, int]:
 
 
 def main() -> None:
-    Base.metadata.create_all(bind=engine)
+    # The API process owns schema creation/migrations. Wait until it has
+    # created the reminder tables before starting the independent worker.
+    while True:
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1 FROM school_reminder_settings LIMIT 0"))
+            break
+        except Exception:
+            logger.info("Waiting for API database schema initialization")
+            time.sleep(5)
     if engine.dialect.name == "postgresql":
         with engine.begin() as connection:
-            connection.execute(__import__("sqlalchemy").text(
+            connection.execute(text(
                 "ALTER TABLE school_notifications ALTER COLUMN created_by DROP NOT NULL"
             ))
     interval = max(60, int(os.getenv("REMINDER_POLL_SECONDS", "900")))
