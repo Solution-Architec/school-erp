@@ -520,7 +520,7 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
     <section className="parent-children-section" aria-label="Linked children">
      <div className="parent-children-heading"><div><h3>Linked children</h3><p>{children.length} {children.length===1?'student profile':'student profiles'} available to your account</p></div><span>Choose a child to view their details</span></div>
      <div className="parent-child-cards">
-      {children.map((child:any)=>{const selected=String(child.id)===String(childId);const initials=String(child.full_name||'Student').split(/\\s+/).filter(Boolean).slice(0,2).map((part:string)=>part[0]).join('').toUpperCase();return <button type="button" key={child.id} className={'parent-child-card '+(selected?'selected':'')} aria-pressed={selected} onClick={()=>{setChildId(String(child.id));setActiveParentSection('home')}}>
+      {children.map((child:any)=>{const selected=String(child.id)===String(childId);const initials=String(child.full_name||'Student').split(' ').filter(Boolean).slice(0,2).map((part:string)=>part[0]).join('').toUpperCase();return <button type="button" key={child.id} className={'parent-child-card '+(selected?'selected':'')} aria-pressed={selected} onClick={()=>{setChildId(String(child.id));setActiveParentSection('home')}}>
        <span className="parent-child-avatar">{initials||'ST'}</span><span className="parent-child-details"><strong>{child.full_name}</strong><small>{child.admission_no||'Admission details unavailable'}</small><small>{[child.class_name,child.section].filter(Boolean).join(' · ')||'Class details unavailable'}</small></span><span className="parent-child-selected">{selected?'Selected':'View profile'}</span>
       </button>})}
      </div>
