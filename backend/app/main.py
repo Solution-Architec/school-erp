@@ -1720,6 +1720,87 @@ def parent_child_attendance(
     ]
 
 
+@app.get("/api/parent/children/{student_id}/homework", tags=["parent-portal"])
+def parent_child_homework(
+    student_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("parent")),
+):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
+    if not _linked_parent_student(db, user, student_id):
+        raise HTTPException(status_code=404, detail="Student not found")
+    student = db.scalar(select(models.Student).where(
+        models.Student.id == student_id,
+        models.Student.school_id == user.school_id,
+    ))
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    records = db.scalars(
+        select(models.Homework).where(
+            models.Homework.school_id == user.school_id,
+            models.Homework.class_name == student.class_name,
+            models.Homework.section == student.section,
+        ).order_by(models.Homework.due_date.asc(), models.Homework.created_at.desc()).limit(100)
+    ).all()
+    return [
+        {
+            "id": item.id,
+            "subject": item.subject,
+            "title": item.title,
+            "description": item.description,
+            "due_date": item.due_date.isoformat(),
+            "attachment_url": item.attachment_url if item.attachment_url.startswith(("https://", "http://")) else "",
+            "created_at": item.created_at.isoformat(),
+        }
+        for item in records
+    ]
+
+
+@app.get("/api/parent/children/{student_id}/timetable", tags=["parent-portal"])
+def parent_child_timetable(
+    student_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("parent")),
+):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
+    if not _linked_parent_student(db, user, student_id):
+        raise HTTPException(status_code=404, detail="Student not found")
+    student = db.scalar(select(models.Student).where(
+        models.Student.id == student_id,
+        models.Student.school_id == user.school_id,
+    ))
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    records = db.scalars(
+        select(models.TimetableEntry).where(
+            models.TimetableEntry.school_id == user.school_id,
+            models.TimetableEntry.class_name == student.class_name,
+            models.TimetableEntry.section == student.section,
+        )
+    ).all()
+    weekday_order = {day: index for index, day in enumerate(
+        ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+    )}
+    records.sort(key=lambda item: (weekday_order.get(item.day_of_week, 7), item.period))
+    return [
+        {
+            "id": item.id,
+            "day_of_week": item.day_of_week,
+            "period": item.period,
+            "subject": item.subject,
+            "teacher_name": item.teacher_name,
+            "room": item.room,
+            "start_time": item.start_time,
+            "end_time": item.end_time,
+        }
+        for item in records
+    ]
+
+
 @app.get("/api/parent/children/{student_id}/exam-results", tags=["parent-portal"])
 def parent_child_exam_results(
     student_id: int,
