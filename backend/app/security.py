@@ -129,6 +129,16 @@ def require_module_permission(module_key: str, action: str, *fallback_roles: str
             if grant.enabled:
                 return user
             raise HTTPException(status_code=403, detail=f"Permission denied: {module_key} / {action}")
+
+        try:
+            from .main import RBAC_MODULES, _default_permission_matrix
+            if module_key in RBAC_MODULES:
+                if _default_permission_matrix(user.role).get(f"{module_key}:{action}", False):
+                    return user
+                raise HTTPException(status_code=403, detail=f"Permission denied: {module_key} / {action}")
+        except ImportError:
+            pass
+
         if module_key in {"library-books", "library-loans"}:
             library_roles = {"admin", "principal", "vice_principal", "user", "librarian"}
             if user.role not in library_roles:

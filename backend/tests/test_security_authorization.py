@@ -109,3 +109,57 @@ def test_retired_demo_developer_account_cannot_sign_in():
     with pytest.raises(HTTPException) as exc:
         main.login(payload, db=SimpleNamespace())
     assert exc.value.status_code == 403
+
+
+def test_default_module_matrix_is_enforced_for_unconfigured_roles():
+    checker = require_module_permission("students", "Delete", "admin")
+    with pytest.raises(HTTPException) as exc:
+        checker(user=SimpleNamespace(role="teacher", school_id=1), db=EmptyPermissionStore())
+    assert exc.value.status_code == 403
+    teacher_create = require_module_permission("homework", "Create", "admin", "teacher")
+    assert teacher_create(user=SimpleNamespace(role="teacher", school_id=1), db=EmptyPermissionStore()).role == "teacher"
+
+
+def test_parent_default_matrix_never_grants_staff_or_destructive_actions():
+    from backend.app.main import _default_permission_matrix
+    permissions = _default_permission_matrix("parent")
+    assert permissions["parent-portal:View"] is True
+    assert permissions["parent-portal:Create"] is True
+    assert permissions["student-leave:Create"] is True
+    assert permissions["parent-messages:Create"] is True
+    assert permissions["students:View"] is False
+    assert permissions["parent-messages:Delete"] is False
+    assert permissions["notifications:Create"] is False
+
+
+def test_all_workspace_modules_are_registered_for_rbac():
+    from backend.app.main import RBAC_MODULES
+    assert {
+        "dashboard", "parent-portal", "parent-relationships", "notifications",
+        "facility-requests", "chatbot", "approvals", "schools", "developer-control",
+        "students", "staff", "classes", "attendance", "timetable", "exams",
+        "report-cards", "homework", "student-leave", "parent-messages",
+        "library-books", "library-loans", "vehicles", "hostels", "documents",
+        "maintenance", "fee-structures", "student-fees", "payments", "fee-reports",
+        "certificate-management",
+    }.issubset(RBAC_MODULES)
+
+
+def test_every_registered_school_position_has_a_default_permission_profile():
+    from backend.app.main import RBAC_ROLES, DEFAULT_ROLE_MODULES, _default_permission_matrix
+    assert RBAC_ROLES.issubset(DEFAULT_ROLE_MODULES)
+    for role in RBAC_ROLES:
+        matrix = _default_permission_matrix(role)
+        assert "dashboard:View" in matrix
+        assert all(isinstance(value, bool) for value in matrix.values())
+
+
+def test_parent_and_school_leadership_self_service_permissions_are_limited():
+    from backend.app.main import _default_permission_matrix
+    parent = _default_permission_matrix("parent")
+    assert parent["parent-portal:Edit"] is True
+    assert parent["parent-portal:Delete"] is False
+    principal = _default_permission_matrix("principal")
+    vice_principal = _default_permission_matrix("vice_principal")
+    assert principal["notifications:Edit"] is True
+    assert vice_principal["notifications:Edit"] is True

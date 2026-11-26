@@ -132,7 +132,7 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True
 RBAC_ROLES = {
     "user", "admin", "principal", "vice_principal", "teacher", "account", "accountant",
     "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator",
-    "transport_manager", "hostel_warden", "security_guard", "others", "parent",
+    "transport_manager", "hostel_warden", "security_guard", "others", "parent", "student",
     "school_hod", "class_teacher", "school_accountant", "admission_officer",
     "examination_controller", "school_counsellor", "school_receptionist", "school_student",
     "college_admin", "college_principal", "college_vice_principal", "dean", "college_hod",
@@ -175,7 +175,8 @@ ROLE_INSTITUTION_TYPES = {
 }
 
 RBAC_MODULES = {
-    "dashboard", "parent-portal", "chatbot", "approvals", "schools", "students", "staff",
+    "dashboard", "parent-portal", "parent-relationships", "notifications", "facility-requests",
+    "developer-control", "chatbot", "approvals", "schools", "students", "staff",
     "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures",
     "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans", "certificate-management"
 }
@@ -199,6 +200,7 @@ DEFAULT_ROLE_MODULES = {
     "security_guard": ["dashboard", "chatbot", "students"],
     "others": ["dashboard", "chatbot"],
     "parent": ["parent-portal", "chatbot", "student-leave", "parent-messages"],
+    "student": ["dashboard", "chatbot", "student-leave", "homework", "timetable", "report-cards", "parent-messages"],
 }
 
 # Institution-specific starting permissions. Developers can still override every
@@ -254,6 +256,13 @@ DEFAULT_ROLE_MODULES.update({
     "training_student": ["dashboard", "chatbot", "homework", "timetable", "documents"],
 })
 
+# Shared workspace modules use the same permission matrix as core ERP modules.
+for _role in ("admin", "principal", "vice_principal", "user"):
+    DEFAULT_ROLE_MODULES.setdefault(_role, []).append("notifications")
+DEFAULT_ROLE_MODULES.setdefault("admin", []).append("parent-relationships")
+for _role in ("admin", "principal", "vice_principal", "transport_manager", "hostel_warden"):
+    DEFAULT_ROLE_MODULES.setdefault(_role, []).append("facility-requests")
+
 
 def write_audit_log(db: Session, actor: models.User, event_type: str, target_type: str = "", target_id: str = "", details: dict | None = None):
     db.add(models.AuditLog(
@@ -267,21 +276,79 @@ def write_audit_log(db: Session, actor: models.User, event_type: str, target_typ
 
 def _default_permission_matrix(role: str) -> dict[str, bool]:
     allowed_modules = set(DEFAULT_ROLE_MODULES.get(role, ["dashboard", "chatbot"]))
-    permissions: dict[str, bool] = {}
-    for module in RBAC_MODULES:
-        for action in RBAC_ACTIONS:
-            enabled = module in allowed_modules and action in {"View", "Create", "Edit", "Delete"}
-            if role == "parent" and module in {"student-leave", "parent-messages"}:
-                enabled = module in allowed_modules and action in {"View", "Create"}
-            if module == "approvals" and action == "Approve" and module in allowed_modules:
-                enabled = True
-            if module == "student-leave" and action == "Approve" and role in {
-                "admin", "principal", "vice_principal", "teacher", "user"
-            }:
-                enabled = True
-            permissions[f"{module}:{action}"] = enabled
-    return permissions
+    permissions = {f"{module}:{action}": False for module in RBAC_MODULES for action in RBAC_ACTIONS}
+    for module in allowed_modules:
+        if module in RBAC_MODULES:
+            permissions[f"{module}:View"] = True
 
+    leadership = {"admin", "user", "principal", "vice_principal", "college_admin", "college_principal",
+        "college_vice_principal", "dean", "university_admin", "chancellor", "vice_chancellor",
+        "institute_admin", "centre_director"}
+    teaching = {"teacher", "class_teacher", "school_hod", "lecturer", "college_professor", "college_hod",
+        "university_professor", "department_head", "research_supervisor", "academic_coordinator",
+        "other_academic_coordinator", "batch_coordinator", "trainer", "university_dean", "university_director"}
+    finance = {"account", "accountant", "school_accountant", "accounts_officer",
+        "university_finance_officer", "other_accounts_officer"}
+    library = {"librarian", "college_librarian", "training_librarian"}
+    operations = {"transport_manager", "hostel_warden", "lab_assistant", "lab_in_charge"}
+    admissions = {"admission_officer", "college_admission_officer", "university_admission_officer",
+        "admission_counsellor", "admission_executive", "school_receptionist", "registrar"}
+    examination = {"examination_controller", "college_exam_controller", "university_exam_controller"}
+    teaching_modules = {"students", "classes", "attendance", "timetable", "exams", "report-cards",
+        "homework", "student-leave", "parent-messages", "documents"}
+    finance_modules = {"fee-structures", "student-fees", "payments", "fee-reports"}
+
+    for module in allowed_modules:
+        if module not in RBAC_MODULES:
+            continue
+        if role in leadership:
+            if module not in {"parent-portal", "developer-control"}:
+                permissions[f"{module}:Create"] = True
+                permissions[f"{module}:Edit"] = True
+            if role in {"admin", "user", "college_admin", "university_admin", "institute_admin"}:
+                if module not in {"parent-portal", "developer-control", "parent-messages"}:
+                    permissions[f"{module}:Delete"] = True
+            if module in {"approvals", "student-leave", "facility-requests"}:
+                permissions[f"{module}:Approve"] = True
+            if module == "parent-relationships":
+                permissions[f"{module}:Create"] = role == "admin"
+                permissions[f"{module}:Edit"] = role == "admin"
+            if module != "developer-control":
+                permissions[f"{module}:Export"] = True
+        elif role in teaching and module in teaching_modules:
+            permissions[f"{module}:Create"] = module in {"attendance", "timetable", "exams", "report-cards",
+                "homework", "student-leave", "parent-messages"}
+            permissions[f"{module}:Edit"] = module in {"attendance", "timetable", "report-cards", "homework", "student-leave"}
+            permissions[f"{module}:Approve"] = module == "student-leave" and role in {"teacher", "class_teacher"}
+        elif role in finance and module in finance_modules:
+            permissions[f"{module}:Create"] = module in {"fee-structures", "student-fees", "payments"}
+            permissions[f"{module}:Edit"] = module in {"fee-structures", "student-fees"}
+            permissions[f"{module}:Export"] = module == "fee-reports"
+        elif role in library and module in {"library-books", "library-loans"}:
+            permissions[f"{module}:Create"] = True
+            permissions[f"{module}:Edit"] = True
+        elif role in operations and module in {"vehicles", "hostels", "maintenance", "facility-requests", "documents"}:
+            permissions[f"{module}:Create"] = module in {"vehicles", "hostels", "maintenance"}
+            permissions[f"{module}:Edit"] = module in {"vehicles", "hostels", "maintenance"}
+            permissions[f"{module}:Approve"] = module == "facility-requests"
+        elif role in admissions and module in {"students", "documents", "approvals"}:
+            permissions[f"{module}:Create"] = module in {"students", "documents"}
+            permissions[f"{module}:Edit"] = module in {"students", "documents"}
+            permissions[f"{module}:Approve"] = module == "approvals"
+        elif role in examination and module in {"exams", "report-cards", "students", "classes", "documents"}:
+            permissions[f"{module}:Create"] = module in {"exams", "report-cards"}
+            permissions[f"{module}:Edit"] = module in {"exams", "report-cards"}
+            permissions[f"{module}:Export"] = module in {"exams", "report-cards"}
+        elif role == "parent" and module in {"student-leave", "parent-messages"}:
+            permissions[f"{module}:Create"] = True
+
+    if role == "parent" and "parent-portal" in allowed_modules:
+        permissions["parent-portal:Create"] = True
+        permissions["parent-portal:Edit"] = True
+    if role in {"admin", "principal", "vice_principal", "user"} and "notifications" in allowed_modules:
+        permissions["notifications:Edit"] = True
+    permissions["developer-control:View"] = False
+    return permissions
 
 def _permission_scope_matrix(db: Session, role: str, school_id: int | None = None) -> dict:
     global_grants = db.scalars(select(models.RolePermission).where(models.RolePermission.role == role, models.RolePermission.school_id.is_(None))).all()
@@ -294,6 +361,7 @@ def _permission_scope_matrix(db: Session, role: str, school_id: int | None = Non
     inherited = dict(effective)
     if school_grants:
         effective.update({f"{g.module_key}:{g.action}": g.enabled for g in school_grants})
+    effective["developer-control:View"] = False
     return {"permissions": effective, "configured": bool(school_grants) if school_id is not None else bool(global_grants),
             "global_configured": bool(global_grants), "school_configured": bool(school_grants), "inherited_permissions": inherited}
 
@@ -380,7 +448,9 @@ def my_module_permissions(db: Session = Depends(get_db), user: models.User = Dep
     if user.role == "super_admin":
         return {"role": user.role, "configured": True, "permissions": {"*": True}}
     scope = _permission_scope_matrix(db, user.role, user.school_id)
-    return {"role": user.role, "school_id": user.school_id, "configured": scope["school_configured"] or scope["global_configured"], "permissions": scope["permissions"]}
+    return {"role": user.role, "school_id": user.school_id, "configured": True,
+            "global_configured": scope["global_configured"], "school_configured": scope["school_configured"],
+            "permissions": scope["permissions"]}
 
 
 @app.get("/api/rbac/audit-logs", tags=["rbac"])
@@ -906,7 +976,7 @@ def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, d
 
 @app.get("/api/parent/children/{student_id}/message-contacts", tags=["parent-portal"])
 def parent_message_contacts(student_id: int, db: Session = Depends(get_db),
-                            user: models.User = Depends(require_roles("parent"))):
+                            user: models.User = Depends(require_module_permission("parent-portal", "View", "parent"))):
     if not user.school_id or not _linked_parent_student(db, user, student_id):
         raise HTTPException(status_code=404, detail="Linked student not found")
     staff_roles = ("teacher",)
@@ -1735,7 +1805,7 @@ def assign_user_school(user_id: int, payload: dict, db: Session = Depends(get_db
 # Parent App / family portal
 @app.post("/api/parent-links", tags=["parent-portal"])
 def create_parent_link(payload: dict, db: Session = Depends(get_db),
-                       user: models.User = Depends(require_roles("super_admin", "admin"))):
+                       user: models.User = Depends(require_module_permission("parent-relationships", "Create", "admin"))):
     parent_id = payload.get("parent_user_id")
     student_id = payload.get("student_id")
     relationship = str(payload.get("relationship", "parent"))[:40]
@@ -1766,7 +1836,7 @@ def create_parent_link(payload: dict, db: Session = Depends(get_db),
 
 @app.get("/api/parent/children", tags=["parent-portal"])
 def parent_children(db: Session = Depends(get_db),
-                    user: models.User = Depends(require_roles("parent"))):
+                    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent"))):
     stmt = select(models.Student, models.ParentStudentLink).join(
         models.ParentStudentLink, models.ParentStudentLink.student_id == models.Student.id
     ).where(models.ParentStudentLink.parent_user_id == user.id,
@@ -1784,7 +1854,7 @@ def parent_child_attendance(
     student_id: int,
     limit: int = Query(90, ge=1, le=365),
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -1821,7 +1891,7 @@ def parent_child_attendance(
 def parent_child_homework(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -1859,7 +1929,7 @@ def parent_child_homework(
 def parent_child_timetable(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -1902,7 +1972,7 @@ def parent_child_timetable(
 def parent_child_exam_results(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -1951,7 +2021,7 @@ def parent_child_exam_results(
 def parent_list_certificate_applications(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -1995,7 +2065,7 @@ def parent_submit_certificate_application(
     student_id: int,
     payload: schemas.CertificateApplicationIn,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "Create", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -2237,7 +2307,7 @@ def download_certificate_for_staff(
 def download_certificate_for_parent(
     issue_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -2260,7 +2330,7 @@ def download_certificate_for_parent(
 
 @app.get("/api/parent/children/{student_id}/fees", tags=["parent-portal"])
 def parent_child_fees(student_id: int, db: Session = Depends(get_db),
-                      user: models.User = Depends(require_roles("parent"))):
+                      user: models.User = Depends(require_module_permission("parent-portal", "View", "parent"))):
     allowed = db.scalar(select(models.ParentStudentLink.id).where(
         models.ParentStudentLink.parent_user_id == user.id,
         models.ParentStudentLink.student_id == student_id,
@@ -2315,7 +2385,7 @@ def list_parent_links(
     student_id: int | None = Query(default=None, gt=0),
     active: bool | None = Query(default=None),
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("super_admin", "admin")),
+    user: models.User = Depends(require_module_permission("parent-relationships", "View", "admin")),
 ):
     if user.role == "super_admin":
         if school_id is None:
@@ -2370,7 +2440,7 @@ def update_parent_link(
     link_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("super_admin", "admin")),
+    user: models.User = Depends(require_module_permission("parent-relationships", "Edit", "admin")),
 ):
     allowed_fields = {"is_active", "relationship"}
     if not payload or set(payload) - allowed_fields:
