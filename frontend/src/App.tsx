@@ -8,7 +8,7 @@ type User = { id:number; name:string; email:string; role:string; school_id?:numb
 type ModuleDef = { key:string; label:string; icon:any; endpoint?:string; fields?:{key:string;label:string;type?:string;required?:boolean;options?:string[]}[]; description:string }
 const modules: ModuleDef[] = [
  {key:'dashboard',label:'Dashboard',icon:LayoutDashboard,description:'School overview and operational alerts'},
- {key:'parent-portal',label:'Parent Portal',icon:Users,description:'Family attendance, exam results, certificates and fee balances'},
+ {key:'parent-portal',label:'Parent Workspace',icon:Users,description:'One secure family workspace for all linked children and school services'},
  {key:'facility-requests',label:'Transport & Hostel Requests',icon:Bus,description:'Review parent transport and hostel allocation requests'},
  {key:'chatbot',label:'Help Assistant',icon:Activity,description:'School FAQ and guided help'},
  {key:'approvals',label:'Staff Approvals',icon:Users,description:'Review verified staff account requests'},
@@ -115,7 +115,7 @@ const roleModuleAccess:Record<string,string[]> = {
  hostel_warden:['dashboard','chatbot','students','hostels','documents','maintenance','facility-requests'],
  security_guard:['dashboard','chatbot','students'],
  others:['dashboard','chatbot'],
- parent:['parent-portal','chatbot','student-leave','parent-messages']
+ parent:['parent-portal']
 }
 const roleAccent:Record<string,string> = {
  super_admin:'#6654c7', user:'#0f766e', admin:'#0f766e', principal:'#0f766e',
@@ -512,28 +512,33 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
   :error?<div className="error" role="alert">{error}</div>
   :children.length===0?<div className="empty-state"><strong>No student profiles linked</strong><p>Ask your school administrator to link your parent account to your child.</p></div>
   :<>
-   <label className="parent-child-select">Student
-    <select value={childId} onChange={e=>{setChildId(e.target.value);setActiveParentSection('home')}}>
-     {children.map(c=><option key={c.id} value={c.id}>{c.full_name} · {c.admission_no} · {c.class_name} {c.section}</option>)}
-    </select>
-   </label>
-   <div className="parent-workspace-layout">
-    <aside className="parent-workspace-sidebar" aria-label="Parent portal navigation">
-     <div className="parent-sidebar-heading"><span>FAMILY SPACE</span><strong>My child</strong></div>
+   <section className="parent-family-workspace" aria-label="Parent workspace">
+    <header className="parent-workspace-header">
+     <div><span className="parent-workspace-eyebrow">EDUNEXUS · FAMILY WORKSPACE</span><h2>Your family, one workspace</h2><p>All children linked to your verified parent account, with their school services in one place.</p></div>
+     <div className="parent-workspace-secure"><ShieldCheck size={17}/><span>Secure parent access</span></div>
+    </header>
+    <section className="parent-children-section" aria-label="Linked children">
+     <div className="parent-children-heading"><div><h3>Linked children</h3><p>{children.length} {children.length===1?'student profile':'student profiles'} available to your account</p></div><span>Choose a child to view their details</span></div>
+     <div className="parent-child-cards">
+      {children.map((child:any)=>{const selected=String(child.id)===String(childId);const initials=String(child.full_name||'Student').split(/\\s+/).filter(Boolean).slice(0,2).map((part:string)=>part[0]).join('').toUpperCase();return <button type="button" key={child.id} className={'parent-child-card '+(selected?'selected':'')} aria-pressed={selected} onClick={()=>{setChildId(String(child.id));setActiveParentSection('home')}}>
+       <span className="parent-child-avatar">{initials||'ST'}</span><span className="parent-child-details"><strong>{child.full_name}</strong><small>{child.admission_no||'Admission details unavailable'}</small><small>{[child.class_name,child.section].filter(Boolean).join(' · ')||'Class details unavailable'}</small></span><span className="parent-child-selected">{selected?'Selected':'View profile'}</span>
+      </button>})}
+     </div>
+    </section>
+    <nav className="parent-service-nav" aria-label="Family services">
      {[
-      {key:'home',label:'Overview',icon:LayoutDashboard,count:0},
-      {key:'attendance',label:'Attendance',icon:CalendarCheck,count:attendance.length},
-      {key:'homework',label:'Homework',icon:BookOpen,count:homework.length},
-      {key:'timetable',label:'Timetable',icon:CalendarDays,count:timetable.length},
-      {key:'fees',label:'Fee balances',icon:Wallet,count:fees.length},
-      {key:'academic',label:'Academic progress',icon:Award,count:examResults.length},
-      {key:'leave',label:'Leave applications',icon:ClipboardList,count:leaveRequests.length},
-      {key:'messages',label:'Teacher messages',icon:MessageCircle,count:parentMessages.length},
-      {key:'facilities',label:'Transport & hostel',icon:Bus,count:0},
-      {key:'certificates',label:'Certificates',icon:FileText,count:certificateApplications.length}
-     ].map(item=>{const Icon=item.icon;return <button type="button" key={item.key} className={'parent-sidebar-link '+(activeParentSection===item.key?'active':'')} onClick={()=>setActiveParentSection(item.key)}><Icon size={17}/><span>{item.label}</span>{item.count>0&&<small>{item.count}</small>}</button>})}
-     <div className="parent-sidebar-foot"><span className="parent-online-dot"/> School workspace connected</div>
-    </aside>
+      {key:'home',label:'Overview',icon:LayoutDashboard},
+      {key:'attendance',label:'Attendance',icon:CalendarCheck},
+      {key:'homework',label:'Homework',icon:BookOpen},
+      {key:'timetable',label:'Timetable',icon:CalendarDays},
+      {key:'fees',label:'Fees',icon:Wallet},
+      {key:'academic',label:'Academic progress',icon:Award},
+      {key:'leave',label:'Leave',icon:ClipboardList},
+      {key:'messages',label:'Messages',icon:MessageCircle},
+      {key:'facilities',label:'Transport & hostel',icon:Bus},
+      {key:'certificates',label:'Certificates',icon:FileText}
+     ].map(item=>{const Icon=item.icon;return <button type="button" key={item.key} className={'parent-service-link '+(activeParentSection===item.key?'active':'')} aria-current={activeParentSection===item.key?'page':undefined} onClick={()=>setActiveParentSection(item.key)}><Icon size={16}/><span>{item.label}</span></button>})}
+    </nav>
     <main className="parent-workspace-content">
      {activeParentSection==='home'&&<section className="parent-chat-home">
       <div className="parent-chat-welcome"><div className="parent-chat-avatar"><GraduationCap size={22}/></div><div><span>EDUNEXUS FAMILY ASSISTANT</span><h3>Hello! How can I help with {children.find(c=>String(c.id)===String(childId))?.full_name||'your child'} today?</h3><p>Ask a question or choose a service from the family menu. I’ll show information published by your school.</p></div></div>
@@ -751,7 +756,7 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
    </section>)}
 
     </main>
-   </div>
+   </section>
   </>}
  </div>
 }
