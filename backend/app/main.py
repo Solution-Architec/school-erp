@@ -898,6 +898,21 @@ def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, d
     db.commit(); db.refresh(obj)
     return obj
 
+@app.get("/api/parent/children/{student_id}/message-contacts", tags=["parent-portal"])
+def parent_message_contacts(student_id: int, db: Session = Depends(get_db),
+                            user: models.User = Depends(require_roles("parent"))):
+    if not user.school_id or not _linked_parent_student(db, user, student_id):
+        raise HTTPException(status_code=404, detail="Linked student not found")
+    staff_roles = ("teacher",)
+    contacts = db.scalars(select(models.User).where(
+        models.User.school_id == user.school_id,
+        models.User.role.in_(staff_roles),
+        models.User.is_active.is_(True),
+        models.User.approval_status == "approved",
+    ).order_by(models.User.name.asc())).all()
+    return [{"id": item.id, "name": item.name, "role": item.role} for item in contacts]
+
+
 @app.get("/api/parent-messages", response_model=list[schemas.ParentTeacherMessageOut], tags=["parent-messages"])
 def list_parent_teacher_messages(db: Session = Depends(get_db),
                                  user: models.User = Depends(require_module_permission("parent-messages", "View", *STANDARD_ROLES, "parent"))):

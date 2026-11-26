@@ -1192,3 +1192,18 @@ body{background:#050b1b;color:#e5edf8}
 
 .facility-review-actions select{width:170px;min-height:30px;padding:5px 7px;border:1px solid #263956;border-radius:7px;background:#071126;color:#e6efff;font-size:9px}
 @media(max-width:900px){.facility-review-actions{min-width:190px}.facility-review-actions select{width:100%}}
+
+
+/* Parent Portal leave applications and school messages */
+.parent-leave-form,.parent-message-form{display:grid;gap:12px;margin:12px 0 16px;padding:15px}
+.parent-leave-form label,.parent-message-form label{display:flex;flex-direction:column;gap:6px;color:#a7b7d1;font-size:10px;font-weight:700}
+.parent-leave-form input,.parent-leave-form textarea,.parent-message-form input,.parent-message-form textarea,.parent-message-form select{width:100%;min-width:0;min-height:38px;padding:8px 10px;border:1px solid #263956;border-radius:8px;background:#071126;color:#e6efff;box-sizing:border-box;font:inherit}
+.parent-leave-form textarea,.parent-message-form textarea{min-height:82px;resize:vertical;line-height:1.5}
+.parent-leave-form>button,.parent-message-form>button{justify-self:start;min-height:38px;padding:0 15px}
+.parent-message-list{display:grid;gap:9px;margin-top:14px}
+.parent-message-item{padding:13px 14px;border:1px solid #1b3552;border-radius:10px;background:#08172c}
+.parent-message-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#dce8f8;font-size:10px}
+.parent-message-meta span{color:#8299b9;font-size:9px}
+.parent-message-item h5{margin:8px 0 4px;color:#bcd0eb;font-size:10px}
+.parent-message-item p{margin:5px 0 0;color:#d0def1;font-size:11px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:640px){.parent-leave-form,.parent-message-form{padding:11px}.parent-leave-form>button,.parent-message-form>button{width:100%}.parent-message-meta{align-items:flex-start;flex-direction:column;gap:4px}}
