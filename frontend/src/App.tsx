@@ -8,7 +8,7 @@ type User = { id:number; name:string; email:string; role:string; school_id?:numb
 type ModuleDef = { key:string; label:string; icon:any; endpoint?:string; fields?:{key:string;label:string;type?:string;required?:boolean;options?:string[]}[]; description:string }
 const modules: ModuleDef[] = [
  {key:'dashboard',label:'Dashboard',icon:LayoutDashboard,description:'School overview and operational alerts'},
- {key:'parent-portal',label:'Parent Portal',icon:Users,description:'Family view of linked students and fee balances'},
+ {key:'parent-portal',label:'Parent Portal',icon:Users,description:'Family attendance, exam results, certificates and fee balances'},
  {key:'chatbot',label:'Help Assistant',icon:Activity,description:'School FAQ and guided help'},
  {key:'approvals',label:'Staff Approvals',icon:Users,description:'Review verified staff account requests'},
  {key:'schools',label:'Schools',icon:Building2,endpoint:'/api/schools',description:'Register schools and assign school-owner accounts',fields:[{key:'name',label:'School name',required:true},{key:'code',label:'School code',required:true}]},
@@ -240,8 +240,22 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
  const [childId,setChildId]=useState('');
  const [fees,setFees]=useState<any[]>([]);
  const [attendance,setAttendance]=useState<any[]>([]);
+ const [examResults,setExamResults]=useState<any[]>([]);
+ const [certificateApplications,setCertificateApplications]=useState<any[]>([]);
  const [error,setError]=useState('');
+ const [feesError,setFeesError]=useState('');
+ const [attendanceError,setAttendanceError]=useState('');
+ const [examResultsError,setExamResultsError]=useState('');
+ const [certificateError,setCertificateError]=useState('');
+ const [certificateMessage,setCertificateMessage]=useState('');
+ const [certificateType,setCertificateType]=useState('bonafide');
+ const [certificatePurpose,setCertificatePurpose]=useState('');
+ const [certificateSubmitting,setCertificateSubmitting]=useState(false);
  const [loading,setLoading]=useState(true);
+ const [feesLoading,setFeesLoading]=useState(false);
+ const [attendanceLoading,setAttendanceLoading]=useState(false);
+ const [examResultsLoading,setExamResultsLoading]=useState(false);
+ const [certificateApplicationsLoading,setCertificateApplicationsLoading]=useState(false);
 
  useEffect(()=>{
   if(userRole!=='parent'){
@@ -266,25 +280,63 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
 
  useEffect(()=>{
   let active=true;
-  setError('');
+  setFees([]);
+  setAttendance([]);
+  setExamResults([]);
+  setCertificateApplications([]);
+  setFeesError('');
+  setAttendanceError('');
+  setExamResultsError('');
+  setCertificateError('');
+  setCertificateMessage('');
   if(childId&&userRole==='parent'){
-   setFees([]);
-   setAttendance([]);
-   Promise.all([
-    request('/api/parent/children/'+childId+'/fees'),
-    request('/api/parent/children/'+childId+'/attendance?limit=90'),
-   ]).then(([feeData,attendanceData])=>{
-    if(!active)return;
-    setFees(feeData);
-    setAttendance(attendanceData);
-   }).catch((e:any)=>{if(active)setError(e.message)});
+   setFeesLoading(true);
+   setAttendanceLoading(true);
+   const encodedChildId=encodeURIComponent(childId);
+   request('/api/parent/children/'+encodedChildId+'/fees')
+    .then((data:any[])=>{if(active)setFees(data)})
+    .catch((e:any)=>{if(active)setFeesError(e.message)})
+    .finally(()=>{if(active)setFeesLoading(false)});
+   request('/api/parent/children/'+encodedChildId+'/attendance?limit=90')
+    .then((data:any[])=>{if(active)setAttendance(data)})
+    .catch((e:any)=>{if(active)setAttendanceError(e.message)})
+    .finally(()=>{if(active)setAttendanceLoading(false)});
+   setExamResultsLoading(true);
+   request('/api/parent/children/'+encodedChildId+'/exam-results')
+    .then((data:any[])=>{if(active)setExamResults(data)})
+    .catch((e:any)=>{if(active)setExamResultsError(e.message)})
+    .finally(()=>{if(active)setExamResultsLoading(false)});
+   setCertificateApplicationsLoading(true);
+   request('/api/parent/children/'+encodedChildId+'/certificate-applications')
+    .then((data:any[])=>{if(active)setCertificateApplications(data)})
+    .catch((e:any)=>{if(active)setCertificateError(e.message)})
+    .finally(()=>{if(active)setCertificateApplicationsLoading(false)});
   }else{
-   setFees([]);
-   setAttendance([]);
+   setFeesLoading(false);
+   setAttendanceLoading(false);
+   setExamResultsLoading(false);
+   setCertificateApplicationsLoading(false);
   }
   return()=>{active=false};
  },[childId,userRole,refreshKey]);
 
+ async function submitCertificate(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();
+  if(!childId||!certificatePurpose.trim()||certificateSubmitting)return;
+  setCertificateSubmitting(true);
+  setCertificateError('');
+  setCertificateMessage('');
+  try{
+   const result=await request('/api/parent/children/'+encodeURIComponent(childId)+'/certificate-applications',{
+    method:'POST',
+    body:JSON.stringify({student_id:Number(childId),certificate_type:certificateType,purpose:certificatePurpose.trim()})
+   });
+   setCertificateApplications(old=>[result,...old]);
+   setCertificatePurpose('');
+   setCertificateMessage('Certificate application submitted. Your school will review it and update the status here.');
+  }catch(err:any){setCertificateError(err.message||'Could not submit certificate application')}
+  finally{setCertificateSubmitting(false)}
+ }
  return <div className="panel">
   <div className="panel-heading">
    <div><h3>Family Portal</h3><p>View information for students linked to your parent account.</p></div>
@@ -302,24 +354,62 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
    </label>
    <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Recent attendance</h4><p>Latest attendance records for the selected student.</p></div></div>
-    <div className="table-wrap">
+    {attendanceError?<div className="error" role="alert">{attendanceError}</div>
+    :<div className="table-wrap">
      <table>
       <thead><tr><th>Date</th><th>Status</th></tr></thead>
       <tbody>
        {attendance.map(record=><tr key={record.id}><td>{record.attendance_date}</td><td><span className="status-badge">{record.status}</span></td></tr>)}
-       {!attendance.length&&<tr><td colSpan={2}>No attendance records found.</td></tr>}
+       {attendanceLoading&&<tr><td colSpan={2}>Loading attendance…</td></tr>}
+       {!attendanceLoading&&!attendance.length&&<tr><td colSpan={2}>No attendance has been recorded for this student yet. Once school staff mark attendance, it will appear here.</td></tr>}
       </tbody>
      </table>
-    </div>
+    </div>}
    </section>
    <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Fee balances</h4><p>Fee information for the selected student.</p></div></div>
-    <div className="table-wrap">
+    {feesError?<div className="error" role="alert">{feesError}</div>
+    :<div className="table-wrap">
      <table>
       <thead><tr><th>Fee category</th><th>Academic year</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
       <tbody>
        {fees.map(f=><tr key={f.fee_id}><td>{f.category}</td><td>{f.academic_year}</td><td>{money(f.total)}</td><td>{money(f.paid)}</td><td><strong>{money(f.balance)}</strong></td><td><span className="status-badge">{f.status}</span></td></tr>)}
-       {!fees.length&&<tr><td colSpan={6}>No fee records found.</td></tr>}
+       {feesLoading&&<tr><td colSpan={6}>Loading fee balances…</td></tr>}
+       {!feesLoading&&!fees.length&&<tr><td colSpan={6}>No fee records found.</td></tr>}
+      </tbody>
+     </table>
+    </div>}
+   </section>
+   <section className="parent-portal-section">
+    <div className="panel-heading"><div><h4>Recent exam results</h4><p>Published marks and result status for the selected student.</p></div></div>
+    {examResultsError?<div className="error" role="alert">{examResultsError}</div>
+    :<div className="table-wrap">
+     <table>
+      <thead><tr><th>Exam</th><th>Subject</th><th>Date</th><th>Academic year</th><th>Marks</th><th>Pass marks</th><th>Result</th></tr></thead>
+      <tbody>
+       {examResults.map(result=><tr key={result.id}><td>{result.exam_name}</td><td>{result.subject}</td><td>{result.exam_date}</td><td>{result.academic_year||'—'}</td><td><strong>{result.marks_obtained}</strong> / {result.max_marks}</td><td>{result.pass_marks}</td><td><span className={'status-badge '+result.result}>{result.result}</span></td></tr>)}
+       {examResultsLoading&&<tr><td colSpan={7}>Loading exam results…</td></tr>}
+       {!examResultsLoading&&!examResults.length&&<tr><td colSpan={7}>No exam results have been published for this student yet.</td></tr>}
+      </tbody>
+     </table>
+    </div>}
+   </section>
+   <section className="parent-portal-section">
+    <div className="panel-heading"><div><h4>Certificate applications</h4><p>Apply for school certificates and track the school's decision.</p></div></div>
+    <form className="record-form parent-certificate-form" onSubmit={submitCertificate}>
+     <label>Certificate type<select value={certificateType} onChange={e=>setCertificateType(e.target.value)}><option value="study">Study certificate</option><option value="bonafide">Bonafide certificate</option><option value="conduct">Conduct certificate</option><option value="transfer">Transfer certificate</option><option value="other">Other certificate</option></select></label>
+     <label>Purpose<textarea required minLength={3} maxLength={500} value={certificatePurpose} onChange={e=>setCertificatePurpose(e.target.value)} placeholder="Tell the school why this certificate is needed."/></label>
+     <button className="primary" disabled={certificateSubmitting||!certificatePurpose.trim()}>{certificateSubmitting?'Submitting…':'Submit certificate request'}</button>
+    </form>
+    {certificateError&&<div className="error" role="alert">{certificateError}</div>}
+    {certificateMessage&&<div className="success" role="status">{certificateMessage}</div>}
+    <div className="table-wrap">
+     <table>
+      <thead><tr><th>Certificate</th><th>Purpose</th><th>Applied on</th><th>Status</th><th>School note</th></tr></thead>
+      <tbody>
+       {certificateApplications.map(application=><tr key={application.id}><td>{({study:'Study',bonafide:'Bonafide',conduct:'Conduct',transfer:'Transfer',other:'Other'} as Record<string,string>)[application.certificate_type]||application.certificate_type}</td><td>{application.purpose}</td><td>{new Date(application.created_at).toLocaleDateString('en-IN')}</td><td><span className={'status-badge '+application.status}>{application.status}</span></td><td>{application.reviewer_note||'—'}</td></tr>)}
+       {certificateApplicationsLoading&&<tr><td colSpan={5}>Loading certificate applications…</td></tr>}
+       {!certificateApplicationsLoading&&!certificateApplications.length&&<tr><td colSpan={5}>No certificate applications submitted yet.</td></tr>}
       </tbody>
      </table>
     </div>
@@ -327,7 +417,6 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   </>}
  </div>
 }
-
 function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Promise<any>}) {
  const [question,setQuestion]=useState(''),[messages,setMessages]=useState<{q:string,a:string}[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState('');
  async function ask(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!question.trim()||busy)return;const q=question.trim();setQuestion('');setBusy(true);setError('');try{const result=await request('/api/chatbot/faq',{method:'POST',body:JSON.stringify({question:q})});setMessages(old=>[...old,{q,a:result.answer}])}catch(err:any){setError(err.message)}finally{setBusy(false)}}

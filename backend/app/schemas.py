@@ -379,6 +379,37 @@ class HomeworkOut(HomeworkIn):
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
+class CertificateApplicationIn(BaseModel):
+    student_id: int = Field(gt=0)
+    certificate_type: Literal["study", "bonafide", "conduct", "transfer", "other"]
+    purpose: str = Field(min_length=3, max_length=500)
+
+    @field_validator("purpose")
+    @classmethod
+    def validate_certificate_purpose(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Certificate purpose cannot be blank")
+        return value.strip()
+
+
+class CertificateApplicationOut(BaseModel):
+    id: int
+    school_id: int
+    student_id: int
+    certificate_type: str
+    purpose: str
+    status: str
+    reviewer_note: str
+    created_at: datetime
+    reviewed_at: datetime | None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CertificateApplicationReviewIn(BaseModel):
+    status: Literal["approved", "rejected"]
+    reviewer_note: str = Field(default="", max_length=500)
+
+
 class StudentLeaveIn(BaseModel):
     school_id: int | None = Field(default=None, gt=0)
     student_id: int = Field(gt=0)

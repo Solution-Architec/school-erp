@@ -1703,6 +1703,143 @@ def parent_child_attendance(
     ]
 
 
+@app.get("/api/parent/children/{student_id}/exam-results", tags=["parent-portal"])
+def parent_child_exam_results(
+    student_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("parent")),
+):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
+    if not _linked_parent_student(db, user, student_id):
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    rows = db.execute(
+        select(models.ReportCard, models.Exam)
+        .join(
+            models.Exam,
+            and_(
+                models.Exam.id == models.ReportCard.exam_id,
+                models.Exam.school_id == models.ReportCard.school_id,
+            ),
+        )
+        .where(
+            models.ReportCard.school_id == user.school_id,
+            models.ReportCard.student_id == student_id,
+            models.Exam.school_id == user.school_id,
+        )
+        .order_by(models.Exam.exam_date.desc(), models.Exam.id.desc())
+    ).all()
+    return [
+        {
+            "id": report.id,
+            "exam_id": exam.id,
+            "exam_name": exam.name,
+            "subject": exam.subject,
+            "exam_date": exam.exam_date.isoformat(),
+            "academic_year": exam.academic_year,
+            "max_marks": float(exam.max_marks),
+            "pass_marks": float(exam.pass_marks),
+            "marks_obtained": float(report.marks_obtained),
+            "result": "passed" if report.marks_obtained >= exam.pass_marks else "failed",
+            "remarks": report.remarks,
+        }
+        for report, exam in rows
+    ]
+
+
+@app.get(
+    "/api/parent/children/{student_id}/certificate-applications",
+    response_model=list[schemas.CertificateApplicationOut],
+    tags=["parent-portal"],
+)
+def parent_list_certificate_applications(
+    student_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("parent")),
+):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
+    if not _linked_parent_student(db, user, student_id):
+        raise HTTPException(status_code=404, detail="Student not found")
+    return list(db.scalars(
+        select(models.CertificateApplication).where(
+            models.CertificateApplication.school_id == user.school_id,
+            models.CertificateApplication.student_id == student_id,
+            models.CertificateApplication.parent_user_id == user.id,
+        ).order_by(models.CertificateApplication.created_at.desc())
+    ).all())
+
+
+@app.post(
+    "/api/parent/children/{student_id}/certificate-applications",
+    response_model=schemas.CertificateApplicationOut,
+    tags=["parent-portal"],
+)
+def parent_submit_certificate_application(
+    student_id: int,
+    payload: schemas.CertificateApplicationIn,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("parent")),
+):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
+    if payload.student_id != student_id or not _linked_parent_student(db, user, student_id):
+        raise HTTPException(status_code=404, detail="Linked student not found")
+
+    application = models.CertificateApplication(
+        school_id=user.school_id,
+        student_id=student_id,
+        parent_user_id=user.id,
+        certificate_type=payload.certificate_type,
+        purpose=payload.purpose,
+        status="pending",
+    )
+    db.add(application)
+    db.flush()
+    write_audit_log(
+        db, user, "parent.certificate.submitted", "certificate_application",
+        str(application.id),
+        {"student_id": student_id, "certificate_type": payload.certificate_type},
+    )
+    db.commit()
+    db.refresh(application)
+    return application
+
+
+@app.post(
+    "/api/certificate-applications/{application_id}/review",
+    response_model=schemas.CertificateApplicationOut,
+    tags=["certificates"],
+)
+def review_certificate_application(
+    application_id: int,
+    decision: schemas.CertificateApplicationReviewIn,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("admin", "principal", "vice_principal")),
+):
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="School staff account required")
+    application = db.get(models.CertificateApplication, application_id)
+    if not application or application.school_id != user.school_id:
+        raise HTTPException(status_code=404, detail="Certificate application not found")
+    if application.status != "pending":
+        raise HTTPException(status_code=409, detail="Only pending applications can be reviewed")
+
+    application.status = decision.status
+    application.reviewer_note = decision.reviewer_note
+    application.reviewed_by = user.id
+    application.reviewed_at = datetime.utcnow()
+    write_audit_log(
+        db, user, "parent.certificate.reviewed", "certificate_application",
+        str(application.id),
+        {"student_id": application.student_id, "status": decision.status},
+    )
+    db.commit()
+    db.refresh(application)
+    return application
+
+
 @app.get("/api/parent/children/{student_id}/fees", tags=["parent-portal"])
 def parent_child_fees(student_id: int, db: Session = Depends(get_db),
                       user: models.User = Depends(require_roles("parent"))):
