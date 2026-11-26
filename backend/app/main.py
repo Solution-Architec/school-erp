@@ -317,7 +317,7 @@ def _default_permission_matrix(role: str) -> dict[str, bool]:
             if role in {"admin", "user", "college_admin", "university_admin", "institute_admin"}:
                 if module not in {"parent-portal", "developer-control", "parent-messages"}:
                     permissions[f"{module}:Delete"] = True
-            if module in {"approvals", "student-leave", "facility-requests"}:
+            if module in {"approvals", "student-leave", "facility-requests", "certificate-management"}:
                 permissions[f"{module}:Approve"] = True
             if module == "parent-relationships":
                 permissions[f"{module}:Create"] = role == "admin"
@@ -968,7 +968,7 @@ def parent_submit_leave(payload: schemas.StudentLeaveIn, db: Session = Depends(g
 @app.post("/api/student-leave/{item_id}/review", response_model=schemas.StudentLeaveOut, tags=["student-leave"])
 def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, db: Session = Depends(get_db),
                          user: models.User = Depends(require_module_permission("student-leave", "Approve", *STANDARD_ROLES))):
-    if user.role != "super_admin" and not user.school_id:
+    if user.role == "parent" or (user.role != "super_admin" and not user.school_id):
         raise HTTPException(status_code=403, detail="School staff account required")
     obj = db.get(models.StudentLeaveRequest, item_id)
     if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
