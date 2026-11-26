@@ -10,25 +10,6 @@ from backend.app.rbac_catalog import seed_rbac_catalog
 from backend.app.security import current_user
 
 
-def _client_for(user):
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    session = Session(engine)
-    seed_rbac_catalog(session)
-    session.commit()
-
-    def override_db():
-        yield session
-
-    app.dependency_overrides[get_db] = override_db
-    app.dependency_overrides[current_user] = lambda: user
-    return TestClient(app), engine, session
-
-
 def _make_user(role):
     return User(name=role, email=f"{role}@api.test", password_hash="x", role=role)
 
@@ -46,7 +27,10 @@ def test_developer_template_api_lifecycle_and_audit():
     developer = _make_user("super_admin")
     session.add(developer)
     session.commit()
-    app.dependency_overrides[get_db] = lambda: iter([session])
+    def override_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[current_user] = lambda: developer
     client = TestClient(app)
     try:
