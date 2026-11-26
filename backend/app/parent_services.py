@@ -268,6 +268,8 @@ def review_facility_request(
                 assignment.is_active = False
             else:
                 vehicle_id = details.get("vehicle_id")
+                if (row.request_type == "new_allocation" or not assignment.is_active) and vehicle_id is None:
+                    raise HTTPException(status_code=422, detail="Select an active vehicle before approving a new transport allocation")
                 if vehicle_id is not None:
                     try:
                         vehicle_id = int(vehicle_id)
@@ -299,6 +301,8 @@ def review_facility_request(
                 assignment.is_active = False
             else:
                 hostel_id = details.get("hostel_id")
+                if (row.request_type == "new_allocation" or not assignment.is_active) and hostel_id is None:
+                    raise HTTPException(status_code=422, detail="Select an active hostel before approving a new hostel allocation")
                 if hostel_id is not None:
                     try:
                         hostel_id = int(hostel_id)
