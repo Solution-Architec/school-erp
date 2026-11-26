@@ -517,3 +517,17 @@ def test_parent_certificate_application_requires_active_link_and_can_be_reviewed
         {"status": "rejected", "reviewer_note": "No"},
     )
     assert repeated.status_code == 409
+
+
+def test_parent_message_contacts_require_active_link_and_return_only_approved_school_staff(academic_api_context):
+    actor, ids, api_request = academic_api_context
+    response = api_request("GET", f"/api/parent/children/{ids['linked_student_id']}/message-contacts")
+    assert response.status_code == 200
+    assert [contact["id"] for contact in response.json()] == [ids["teacher_id"]]
+    assert response.json()[0]["role"] == "teacher"
+
+    response = api_request("GET", f"/api/parent/children/{ids['unlinked_student_id']}/message-contacts")
+    assert response.status_code == 404
+
+    response = api_request("GET", f"/api/parent/children/{ids['cross_school_student_id']}/message-contacts")
+    assert response.status_code == 404
