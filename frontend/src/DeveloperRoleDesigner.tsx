@@ -101,7 +101,7 @@ export default function DeveloperRoleDesigner({request}:{request:Request}) {
   } catch(e:any) {setError(e.message||'Could not create role template')}
   finally {setBusy(false)}
  }
- async function saveVersion(e:React.FormEvent) {
+ async function saveVersion(e:FormEvent) {
   e.preventDefault()
   if(!selected)return
   if(!institutionTypes.length){setError('Select at least one institution type.');return}
