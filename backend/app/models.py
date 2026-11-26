@@ -544,10 +544,10 @@ class RbacAction(Base):
 class RbacModuleAction(Base):
     """Allow-listed action combinations for each registered module."""
     __tablename__ = "rbac_module_actions"
-    __table_args__ = (
-        ForeignKey("rbac_modules.key", name="fk_rbac_module_action_module"),
-        ForeignKey("rbac_actions.key", name="fk_rbac_module_action_action"),
+    module_key: Mapped[str] = mapped_column(
+        String(60), ForeignKey("rbac_modules.key"), primary_key=True
     )
-    module_key: Mapped[str] = mapped_column(String(60), primary_key=True)
-    action_key: Mapped[str] = mapped_column(String(30), primary_key=True)
+    action_key: Mapped[str] = mapped_column(
+        String(30), ForeignKey("rbac_actions.key"), primary_key=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
