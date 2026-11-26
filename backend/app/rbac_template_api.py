@@ -1,6 +1,5 @@
 """Developer-only APIs for governed RBAC role templates."""
 import json
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,7 +17,6 @@ from .rbac_templates import (
     publish_template_version,
     replace_draft_policy,
     retire_template_version,
-    set_role_template_active,
 )
 from .security import require_roles
 
@@ -162,7 +160,7 @@ def get_role_template_api(
     template = db.get(models.RbacRoleTemplate, template_id)
     if template is None:
         raise HTTPException(status_code=404, detail="Role template not found")
-    return _template_out(template)
+    return _template_out(template, db)
 
 
 @router.patch("/templates/{template_id}")
