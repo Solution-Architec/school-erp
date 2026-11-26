@@ -417,7 +417,7 @@ class CertificateApplicationStaffOut(BaseModel):
     class_name: str = ""
     section: str = ""
     parent_name: str
-    parent_email: EmailStr
+    parent_email: str
     certificate_type: str
     purpose: str
     status: str
