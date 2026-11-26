@@ -1188,3 +1188,7 @@ body{background:#050b1b;color:#e5edf8}
 .facility-review-actions button{min-height:30px;padding:0 9px;font-size:9px}
 .facility-review-actions button:disabled{opacity:.55;cursor:wait}
 .facility-review-actions~input,.table-wrap td input[aria-label^="Review note"]{width:150px;min-height:32px;padding:6px 8px;border:1px solid #263956;border-radius:7px;background:#071126;color:#e6efff;font-size:10px}
+
+
+.facility-review-actions select{width:170px;min-height:30px;padding:5px 7px;border:1px solid #263956;border-radius:7px;background:#071126;color:#e6efff;font-size:9px}
+@media(max-width:900px){.facility-review-actions{min-width:190px}.facility-review-actions select{width:100%}}
