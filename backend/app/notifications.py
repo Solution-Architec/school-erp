@@ -14,7 +14,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from .database import Base, get_db
 from . import models
-from .security import current_user
+from .security import current_user, require_module_permission
 
 router = APIRouter(tags=["notifications"])
 
@@ -167,7 +167,7 @@ def _eligible(notification: SchoolNotification, students: list[models.Student]) 
 
 
 @router.get("/api/school/notifications")
-def list_school_notifications(db: Session = Depends(get_db), user=Depends(current_user)):
+def list_school_notifications(db: Session = Depends(get_db), user=Depends(require_module_permission("notifications", "View", *STAFF_ROLES))):
     school_id = _school_staff(user)
     rows = db.scalars(
         select(SchoolNotification)
@@ -184,7 +184,7 @@ def list_school_notifications(db: Session = Depends(get_db), user=Depends(curren
 
 
 @router.post("/api/school/notifications", status_code=201)
-def create_school_notification(payload: NotificationCreate, db: Session = Depends(get_db), user=Depends(current_user)):
+def create_school_notification(payload: NotificationCreate, db: Session = Depends(get_db), user=Depends(require_module_permission("notifications", "Create", *STAFF_ROLES))):
     school_id = _school_staff(user)
     class_name = payload.class_name.strip()
     section = payload.section.strip()
@@ -219,7 +219,7 @@ def create_school_notification(payload: NotificationCreate, db: Session = Depend
 
 
 @router.get("/api/school/parent-reminder-settings")
-def get_school_parent_reminder_settings(db: Session = Depends(get_db), user=Depends(current_user)):
+def get_school_parent_reminder_settings(db: Session = Depends(get_db), user=Depends(require_module_permission("notifications", "View", *STAFF_ROLES))):
     if user.role not in {"admin", "principal", "vice_principal"} or not user.school_id:
         raise HTTPException(status_code=403, detail="School leadership access required")
     row = db.scalar(select(SchoolReminderSettings).where(
@@ -232,7 +232,7 @@ def get_school_parent_reminder_settings(db: Session = Depends(get_db), user=Depe
 def update_school_parent_reminder_settings(
     payload: SchoolReminderSettingsUpdate,
     db: Session = Depends(get_db),
-    user=Depends(current_user),
+    user=Depends(require_module_permission("notifications", "Edit", *STAFF_ROLES)),
 ):
     if user.role not in {"admin", "principal", "vice_principal"} or not user.school_id:
         raise HTTPException(status_code=403, detail="School leadership access required")
@@ -266,7 +266,7 @@ def update_school_parent_reminder_settings(
 
 
 @router.get("/api/parent/notifications")
-def list_parent_notifications(db: Session = Depends(get_db), user=Depends(current_user)):
+def list_parent_notifications(db: Session = Depends(get_db), user=Depends(require_module_permission("parent-portal", "View", "parent"))):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent access required")
     students = _linked_students(db, user)
@@ -309,7 +309,7 @@ def list_parent_notifications(db: Session = Depends(get_db), user=Depends(curren
 
 
 @router.post("/api/parent/notifications/{notification_id}/read")
-def mark_parent_notification_read(notification_id: int, db: Session = Depends(get_db), user=Depends(current_user)):
+def mark_parent_notification_read(notification_id: int, db: Session = Depends(get_db), user=Depends(require_module_permission("parent-portal", "Edit", "parent"))):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent access required")
     row = db.scalar(select(SchoolNotification).where(
@@ -338,7 +338,7 @@ def mark_parent_notification_read(notification_id: int, db: Session = Depends(ge
 
 
 @router.get("/api/parent/notification-preferences")
-def get_parent_notification_preferences(db: Session = Depends(get_db), user=Depends(current_user)):
+def get_parent_notification_preferences(db: Session = Depends(get_db), user=Depends(require_module_permission("parent-portal", "View", "parent"))):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent access required")
     row = db.scalar(select(NotificationPreference).where(
@@ -352,7 +352,7 @@ def get_parent_notification_preferences(db: Session = Depends(get_db), user=Depe
 def update_parent_notification_preferences(
     payload: NotificationPreferenceUpdate,
     db: Session = Depends(get_db),
-    user=Depends(current_user),
+    user=Depends(require_module_permission("parent-portal", "Edit", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent access required")
