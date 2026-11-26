@@ -65,13 +65,6 @@ def _role_out(db: Session, role: models.InstitutionRole) -> dict[str, Any]:
         )
         .order_by(models.InstitutionRolePermission.module_key, models.InstitutionRolePermission.action_key)
     ).all()
-    assignment_count = db.scalar(
-        select(models.UserRoleAssignment.id).where(
-            models.UserRoleAssignment.school_id == role.school_id,
-            models.UserRoleAssignment.role_id == role.id,
-            models.UserRoleAssignment.is_active.is_(True),
-        ).count()
-    ) if False else None
     from sqlalchemy import func
     assignment_count = db.scalar(select(func.count(models.UserRoleAssignment.id)).where(
         models.UserRoleAssignment.school_id == role.school_id,
