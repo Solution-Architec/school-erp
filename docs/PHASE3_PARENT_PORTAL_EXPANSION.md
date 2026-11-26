@@ -30,6 +30,7 @@ Extend the Parent role into a secure Family Services Portal for every actively l
 ## Suggested implementation sequence
 
 - **P3.2A** Parent portal shell, multi-child selector, profile, results, homework, timetable, and calendar read views.
+  - Homework and timetable read views now use `/api/parent/children/{student_id}/homework` and `/api/parent/children/{student_id}/timetable`. Both require an active parent-student link and resolve class/section from the linked student; results are school-scoped. Homework exposes only parent-safe assignment fields and HTTP(S) attachment links.
 - **P3.2B** Certificate application and issuance workflow.
 - **P3.2C** Transport/hostel assignment read views and parent change-request workflows.
 - **P3.2D** Notifications, consent forms, service requests, accessibility, and mobile layout.

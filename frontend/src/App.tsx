@@ -241,6 +241,8 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
  const [childId,setChildId]=useState('');
  const [fees,setFees]=useState<any[]>([]);
  const [attendance,setAttendance]=useState<any[]>([]);
+ const [homework,setHomework]=useState<any[]>([]);
+ const [timetable,setTimetable]=useState<any[]>([]);
  const [examResults,setExamResults]=useState<any[]>([]);
  const [reportYear,setReportYear]=useState('all');
  const [reportMonth,setReportMonth]=useState('all');
@@ -278,6 +280,8 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
  const [error,setError]=useState('');
  const [feesError,setFeesError]=useState('');
  const [attendanceError,setAttendanceError]=useState('');
+ const [homeworkError,setHomeworkError]=useState('');
+ const [timetableError,setTimetableError]=useState('');
  const [examResultsError,setExamResultsError]=useState('');
  const [certificateError,setCertificateError]=useState('');
  const [certificateMessage,setCertificateMessage]=useState('');
@@ -287,6 +291,8 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
  const [loading,setLoading]=useState(true);
  const [feesLoading,setFeesLoading]=useState(false);
  const [attendanceLoading,setAttendanceLoading]=useState(false);
+ const [homeworkLoading,setHomeworkLoading]=useState(false);
+ const [timetableLoading,setTimetableLoading]=useState(false);
  const [examResultsLoading,setExamResultsLoading]=useState(false);
  const [certificateApplicationsLoading,setCertificateApplicationsLoading]=useState(false);
 
@@ -315,6 +321,8 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
   let active=true;
   setFees([]);
   setAttendance([]);
+  setHomework([]);
+  setTimetable([]);
   setExamResults([]);
   setCertificateApplications([]);
   setFacilityData({transport:null,hostel:null});
@@ -330,6 +338,8 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
   setFacilityMessage('');
   setFeesError('');
   setAttendanceError('');
+  setHomeworkError('');
+  setTimetableError('');
   setExamResultsError('');
   setCertificateError('');
   setCertificateMessage('');
@@ -345,6 +355,16 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
     .then((data:any[])=>{if(active)setAttendance(data)})
     .catch((e:any)=>{if(active)setAttendanceError(e.message)})
     .finally(()=>{if(active)setAttendanceLoading(false)});
+   setHomeworkLoading(true);
+   request('/api/parent/children/'+encodedChildId+'/homework')
+    .then((data:any[])=>{if(active)setHomework(data)})
+    .catch((e:any)=>{if(active)setHomeworkError(e.message||'Could not load homework')})
+    .finally(()=>{if(active)setHomeworkLoading(false)});
+   setTimetableLoading(true);
+   request('/api/parent/children/'+encodedChildId+'/timetable')
+    .then((data:any[])=>{if(active)setTimetable(data)})
+    .catch((e:any)=>{if(active)setTimetableError(e.message||'Could not load class timetable')})
+    .finally(()=>{if(active)setTimetableLoading(false)});
    setExamResultsLoading(true);
    request('/api/parent/children/'+encodedChildId+'/exam-results')
     .then((data:any[])=>{if(active)setExamResults(data)})
@@ -375,6 +395,8 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
   }else{
    setFeesLoading(false);
    setAttendanceLoading(false);
+   setHomeworkLoading(false);
+   setTimetableLoading(false);
    setExamResultsLoading(false);
    setCertificateApplicationsLoading(false);
   }
@@ -502,6 +524,30 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
        {attendance.map(record=><tr key={record.id}><td>{record.attendance_date}</td><td><span className="status-badge">{record.status}</span></td></tr>)}
        {attendanceLoading&&<tr><td colSpan={2}>Loading attendance…</td></tr>}
        {!attendanceLoading&&!attendance.length&&<tr><td colSpan={2}>No attendance has been recorded for this student yet. Once school staff mark attendance, it will appear here.</td></tr>}
+      </tbody>
+     </table>
+    </div>}
+   </section>
+   <section className="parent-portal-section parent-homework-section">
+    <div className="panel-heading"><div><h4>Homework and assignments</h4><p>Class and section assignments, instructions, due dates and teacher-shared attachments.</p></div></div>
+    {homeworkError?<div className="error" role="alert">{homeworkError}</div>:<div className="table-wrap">
+     <table><thead><tr><th>Subject</th><th>Assignment</th><th>Instructions</th><th>Due date</th><th>Attachment</th></tr></thead>
+      <tbody>
+       {homework.map(item=><tr key={item.id}><td>{item.subject}</td><td><strong>{item.title}</strong></td><td>{item.description||'—'}</td><td>{item.due_date}</td><td>{item.attachment_url?<a href={item.attachment_url} target="_blank" rel="noreferrer">View attachment</a>:'—'}</td></tr>)}
+       {homeworkLoading&&<tr><td colSpan={5}>Loading homework…</td></tr>}
+       {!homeworkLoading&&!homework.length&&<tr><td colSpan={5}>No homework has been published for this class and section yet.</td></tr>}
+      </tbody>
+     </table>
+    </div>}
+   </section>
+   <section className="parent-portal-section parent-timetable-section">
+    <div className="panel-heading"><div><h4>Class timetable</h4><p>Weekly periods for the selected student's class and section.</p></div></div>
+    {timetableError?<div className="error" role="alert">{timetableError}</div>:<div className="table-wrap">
+     <table><thead><tr><th>Day</th><th>Period</th><th>Time</th><th>Subject</th><th>Teacher</th><th>Room</th></tr></thead>
+      <tbody>
+       {timetable.map(item=><tr key={item.id}><td>{item.day_of_week}</td><td>{item.period}</td><td>{item.start_time} – {item.end_time}</td><td><strong>{item.subject}</strong></td><td>{item.teacher_name||'—'}</td><td>{item.room||'—'}</td></tr>)}
+       {timetableLoading&&<tr><td colSpan={6}>Loading timetable…</td></tr>}
+       {!timetableLoading&&!timetable.length&&<tr><td colSpan={6}>No timetable has been published for this class and section yet.</td></tr>}
       </tbody>
      </table>
     </div>}

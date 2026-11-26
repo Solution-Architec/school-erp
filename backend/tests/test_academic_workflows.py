@@ -237,6 +237,45 @@ def academic_api_context():
         )
         db.add_all([report_linked, report_unlinked])
 
+        homework_linked = models.Homework(
+            school_id=school.id, class_name="5", section="A", subject="Science",
+            title="Plant cells", description="Draw and label a plant cell.",
+            assigned_by=teacher.id, due_date=date(2026, 11, 30),
+            attachment_url="https://school.example.test/plant-cells.pdf",
+        )
+        homework_other_section = models.Homework(
+            school_id=school.id, class_name="5", section="B", subject="Maths",
+            title="Fractions", description="Complete exercise 4.",
+            assigned_by=teacher.id, due_date=date(2026, 11, 29),
+        )
+        homework_cross_school = models.Homework(
+            school_id=other_school.id, class_name="5", section="A", subject="English",
+            title="Cross-school work", description="Must not be visible.",
+            assigned_by=teacher.id, due_date=date(2026, 11, 28),
+        )
+        timetable_linked = models.TimetableEntry(
+            school_id=school.id, class_name="5", section="A",
+            day_of_week="Monday", period=1, subject="Science",
+            teacher_name="Test Teacher", room="A-101",
+            start_time="09:00", end_time="09:45",
+        )
+        timetable_other_section = models.TimetableEntry(
+            school_id=school.id, class_name="5", section="B",
+            day_of_week="Monday", period=1, subject="Maths",
+            teacher_name="Other Teacher", room="B-101",
+            start_time="09:00", end_time="09:45",
+        )
+        timetable_cross_school = models.TimetableEntry(
+            school_id=other_school.id, class_name="5", section="A",
+            day_of_week="Monday", period=2, subject="Other School",
+            teacher_name="Private", room="X-1",
+            start_time="09:45", end_time="10:30",
+        )
+        db.add_all([
+            homework_linked, homework_other_section, homework_cross_school,
+            timetable_linked, timetable_other_section, timetable_cross_school,
+        ])
+
         db.commit()
 
         ids = {
@@ -261,6 +300,8 @@ def academic_api_context():
             "attendance_cross_school_id": attendance_cross_school.id,
             "report_linked_id": report_linked.id,
             "report_unlinked_id": report_unlinked.id,
+            "homework_linked_id": homework_linked.id,
+            "timetable_linked_id": timetable_linked.id,
         }
 
     actor["user"] = SimpleNamespace(
@@ -531,3 +572,31 @@ def test_parent_message_contacts_require_active_link_and_return_only_approved_sc
 
     response = api_request("GET", f"/api/parent/children/{ids['cross_school_student_id']}/message-contacts")
     assert response.status_code == 404
+
+
+
+def test_parent_homework_and_timetable_are_linked_student_class_scoped(academic_api_context):
+    actor, ids, api_request = academic_api_context
+
+    response = api_request("GET", f"/api/parent/children/{ids['linked_student_id']}/homework")
+    assert response.status_code == 200
+    homework = response.json()
+    assert [item["id"] for item in homework] == [ids["homework_linked_id"]]
+    assert homework[0]["subject"] == "Science"
+    assert homework[0]["attachment_url"] == "https://school.example.test/plant-cells.pdf"
+    assert "assigned_by" not in homework[0]
+
+    response = api_request("GET", f"/api/parent/children/{ids['linked_student_id']}/timetable")
+    assert response.status_code == 200
+    timetable = response.json()
+    assert [item["id"] for item in timetable] == [ids["timetable_linked_id"]]
+    assert timetable[0]["subject"] == "Science"
+    assert "school_id" not in timetable[0]
+
+
+def test_parent_homework_and_timetable_reject_unlinked_inactive_and_cross_school_students(academic_api_context):
+    actor, ids, api_request = academic_api_context
+    for student_key in ("unlinked_student_id", "inactive_link_student_id", "cross_school_student_id"):
+        student_id = ids[student_key]
+        assert api_request("GET", f"/api/parent/children/{student_id}/homework").status_code == 404
+        assert api_request("GET", f"/api/parent/children/{student_id}/timetable").status_code == 404
