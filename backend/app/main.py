@@ -1984,3 +1984,125 @@ def chatbot_faq(payload: dict, user: models.User = Depends(require_module_permis
         if any(keyword in question for keyword in keywords):
             return {"answer": answer, "source": "schoolos-approved-faq", "needs_human_support": False}
     return {"answer": "I couldn't find an approved answer for that question. Please contact your school office or administrator.", "source": "schoolos-approved-faq", "needs_human_support": True}
+
+
+# Parent relationship governance. Phone/Aadhaar matches are not authorization:
+# only an explicitly approved ParentStudentLink grants access to a child.
+@app.get("/api/parent-links", tags=["parent-portal"])
+def list_parent_links(
+    school_id: int | None = Query(default=None, gt=0),
+    parent_user_id: int | None = Query(default=None, gt=0),
+    student_id: int | None = Query(default=None, gt=0),
+    active: bool | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("super_admin", "admin")),
+):
+    if user.role == "super_admin":
+        if school_id is None:
+            raise HTTPException(status_code=422, detail="Select a school to review parent relationships")
+        target_school_id = school_id
+    else:
+        if not user.school_id:
+            raise HTTPException(status_code=403, detail="School staff account required")
+        if school_id is not None and school_id != user.school_id:
+            raise HTTPException(status_code=404, detail="School not found")
+        target_school_id = user.school_id
+
+    stmt = select(models.ParentStudentLink, models.User, models.Student).join(
+        models.User, models.User.id == models.ParentStudentLink.parent_user_id
+    ).join(
+        models.Student, models.Student.id == models.ParentStudentLink.student_id
+    ).where(
+        models.ParentStudentLink.school_id == target_school_id,
+        models.User.school_id == target_school_id,
+        models.User.role == "parent",
+        models.Student.school_id == target_school_id,
+    )
+    if parent_user_id is not None:
+        stmt = stmt.where(models.ParentStudentLink.parent_user_id == parent_user_id)
+    if student_id is not None:
+        stmt = stmt.where(models.ParentStudentLink.student_id == student_id)
+    if active is not None:
+        stmt = stmt.where(models.ParentStudentLink.is_active.is_(active))
+    rows = db.execute(stmt.order_by(
+        models.ParentStudentLink.created_at.desc(),
+        models.ParentStudentLink.id.desc(),
+    ).limit(500)).all()
+    return [{
+        "id": link.id,
+        "school_id": link.school_id,
+        "parent_user_id": parent.id,
+        "parent_name": parent.name,
+        "parent_email": parent.email,
+        "student_id": student.id,
+        "student_name": student.full_name,
+        "admission_no": student.admission_no,
+        "class_name": student.class_name,
+        "section": student.section,
+        "relationship": link.relationship,
+        "is_active": link.is_active,
+        "created_at": link.created_at,
+    } for link, parent, student in rows]
+
+
+@app.patch("/api/parent-links/{link_id}", tags=["parent-portal"])
+def update_parent_link(
+    link_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles("super_admin", "admin")),
+):
+    allowed_fields = {"is_active", "relationship"}
+    if not payload or set(payload) - allowed_fields:
+        raise HTTPException(status_code=422, detail="Only is_active and relationship may be updated")
+    link = db.get(models.ParentStudentLink, link_id)
+    if not link or (user.role != "super_admin" and link.school_id != user.school_id):
+        raise HTTPException(status_code=404, detail="Parent relationship not found")
+
+    parent = db.scalar(select(models.User).where(
+        models.User.id == link.parent_user_id,
+        models.User.school_id == link.school_id,
+        models.User.role == "parent",
+    ))
+    student = db.scalar(select(models.Student).where(
+        models.Student.id == link.student_id,
+        models.Student.school_id == link.school_id,
+    ))
+    if not parent or not student:
+        raise HTTPException(status_code=409, detail="Parent relationship has invalid school records")
+
+    changes = {}
+    if "is_active" in payload:
+        if not isinstance(payload["is_active"], bool):
+            raise HTTPException(status_code=422, detail="is_active must be true or false")
+        if link.is_active != payload["is_active"]:
+            changes["is_active"] = {"from": link.is_active, "to": payload["is_active"]}
+            link.is_active = payload["is_active"]
+    if "relationship" in payload:
+        relationship = payload["relationship"]
+        if not isinstance(relationship, str) or not relationship.strip() or len(relationship.strip()) > 40:
+            raise HTTPException(status_code=422, detail="relationship must contain 1 to 40 characters")
+        relationship = relationship.strip().lower()
+        if link.relationship != relationship:
+            changes["relationship"] = {"from": link.relationship, "to": relationship}
+            link.relationship = relationship
+    if changes:
+        write_audit_log(
+            db, user, "parent.relationship.updated", "parent_student_link",
+            str(link.id), {
+                "school_id": link.school_id,
+                "parent_user_id": link.parent_user_id,
+                "student_id": link.student_id,
+                "changes": changes,
+            },
+        )
+        db.commit()
+        db.refresh(link)
+    return {
+        "id": link.id,
+        "parent_user_id": link.parent_user_id,
+        "student_id": link.student_id,
+        "school_id": link.school_id,
+        "relationship": link.relationship,
+        "is_active": link.is_active,
+    }

@@ -600,3 +600,68 @@ def test_parent_homework_and_timetable_reject_unlinked_inactive_and_cross_school
         student_id = ids[student_key]
         assert api_request("GET", f"/api/parent/children/{student_id}/homework").status_code == 404
         assert api_request("GET", f"/api/parent/children/{student_id}/timetable").status_code == 404
+
+
+def test_parent_relationship_governance_is_school_scoped_and_audited(academic_api_context):
+    actor, ids, api_request = academic_api_context
+    actor["user"] = type(actor["user"])(
+        id=ids["school_admin_id"], role="admin", school_id=ids["school_id"], is_active=True,
+    )
+
+    listed = api_request("GET", "/api/parent-links?active=true")
+    assert listed.status_code == 200
+    assert len(listed.json()) == 2
+    assert all(row["school_id"] == ids["school_id"] for row in listed.json())
+    assert all("guardian_phone" not in row and "aadhaar" not in row for row in listed.json())
+
+    cross_school = api_request("PATCH", "/api/parent-links/999999", {"is_active": False})
+    assert cross_school.status_code == 404
+
+    # Deactivate the active link; the parent immediately loses child access.
+    link_id = next(row["id"] for row in listed.json()
+                   if row["student_id"] == ids["linked_student_id"])
+    deactivated = api_request("PATCH", f"/api/parent-links/{link_id}", {"is_active": False})
+    assert deactivated.status_code == 200
+    assert deactivated.json()["is_active"] is False
+
+    actor["user"] = type(actor["user"])(
+        id=ids["parent_id"], role="parent", school_id=ids["school_id"], is_active=True,
+    )
+    children = api_request("GET", "/api/parent/children")
+    assert children.status_code == 200
+    assert all(row["id"] != ids["linked_student_id"] for row in children.json())
+    denied = api_request("GET", f"/api/parent/children/{ids['linked_student_id']}/attendance")
+    assert denied.status_code == 404
+
+    actor["user"] = type(actor["user"])(
+        id=ids["school_admin_id"], role="admin", school_id=ids["school_id"], is_active=True,
+    )
+    reactivated = api_request("PATCH", f"/api/parent-links/{link_id}", {"is_active": True})
+    assert reactivated.status_code == 200
+    assert reactivated.json()["is_active"] is True
+
+
+def test_parent_relationship_governance_rejects_invalid_updates_and_tenant_escape(academic_api_context):
+    actor, ids, api_request = academic_api_context
+    actor["user"] = type(actor["user"])(
+        id=ids["school_admin_id"], role="admin", school_id=ids["school_id"], is_active=True,
+    )
+    link_list = api_request("GET", "/api/parent-links")
+    link_id = next(row["id"] for row in link_list.json()
+                   if row["student_id"] == ids["linked_student_id"])
+
+    invalid = api_request("PATCH", f"/api/parent-links/{link_id}", {"is_active": "false"})
+    assert invalid.status_code == 422
+    extra = api_request("PATCH", f"/api/parent-links/{link_id}", {"parent_user_id": ids["other_parent_id"]})
+    assert extra.status_code == 422
+    blank = api_request("PATCH", f"/api/parent-links/{link_id}", {"relationship": "  "})
+    assert blank.status_code == 422
+
+    # An administrator from another tenant cannot enumerate or change this link.
+    actor["user"] = type(actor["user"])(
+        id=ids["school_admin_id"], role="admin", school_id=ids["other_school_id"], is_active=True,
+    )
+    denied = api_request("PATCH", f"/api/parent-links/{link_id}", {"is_active": False})
+    assert denied.status_code == 404
+    wrong_school_list = api_request("GET", f"/api/parent-links?school_id={ids['school_id']}")
+    assert wrong_school_list.status_code == 404
