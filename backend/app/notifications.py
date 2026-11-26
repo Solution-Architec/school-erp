@@ -204,3 +204,45 @@ def mark_parent_notification_read(notification_id: int, db: Session = Depends(ge
         ))
         db.commit()
     return {"notification_id": row.id, "is_read": True}
+
+
+def create_event_notification(
+    db: Session,
+    *,
+    school_id: int,
+    actor_user_id: int,
+    title: str,
+    body: str,
+    category: Literal["attendance", "homework", "examination", "fees", "general"],
+    student_id: int | None = None,
+    class_name: str = "",
+    section: str = "",
+) -> SchoolNotification:
+    """Queue an in-app alert in the caller's transaction.
+
+    Parent recipients are deliberately not snapshotted: inbox visibility is
+    evaluated against active same-school parent-student links at read time.
+    """
+    audience = "student" if student_id is not None else "class"
+    row = SchoolNotification(
+        school_id=school_id,
+        created_by=actor_user_id,
+        title=title[:180],
+        body=body[:5000],
+        category=category,
+        audience=audience,
+        class_name=class_name[:80],
+        section=section[:40],
+        student_id=student_id,
+        is_published=True,
+    )
+    db.add(row)
+    db.flush()
+    db.add(models.AuditLog(
+        actor_user_id=actor_user_id,
+        event_type="notification.event_generated",
+        target_type="school_notification",
+        target_id=str(row.id),
+        details=f"school_id={school_id}; audience={audience}; category={category}",
+    ))
+    return row
