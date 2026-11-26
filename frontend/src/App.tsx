@@ -259,6 +259,22 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
  const [facilityMessage,setFacilityMessage]=useState('');
  const [facilityLoading,setFacilityLoading]=useState(false);
  const [facilitySubmitting,setFacilitySubmitting]=useState(false);
+ const [leaveRequests,setLeaveRequests]=useState<any[]>([]);
+ const [leaveStart,setLeaveStart]=useState('');
+ const [leaveEnd,setLeaveEnd]=useState('');
+ const [leaveReason,setLeaveReason]=useState('');
+ const [leaveError,setLeaveError]=useState('');
+ const [leaveMessage,setLeaveMessage]=useState('');
+ const [leaveSubmitting,setLeaveSubmitting]=useState(false);
+ const [messageContacts,setMessageContacts]=useState<any[]>([]);
+ const [parentMessages,setParentMessages]=useState<any[]>([]);
+ const [messageRecipient,setMessageRecipient]=useState('');
+ const [messageSubject,setMessageSubject]=useState('');
+ const [messageBody,setMessageBody]=useState('');
+ const [messageError,setMessageError]=useState('');
+ const [messageNotice,setMessageNotice]=useState('');
+ const [messageSubmitting,setMessageSubmitting]=useState(false);
+ const [messagesLoading,setMessagesLoading]=useState(false);
  const [error,setError]=useState('');
  const [feesError,setFeesError]=useState('');
  const [attendanceError,setAttendanceError]=useState('');
@@ -303,6 +319,13 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   setCertificateApplications([]);
   setFacilityData({transport:null,hostel:null});
   setFacilityRequests([]);
+  setLeaveRequests([]);
+  setLeaveError('');
+  setLeaveMessage('');
+  setMessageContacts([]);
+  setParentMessages([]);
+  setMessageError('');
+  setMessageNotice('');
   setFacilityError('');
   setFacilityMessage('');
   setFeesError('');
@@ -334,6 +357,16 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
    ]).then(([facilities,requests])=>{if(active){setFacilityData(facilities);setFacilityRequests(requests)}})
     .catch((e:any)=>{if(active)setFacilityError(e.message||'Could not load transport and hostel details')})
     .finally(()=>{if(active)setFacilityLoading(false)});
+   request('/api/parent-portal/leave')
+    .then((data:any[])=>{if(active)setLeaveRequests(data.filter(item=>String(item.student_id)===String(childId)))})
+    .catch((e:any)=>{if(active)setLeaveError(e.message||'Could not load leave requests')});
+   setMessagesLoading(true);
+   Promise.all([
+    request('/api/parent/children/'+encodedChildId+'/message-contacts'),
+    request('/api/parent-messages')
+   ]).then(([contacts,messages])=>{if(active){setMessageContacts(contacts);setMessageRecipient(current=>contacts.some((c:any)=>String(c.id)===current)?current:(contacts.length?String(contacts[0].id):''));setParentMessages(messages.filter((item:any)=>String(item.student_id)===String(childId)))}})
+    .catch((e:any)=>{if(active)setMessageError(e.message||'Could not load parent-teacher messages')})
+    .finally(()=>{if(active)setMessagesLoading(false)});
    setCertificateApplicationsLoading(true);
    request('/api/parent/children/'+encodedChildId+'/certificate-applications')
     .then((data:any[])=>{if(active)setCertificateApplications(data)})
@@ -382,6 +415,32 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   const labels=[year!=='all'?year:'all available years',month!=='all'?monthNames[Number(month)-1]:'all months',exam!=='all'?exam:'all exams',subject!=='all'?subject:'all subjects'];
   setReportAnswer('Showing '+labels.join(' · ')+'. '+(q.includes('compare')?'The exam trend below compares the available exam records.':'Your summary and graphs have been updated using published marks.'));
   setReportQuestion('');
+ }
+ async function submitLeaveRequest(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();
+  if(!childId||!leaveStart||!leaveEnd||!leaveReason.trim()||leaveSubmitting)return;
+  setLeaveSubmitting(true);setLeaveError('');setLeaveMessage('');
+  try{
+   const result=await request('/api/parent-portal/leave',{method:'POST',body:JSON.stringify({
+    student_id:Number(childId),start_date:leaveStart,end_date:leaveEnd,reason:leaveReason.trim()
+   })});
+   setLeaveRequests(old=>[result,...old]);setLeaveReason('');
+   setLeaveMessage('Leave application submitted. You can track its status below.');
+  }catch(e:any){setLeaveError(e.message||'Could not submit leave application')}
+  finally{setLeaveSubmitting(false)}
+ }
+ async function sendParentMessage(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();
+  if(!childId||!messageRecipient||!messageBody.trim()||messageSubmitting)return;
+  setMessageSubmitting(true);setMessageError('');setMessageNotice('');
+  try{
+   const result=await request('/api/parent-messages',{method:'POST',body:JSON.stringify({
+    student_id:Number(childId),recipient_user_id:Number(messageRecipient),subject:messageSubject.trim(),body:messageBody.trim()
+   })});
+   setParentMessages(old=>[...old,result]);setMessageBody('');
+   setMessageNotice('Message sent to '+(messageContacts.find(c=>String(c.id)===messageRecipient)?.name||'school staff')+'.');
+  }catch(e:any){setMessageError(e.message||'Could not send message')}
+  finally{setMessageSubmitting(false)}
  }
  async function submitFacilityRequest(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
@@ -497,6 +556,44 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
        </tbody></table></div>
       </>}
      </>}
+    </>}
+   </section>
+   <section className="parent-portal-section parent-leave-section">
+    <div className="panel-heading"><div><h4>Leave applications</h4><p>Apply for leave for the selected student and follow the school’s decision.</p></div><CalendarDays size={20}/></div>
+    {leaveError&&<div className="error" role="alert">{leaveError}</div>}
+    {leaveMessage&&<div className="success" role="status">{leaveMessage}</div>}
+    <form className="record-form parent-leave-form" onSubmit={submitLeaveRequest}>
+     <div className="parent-facility-fields">
+      <label>From date<input type="date" required value={leaveStart} onChange={e=>setLeaveStart(e.target.value)}/></label>
+      <label>To date<input type="date" required min={leaveStart||undefined} value={leaveEnd} onChange={e=>setLeaveEnd(e.target.value)}/></label>
+     </div>
+     <label>Reason<textarea required minLength={3} maxLength={500} value={leaveReason} onChange={e=>setLeaveReason(e.target.value)} placeholder="Explain the reason for leave."/></label>
+     <button className="primary" disabled={leaveSubmitting||!leaveStart||!leaveEnd||!leaveReason.trim()}>{leaveSubmitting?'Submitting…':'Submit leave application'}</button>
+    </form>
+    <div className="table-wrap"><table><thead><tr><th>From</th><th>To</th><th>Reason</th><th>Submitted</th><th>Status</th><th>School note</th></tr></thead><tbody>
+     {leaveRequests.map(item=><tr key={item.id}><td>{item.start_date}</td><td>{item.end_date}</td><td>{item.reason}</td><td>{item.created_at?new Date(item.created_at).toLocaleDateString('en-IN'):'—'}</td><td><span className={'status-badge '+item.status}>{item.status}</span></td><td>{item.reviewer_note||'—'}</td></tr>)}
+     {!leaveRequests.length&&<tr><td colSpan={6}>No leave applications for this student yet.</td></tr>}
+    </tbody></table></div>
+   </section>
+   <section className="parent-portal-section parent-messages-section">
+    <div className="panel-heading"><div><h4>Messages to school</h4><p>Contact an approved teacher or school administrator about this student.</p></div><MessageCircle size={20}/></div>
+    {messageError&&<div className="error" role="alert">{messageError}</div>}
+    {messageNotice&&<div className="success" role="status">{messageNotice}</div>}
+    {messagesLoading?<div className="empty-state">Loading conversations…</div>:<>
+     <form className="record-form parent-message-form" onSubmit={sendParentMessage}>
+      <label>Send to<select required value={messageRecipient} onChange={e=>setMessageRecipient(e.target.value)}><option value="">Select school staff</option>{messageContacts.map(contact=><option key={contact.id} value={contact.id}>{contact.name} · {contact.role.replaceAll('_',' ')}</option>)}</select></label>
+      <label>Subject<input value={messageSubject} onChange={e=>setMessageSubject(e.target.value)} maxLength={180} placeholder="Optional subject"/></label>
+      <label>Message<textarea required minLength={1} maxLength={10000} value={messageBody} onChange={e=>setMessageBody(e.target.value)} placeholder="Write your message to the school…"/></label>
+      <button className="primary" disabled={messageSubmitting||!messageRecipient||!messageBody.trim()}>{messageSubmitting?'Sending…':'Send message'}</button>
+     </form>
+     <div className="parent-message-list">
+      {parentMessages.map(item=>{
+       const own=item.sender_user_id===Number((window as any).__currentUserId||-1);
+       const contact=messageContacts.find(c=>c.id===(own?item.recipient_user_id:item.sender_user_id));
+       return <article className="parent-message-item" key={item.id}><div className="parent-message-meta"><strong>{contact?.name||'School conversation'}</strong><span>{new Date(item.created_at).toLocaleString('en-IN')}</span></div>{item.subject&&<h5>{item.subject}</h5>}<p>{item.body}</p></article>;
+      })}
+      {!parentMessages.length&&<div className="empty-state">No messages yet. Send a message to start a conversation with the school.</div>}
+     </div>
     </>}
    </section>
    <section className="parent-portal-section parent-facilities-section">
