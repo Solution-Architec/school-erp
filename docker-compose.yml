@@ -116,6 +116,21 @@ services:
     networks:
       - internal
 
+  parent-reminder-worker:
+    build: ./backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.reminder_worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REMINDER_POLL_SECONDS: ${REMINDER_POLL_SECONDS:-900}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
   frontend:
     build:
       context: ./frontend
