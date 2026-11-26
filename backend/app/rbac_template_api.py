@@ -191,7 +191,7 @@ def update_role_template_api(
                {"changes": changes})
         _commit(db)
         db.refresh(template)
-    return _template_out(template)
+    return _template_out(template, db)
 
 
 @router.post("/templates/{template_id}/versions", status_code=201)
