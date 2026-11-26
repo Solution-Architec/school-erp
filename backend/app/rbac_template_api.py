@@ -78,7 +78,7 @@ def _version_out(version: models.RbacRoleTemplateVersion) -> dict[str, Any]:
     }
 
 
-def _template_out(template: models.RbacRoleTemplate, *, include_versions: bool = True) -> dict[str, Any]:
+def _template_out(template: models.RbacRoleTemplate, db: Session, *, include_versions: bool = True) -> dict[str, Any]:
     result = {
         "id": template.id,
         "template_key": template.template_key,
@@ -91,11 +91,12 @@ def _template_out(template: models.RbacRoleTemplate, *, include_versions: bool =
         "updated_at": template.updated_at,
     }
     if include_versions:
-        result["versions"] = [
-            _version_out(item) for item in sorted(
-                template.versions, key=lambda value: value.version_number, reverse=True
-            )
-        ]
+        versions = db.scalars(
+            select(models.RbacRoleTemplateVersion)
+            .where(models.RbacRoleTemplateVersion.template_id == template.id)
+            .order_by(models.RbacRoleTemplateVersion.version_number.desc())
+        ).all()
+        result["versions"] = [_version_out(item) for item in versions]
     return result
 
 
@@ -127,7 +128,7 @@ def list_role_templates(
     if not include_inactive:
         query = query.where(models.RbacRoleTemplate.is_active.is_(True))
     templates = db.scalars(query).all()
-    return [_template_out(item) for item in templates]
+    return [_template_out(item, db) for item in templates]
 
 
 @router.post("/templates", status_code=201)
@@ -146,7 +147,7 @@ def create_role_template_api(
                {"template_key": template.template_key, "name": template.name})
         _commit(db)
         db.refresh(template)
-        return _template_out(template)
+        return _template_out(template, db)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=422, detail=str(exc))
