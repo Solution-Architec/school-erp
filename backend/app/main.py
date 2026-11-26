@@ -358,7 +358,8 @@ def _default_permission_matrix(role: str) -> dict[str, bool]:
             permissions[f"{module}:Create"] = True
 
     if role == "parent" and "parent-portal" in allowed_modules:
-        # Parent inbox read receipts and notification preferences are self-service.
+        # Parent workspace forms, inbox read receipts and preferences are self-service.
+        permissions["parent-portal:Create"] = True
         permissions["parent-portal:Edit"] = True
     if role in {"admin", "principal", "vice_principal", "user"} and "notifications" in allowed_modules:
         permissions["notifications:Edit"] = True
@@ -991,7 +992,7 @@ def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, d
 
 @app.get("/api/parent/children/{student_id}/message-contacts", tags=["parent-portal"])
 def parent_message_contacts(student_id: int, db: Session = Depends(get_db),
-                            user: models.User = Depends(require_roles("parent"))):
+                            user: models.User = Depends(require_module_permission("parent-portal", "View", "parent"))):
     if not user.school_id or not _linked_parent_student(db, user, student_id):
         raise HTTPException(status_code=404, detail="Linked student not found")
     staff_roles = ("teacher",)
@@ -1820,7 +1821,7 @@ def assign_user_school(user_id: int, payload: dict, db: Session = Depends(get_db
 # Parent App / family portal
 @app.post("/api/parent-links", tags=["parent-portal"])
 def create_parent_link(payload: dict, db: Session = Depends(get_db),
-                       user: models.User = Depends(require_roles("super_admin", "admin"))):
+                       user: models.User = Depends(require_module_permission("parent-relationships", "Create", "admin"))):
     parent_id = payload.get("parent_user_id")
     student_id = payload.get("student_id")
     relationship = str(payload.get("relationship", "parent"))[:40]
@@ -1851,7 +1852,7 @@ def create_parent_link(payload: dict, db: Session = Depends(get_db),
 
 @app.get("/api/parent/children", tags=["parent-portal"])
 def parent_children(db: Session = Depends(get_db),
-                    user: models.User = Depends(require_roles("parent"))):
+                    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent"))):
     stmt = select(models.Student, models.ParentStudentLink).join(
         models.ParentStudentLink, models.ParentStudentLink.student_id == models.Student.id
     ).where(models.ParentStudentLink.parent_user_id == user.id,
@@ -1869,7 +1870,7 @@ def parent_child_attendance(
     student_id: int,
     limit: int = Query(90, ge=1, le=365),
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -1906,7 +1907,7 @@ def parent_child_attendance(
 def parent_child_homework(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -1944,7 +1945,7 @@ def parent_child_homework(
 def parent_child_timetable(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -1987,7 +1988,7 @@ def parent_child_timetable(
 def parent_child_exam_results(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -2036,7 +2037,7 @@ def parent_child_exam_results(
 def parent_list_certificate_applications(
     student_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -2060,7 +2061,7 @@ def parent_submit_certificate_application(
     student_id: int,
     payload: schemas.CertificateApplicationIn,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("parent")),
+    user: models.User = Depends(require_module_permission("parent-portal", "Create", "parent")),
 ):
     if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
@@ -2122,7 +2123,7 @@ def review_certificate_application(
 
 @app.get("/api/parent/children/{student_id}/fees", tags=["parent-portal"])
 def parent_child_fees(student_id: int, db: Session = Depends(get_db),
-                      user: models.User = Depends(require_roles("parent"))):
+                      user: models.User = Depends(require_module_permission("parent-portal", "View", "parent"))):
     allowed = db.scalar(select(models.ParentStudentLink.id).where(
         models.ParentStudentLink.parent_user_id == user.id,
         models.ParentStudentLink.student_id == student_id,
@@ -2177,7 +2178,7 @@ def list_parent_links(
     student_id: int | None = Query(default=None, gt=0),
     active: bool | None = Query(default=None),
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("super_admin", "admin")),
+    user: models.User = Depends(require_module_permission("parent-relationships", "View", "admin")),
 ):
     if user.role == "super_admin":
         if school_id is None:
@@ -2232,7 +2233,7 @@ def update_parent_link(
     link_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("super_admin", "admin")),
+    user: models.User = Depends(require_module_permission("parent-relationships", "Edit", "admin")),
 ):
     allowed_fields = {"is_active", "relationship"}
     if not payload or set(payload) - allowed_fields:
