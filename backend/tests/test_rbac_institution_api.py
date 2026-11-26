@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.app.database import Base, get_db
 from backend.app.main import app
-from backend.app.models import AuditLog, InstitutionRole, User, UserRoleAssignment
+from backend.app.models import AuditLog, InstitutionRole, RolePermission, User, UserRoleAssignment
 from backend.app.rbac_catalog import seed_rbac_catalog
 from backend.app.rbac_templates import create_role_template, create_template_version, publish_template_version
 from backend.app.security import current_user
@@ -85,7 +85,7 @@ def test_institution_role_builder_api_creates_roles_and_manages_multiple_assignm
 
         users = client.get("/api/institution/rbac/users")
         assert users.status_code == 200
-        assert [item["id"] for item in users.json()] == [staff.id]
+        assert {item["id"] for item in users.json()} == {admin.id, staff.id}
 
         assigned = client.post("/api/institution/rbac/assignments", json={
             "user_id": staff.id, "role_id": role_id,
@@ -155,6 +155,23 @@ def test_institution_role_api_hides_templates_for_other_institution_types():
         response = client.get("/api/institution/rbac/templates")
         assert response.status_code == 200
         assert all(item["version_id"] != version.id for item in response.json())
+    finally:
+        app.dependency_overrides.clear()
+        session.close()
+        engine.dispose()
+
+
+def test_institution_role_api_respects_explicit_module_view_denial():
+    admin = User(name="Admin", email="denied@api.test", password_hash="x", role="admin")
+    client, engine, session, admin, staff, version = _client_for(admin)
+    try:
+        session.add(RolePermission(
+            role="admin", school_id=admin.school_id,
+            module_key="institution-role-builder", action="View", enabled=False,
+        ))
+        session.commit()
+        response = client.get("/api/institution/rbac/roles")
+        assert response.status_code == 403
     finally:
         app.dependency_overrides.clear()
         session.close()
