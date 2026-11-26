@@ -551,3 +551,46 @@ class RbacModuleAction(Base):
         String(30), ForeignKey("rbac_actions.key"), primary_key=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class RbacRoleTemplate(Base):
+    """Developer-owned role template identity; versions hold immutable published policy."""
+    __tablename__ = "rbac_role_templates"
+    __table_args__ = (
+        UniqueConstraint("template_key", name="uq_rbac_role_template_key"),
+        Index("ix_rbac_role_template_active", "is_active"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    template_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    category: Mapped[str] = mapped_column(String(60), default="general", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class RbacRoleTemplateVersion(Base):
+    """Versioned template policy. Published rows are immutable by service contract."""
+    __tablename__ = "rbac_role_template_versions"
+    __table_args__ = (
+        UniqueConstraint("template_id", "version_number", name="uq_rbac_template_version"),
+        CheckConstraint("version_number > 0", name="ck_rbac_template_version_positive"),
+        CheckConstraint("status IN ('draft', 'published', 'retired')", name="ck_rbac_template_version_status"),
+        Index("ix_rbac_template_version_status", "template_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    template_id: Mapped[int] = mapped_column(ForeignKey("rbac_role_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    institution_types: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    # Shape: [{"module_key": "...", "actions": ["View"], "scope": "institution"}]
+    permissions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    change_summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    published_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
