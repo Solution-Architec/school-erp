@@ -100,9 +100,9 @@ const roleDescriptions:Record<string,string> = {
 const roleModuleAccess:Record<string,string[]> = {
  super_admin:['developer-control'],
  user:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
- admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
- principal:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
- vice_principal:['dashboard','chatbot','students','staff','classes','documents','maintenance','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
+ admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests'],
+ principal:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests'],
+ vice_principal:['dashboard','chatbot','students','staff','classes','documents','maintenance','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests'],
  teacher:['dashboard','chatbot','students','classes','documents','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages'],
  account:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
  accountant:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
@@ -111,8 +111,8 @@ const roleModuleAccess:Record<string,string[]> = {
  librarian:['dashboard','chatbot','students','documents','library-books','library-loans'],
  lab_assistant:['dashboard','chatbot','documents','maintenance'],
  it_administrator:['dashboard','chatbot','staff','documents','maintenance','approvals'],
- transport_manager:['dashboard','chatbot','students','vehicles','documents','maintenance'],
- hostel_warden:['dashboard','chatbot','students','hostels','documents','maintenance'],
+ transport_manager:['dashboard','chatbot','students','vehicles','documents','maintenance','facility-requests'],
+ hostel_warden:['dashboard','chatbot','students','hostels','documents','maintenance','facility-requests'],
  security_guard:['dashboard','chatbot','students'],
  others:['dashboard','chatbot'],
  parent:['parent-portal','chatbot','student-leave','parent-messages']
