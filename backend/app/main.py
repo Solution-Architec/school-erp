@@ -1697,6 +1697,16 @@ def record_payment(fee_id: int, payload: schemas.PaymentIn, db: Session = Depend
     )) or 0
     due = Decimal(str(fee.total_amount)) - Decimal(str(fee.discount))
     fee.status = "paid" if Decimal(str(paid)) >= due else "partial"
+    student = db.get(models.Student, fee.student_id)
+    if student:
+        remaining = max(due - Decimal(str(paid)), Decimal("0"))
+        balance_text = f" Remaining balance: ₹{remaining:.2f}." if remaining > 0 else " The fee is now fully paid."
+        create_event_notification(
+            db, school_id=fee.school_id, actor_user_id=user.id,
+            title="Fee payment received",
+            body=f"Payment of ₹{Decimal(str(payment.amount)):.2f} received for {student.full_name}. Receipt: {payment.receipt_no}.{balance_text}",
+            category="fees", student_id=student.id,
+        )
     db.commit()
     db.refresh(payment)
     return payment
