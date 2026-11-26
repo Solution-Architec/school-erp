@@ -4,11 +4,12 @@ Notifications are stored in-app first. Parent visibility is resolved at read tim
 from active parent-student links, so revoked links lose access immediately.
 """
 from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, select
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from .database import Base, get_db
@@ -22,7 +23,7 @@ class SchoolNotification(Base):
     __tablename__ = "school_notifications"
     id: Mapped[int] = mapped_column(primary_key=True)
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
-    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str] = mapped_column(String(30), default="announcement", index=True)
@@ -60,6 +61,29 @@ class NotificationPreference(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SchoolReminderSettings(Base):
+    __tablename__ = "school_reminder_settings"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, unique=True, index=True)
+    fee_reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    fee_reminder_days_before: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    absence_alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Kolkata", nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class NotificationReminderDispatch(Base):
+    __tablename__ = "notification_reminder_dispatches"
+    __table_args__ = (UniqueConstraint("dedupe_key", name="uq_notification_reminder_dedupe"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    reference_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    reference_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey("school_notifications.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class NotificationCreate(BaseModel):
     title: str = Field(min_length=3, max_length=180)
     body: str = Field(min_length=3, max_length=5000)
@@ -69,6 +93,22 @@ class NotificationCreate(BaseModel):
     section: str = Field(default="", max_length=40)
     student_id: int | None = None
     is_published: bool = True
+
+
+class SchoolReminderSettingsUpdate(BaseModel):
+    fee_reminders_enabled: bool | None = None
+    fee_reminder_days_before: int | None = Field(default=None, ge=0, le=30)
+    absence_alerts_enabled: bool | None = None
+    timezone: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+def _reminder_settings_payload(row: SchoolReminderSettings | None) -> dict:
+    return {
+        "fee_reminders_enabled": row.fee_reminders_enabled if row else True,
+        "fee_reminder_days_before": row.fee_reminder_days_before if row else 3,
+        "absence_alerts_enabled": row.absence_alerts_enabled if row else True,
+        "timezone": row.timezone if row else "Asia/Kolkata",
+    }
 
 
 class NotificationPreferenceUpdate(BaseModel):
@@ -176,6 +216,53 @@ def create_school_notification(payload: NotificationCreate, db: Session = Depend
             "audience": row.audience, "class_name": row.class_name, "section": row.section,
             "student_id": row.student_id, "is_published": row.is_published,
             "published_at": row.published_at, "created_at": row.created_at}
+
+
+@router.get("/api/school/parent-reminder-settings")
+def get_school_parent_reminder_settings(db: Session = Depends(get_db), user=Depends(current_user)):
+    if user.role not in {"admin", "principal", "vice_principal"} or not user.school_id:
+        raise HTTPException(status_code=403, detail="School leadership access required")
+    row = db.scalar(select(SchoolReminderSettings).where(
+        SchoolReminderSettings.school_id == user.school_id
+    ))
+    return _reminder_settings_payload(row)
+
+
+@router.patch("/api/school/parent-reminder-settings")
+def update_school_parent_reminder_settings(
+    payload: SchoolReminderSettingsUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    if user.role not in {"admin", "principal", "vice_principal"} or not user.school_id:
+        raise HTTPException(status_code=403, detail="School leadership access required")
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes or any(value is None for value in changes.values()):
+        raise HTTPException(status_code=422, detail="Provide valid reminder settings")
+    if "timezone" in changes:
+        try:
+            ZoneInfo(changes["timezone"])
+        except (ZoneInfoNotFoundError, TypeError):
+            raise HTTPException(status_code=422, detail="Use a valid IANA timezone, such as Asia/Kolkata")
+    row = db.scalar(select(SchoolReminderSettings).where(
+        SchoolReminderSettings.school_id == user.school_id
+    ))
+    if row is None:
+        row = SchoolReminderSettings(school_id=user.school_id)
+        db.add(row)
+    for field, value in changes.items():
+        setattr(row, field, value)
+    db.flush()
+    db.add(models.AuditLog(
+        actor_user_id=user.id,
+        event_type="notification.reminder_settings.updated",
+        target_type="school_reminder_settings",
+        target_id=str(row.id),
+        details=f"school_id={user.school_id}; fields={','.join(sorted(changes))}",
+    ))
+    db.commit()
+    db.refresh(row)
+    return _reminder_settings_payload(row)
 
 
 @router.get("/api/parent/notifications")

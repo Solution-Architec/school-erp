@@ -170,3 +170,64 @@ def test_event_notification_is_visible_only_to_parent_of_linked_student():
         app.dependency_overrides.clear()
         Base.metadata.drop_all(bind=engine)
         engine.dispose()
+
+
+def test_school_reminder_settings_are_school_leadership_only_and_validate_timezone():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    app = FastAPI()
+    app.include_router(router)
+    actor = {}
+
+    def override_db():
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[current_user] = lambda: actor["user"]
+    with SessionLocal() as db:
+        school = models.School(name="Reminder Settings School", code="REMIND-SET-1")
+        db.add(school)
+        db.flush()
+        admin = models.User(name="Admin", email="reminder-settings-admin@example.test",
+                            password_hash="x", role="admin", school_id=school.id)
+        parent = models.User(name="Parent", email="reminder-settings-parent@example.test",
+                             password_hash="x", role="parent", school_id=school.id)
+        db.add_all([admin, parent])
+        db.commit()
+        actor["admin"] = SimpleNamespace(id=admin.id, role="admin", school_id=school.id)
+        actor["parent"] = SimpleNamespace(id=parent.id, role="parent", school_id=school.id)
+
+    async def exercise():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            actor["user"] = actor["admin"]
+            defaults = await client.get("/api/school/parent-reminder-settings")
+            assert defaults.status_code == 200
+            assert defaults.json()["fee_reminder_days_before"] == 3
+            saved = await client.patch("/api/school/parent-reminder-settings", json={
+                "fee_reminders_enabled": False,
+                "fee_reminder_days_before": 7,
+                "timezone": "Asia/Kolkata",
+            })
+            assert saved.status_code == 200
+            assert saved.json()["fee_reminders_enabled"] is False
+            assert saved.json()["fee_reminder_days_before"] == 7
+            invalid = await client.patch("/api/school/parent-reminder-settings", json={
+                "timezone": "Not/A_Real_Zone",
+            })
+            assert invalid.status_code == 422
+            actor["user"] = actor["parent"]
+            denied = await client.get("/api/school/parent-reminder-settings")
+            assert denied.status_code == 403
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        app.dependency_overrides.clear()
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()

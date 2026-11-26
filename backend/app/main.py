@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     if engine.dialect.name == "postgresql":
         with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE school_notifications ALTER COLUMN created_by DROP NOT NULL"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(80) NOT NULL DEFAULT 'Principal'"))
