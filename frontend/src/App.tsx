@@ -74,7 +74,7 @@ const modules: ModuleDef[] = [
 ]
 
 const roleLabels:Record<string,string> = {
- super_admin:'Developer', user:'Principal', admin:'Principal', principal:'Principal',
+ super_admin:'Developer', user:'Principal', admin:'School Admin', principal:'Principal', student:'Student',
  vice_principal:'Vice Principal', teacher:'Teacher', account:'Accounts', accountant:'Accounts',
  clerk:'Clerk', office_assistant:'Office Assistant', librarian:'Librarian',
  lab_assistant:'Lab Assistant', it_administrator:'IT Administrator',
@@ -129,9 +129,9 @@ const roleAccent:Record<string,string> = {
  transport_manager:'#b36b24', hostel_warden:'#9a5c86',
  security_guard:'#64748b', others:'#64748b', parent:'#267d9b'
 }
-const additionalRoleKeys = ["school_hod","class_teacher","school_accountant","admission_officer","examination_controller","school_counsellor","school_receptionist","school_student","college_admin","college_principal","college_vice_principal","dean","college_hod","lecturer","college_professor","academic_coordinator","registrar","college_exam_controller","college_admission_officer","accounts_officer","college_librarian","lab_in_charge","placement_officer","college_student","university_admin","chancellor","vice_chancellor","university_registrar","university_dean","university_director","department_head","university_professor","research_supervisor","university_exam_controller","university_finance_officer","university_admission_officer","research_scholar","university_student","institute_admin","centre_director","other_academic_coordinator","batch_coordinator","trainer","admission_counsellor","admission_executive","other_accounts_officer","training_librarian","training_student"];
+const additionalRoleKeys = ["student","school_hod","class_teacher","school_accountant","admission_officer","examination_controller","school_counsellor","school_receptionist","school_student","college_admin","college_principal","college_vice_principal","dean","college_hod","lecturer","college_professor","academic_coordinator","registrar","college_exam_controller","college_admission_officer","accounts_officer","college_librarian","lab_in_charge","placement_officer","college_student","university_admin","chancellor","vice_chancellor","university_registrar","university_dean","university_director","department_head","university_professor","research_supervisor","university_exam_controller","university_finance_officer","university_admission_officer","research_scholar","university_student","institute_admin","centre_director","other_academic_coordinator","batch_coordinator","trainer","admission_counsellor","admission_executive","other_accounts_officer","training_librarian","training_student"];
 const roleCatalog = [...new Set([...Object.keys(roleLabels), ...additionalRoleKeys])]
- .filter(key=>key!=='super_admin'&&key!=='user'&&key!=='account'&&key!=='accountant')
+ .filter(key=>key!=='super_admin')
  .map(key=>({
   role:roleLabels[key]||key.split('_').map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(' '),
   roleKey:key,
