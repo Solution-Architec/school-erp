@@ -120,7 +120,7 @@ def test_role_creation_requires_same_school_admin_and_applicable_published_templ
             session, school_id=school.id, role_key="bad", name="Bad",
             template_version_id=version.id, permissions=[], actor_user_id=user.id,
         )
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(ValueError, match="administrator"):
         create_institution_role(
             session, school_id=other_school.id, role_key="bad", name="Bad",
             template_version_id=version.id, permissions=[], actor_user_id=admin.id,
