@@ -55,7 +55,7 @@ class NotificationCreate(BaseModel):
     is_published: bool = True
 
 
-STAFF_ROLES = {"admin", "principal", "vice_principal", "user", "teacher"}
+STAFF_ROLES = {"admin", "principal", "vice_principal", "user"}
 
 
 def _school_staff(user):
