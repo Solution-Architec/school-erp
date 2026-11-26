@@ -494,3 +494,18 @@ class PlatformActivity(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
     school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.id"), nullable=True, index=True)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class CertificateIssue(Base):
+    """Immutable issuance record for an approved parent certificate request."""
+    __tablename__ = "certificate_issues"
+    __table_args__ = (
+        UniqueConstraint("application_id", name="uq_certificate_issue_application"),
+        UniqueConstraint("school_id", "certificate_number", name="uq_certificate_issue_school_number"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    application_id: Mapped[int] = mapped_column(ForeignKey("certificate_applications.id"), nullable=False, index=True)
+    certificate_number: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    issued_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
