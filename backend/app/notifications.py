@@ -272,6 +272,8 @@ def update_parent_notification_preferences(
     changes = payload.model_dump(exclude_unset=True)
     if not changes:
         raise HTTPException(status_code=422, detail="Provide at least one notification preference")
+    if any(value is None for value in changes.values()):
+        raise HTTPException(status_code=422, detail="Notification preferences must be true or false")
     row = db.scalar(select(NotificationPreference).where(
         NotificationPreference.parent_user_id == user.id,
         NotificationPreference.school_id == user.school_id,
