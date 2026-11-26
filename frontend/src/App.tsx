@@ -922,9 +922,9 @@ function App(){
  const availableModules=modules.filter(m=>allowedModuleKeys.includes(m.key))
  const selected=modules.find(m=>m.key===active)||modules[0]
  const roleLabel=user?.platform_workspace?'Developer · Client Workspace':(roleLabels[user?.role||'user']||'School User')
- const showRecordActions=(active==='staff'||['attendance','timetable','exams','report-cards','homework','library-books','library-loans'].includes(active)||(active==='student-leave'&&user?.role!=='parent'))&&(hasAction(active,'Edit')||hasAction(active,'Delete')||hasAction(active,'Approve'))
  const hasModule=(key:string)=>allowedModuleKeys.includes(key)
  const hasAction=(key:string,action:string)=>Boolean(user?.platform_workspace||rbacPermissions?.permissions?.[key+':'+action]||rbacPermissions?.permissions?.['*'])
+ const showRecordActions=(active==='staff'||['attendance','timetable','exams','report-cards','homework','library-books','library-loans'].includes(active)||(active==='student-leave'&&user?.role!=='parent'))&&(hasAction(active,'Edit')||hasAction(active,'Delete')||hasAction(active,'Approve'))
  const authHeaders=useMemo(()=>({'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}),[token])
  useEffect(()=>{if(user){const first=allowedModuleKeys[0]||'dashboard';if(!allowedModuleKeys.includes(active))setActive(first)}},[user,rbacPermissions])
  useEffect(()=>{if(!token){setRbacPermissions(null);return}let active=true;fetch(`${API}/api/rbac/me`,{headers:authHeaders}).then(r=>r.ok?r.json():Promise.reject()).then(data=>{if(active)setRbacPermissions(data)}).catch(()=>{if(active)setRbacPermissions({role:'',configured:true,permissions:{}})});return()=>{active=false}},[token,authHeaders])
