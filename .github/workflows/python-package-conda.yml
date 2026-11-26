@@ -25,7 +25,8 @@ jobs:
         env:
           # Test-only signing key. Never reuse this value outside CI.
           JWT_SECRET_KEY: "ci-only-test-signing-key-0123456789abcdef0123456789abcdef"
-          PYTHONPATH: backend
+          # Support both legacy app.* and repository-qualified backend.app.* test imports.
+          PYTHONPATH: .:backend
         run: pytest -q backend/tests
   frontend:
     runs-on: ubuntu-latest
@@ -56,5 +57,35 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U school_erp -d school_erp"
-          --health-interval 20
+          --health-interval 5s
+          --health-timeout 5s
           --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build backup image
+        run: docker build -t school-erp-backup-ci -f docker/backup/Dockerfile .
+      - name: Create and restore-verify a PostgreSQL backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/postgres-backups"
+
+          docker_args=(
+            run
+            --rm
+            --network host
+            -v "$GITHUB_WORKSPACE/scripts/backup-postgres.sh:/opt/backup/backup-postgres.sh:ro"
+            -v "$GITHUB_WORKSPACE/scripts/backup-retention.py:/opt/backup/backup-retention.py:ro"
+            -v "$GITHUB_WORKSPACE/scripts/cleanup-stale-backups.py:/opt/backup/cleanup-stale-backups.py:ro"
+            -v "$RUNNER_TEMP/postgres-backups:/backups"
+            -e PGHOST=127.0.0.1
+            -e PGPORT=5432
+            -e PGDATABASE=school_erp
+            -e PGUSER=school_erp
+            -e PGPASSWORD=ci-backup-test-password
+            -e BACKUP_DIR=/backups
+            -e BACKUP_ONCE=true
+          )
+
+          docker_args+=(school-erp-backup-ci sh -c "mkdir -p /backups && chown postgres:postgres /backups && exec su-exec postgres sh /opt/backup/backup-postgres.sh")
+          docker "${docker_args[@]}"
