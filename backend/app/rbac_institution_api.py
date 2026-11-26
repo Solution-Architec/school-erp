@@ -1,6 +1,6 @@
 """Institution-admin APIs for local custom roles and multiple role assignments."""
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -38,6 +38,14 @@ class AssignmentCreateIn(BaseModel):
 
 class AssignmentActiveIn(BaseModel):
     is_active: bool
+
+
+def _utc_naive(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
 
 
 def _school_id(user: models.User) -> int:
@@ -242,7 +250,7 @@ def create_role_assignment_api(
     try:
         assignment = assign_institution_role(
             db, school_id=school_id, user_id=payload.user_id, role_id=payload.role_id,
-            actor_user_id=user.id, starts_at=payload.starts_at, ends_at=payload.ends_at,
+            actor_user_id=user.id, starts_at=_utc_naive(payload.starts_at), ends_at=_utc_naive(payload.ends_at),
         )
         _commit(db)
         db.refresh(assignment)
