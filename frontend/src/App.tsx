@@ -248,6 +248,16 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
  const [reportQuestion,setReportQuestion]=useState('');
  const [reportAnswer,setReportAnswer]=useState('');
  const [certificateApplications,setCertificateApplications]=useState<any[]>([]);
+ const [facilityData,setFacilityData]=useState<any>({transport:null,hostel:null});
+ const [facilityRequests,setFacilityRequests]=useState<any[]>([]);
+ const [facilityType,setFacilityType]=useState<'transport'|'hostel'>('transport');
+ const [facilityRequestType,setFacilityRequestType]=useState('pickup_change');
+ const [facilityReason,setFacilityReason]=useState('');
+ const [facilityDetails,setFacilityDetails]=useState({vehicle_id:'',route_name:'',pickup_point:'',drop_point:'',pickup_time:'',drop_time:'',hostel_id:'',room_no:'',bed_no:''});
+ const [facilityError,setFacilityError]=useState('');
+ const [facilityMessage,setFacilityMessage]=useState('');
+ const [facilityLoading,setFacilityLoading]=useState(false);
+ const [facilitySubmitting,setFacilitySubmitting]=useState(false);
  const [error,setError]=useState('');
  const [feesError,setFeesError]=useState('');
  const [attendanceError,setAttendanceError]=useState('');
@@ -290,6 +300,10 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   setAttendance([]);
   setExamResults([]);
   setCertificateApplications([]);
+  setFacilityData({transport:null,hostel:null});
+  setFacilityRequests([]);
+  setFacilityError('');
+  setFacilityMessage('');
   setFeesError('');
   setAttendanceError('');
   setExamResultsError('');
@@ -312,6 +326,13 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
     .then((data:any[])=>{if(active)setExamResults(data)})
     .catch((e:any)=>{if(active)setExamResultsError(e.message)})
     .finally(()=>{if(active)setExamResultsLoading(false)});
+   setFacilityLoading(true);
+   Promise.all([
+    request('/api/parent/children/'+encodedChildId+'/facilities'),
+    request('/api/parent/children/'+encodedChildId+'/facility-requests')
+   ]).then(([facilities,requests])=>{if(active){setFacilityData(facilities);setFacilityRequests(requests)}})
+    .catch((e:any)=>{if(active)setFacilityError(e.message||'Could not load transport and hostel details')})
+    .finally(()=>{if(active)setFacilityLoading(false)});
    setCertificateApplicationsLoading(true);
    request('/api/parent/children/'+encodedChildId+'/certificate-applications')
     .then((data:any[])=>{if(active)setCertificateApplications(data)})
@@ -360,6 +381,24 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   const labels=[year!=='all'?year:'all available years',month!=='all'?monthNames[Number(month)-1]:'all months',exam!=='all'?exam:'all exams',subject!=='all'?subject:'all subjects'];
   setReportAnswer('Showing '+labels.join(' · ')+'. '+(q.includes('compare')?'The exam trend below compares the available exam records.':'Your summary and graphs have been updated using published marks.'));
   setReportQuestion('');
+ }
+ async function submitFacilityRequest(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();
+  if(!childId||!facilityReason.trim()||facilitySubmitting)return;
+  setFacilitySubmitting(true);setFacilityError('');setFacilityMessage('');
+  const keys=facilityType==='transport'
+   ?['vehicle_id','route_name','pickup_point','drop_point','pickup_time','drop_time']
+   :['hostel_id','room_no','bed_no'];
+  const details:Record<string,string|number>={};
+  keys.forEach(key=>{const value=(facilityDetails as any)[key];if(value.trim()){details[key]=(key==='vehicle_id'||key==='hostel_id')?Number(value):value.trim()}});
+  try{
+   const result=await request('/api/parent/children/'+encodeURIComponent(childId)+'/facility-requests',{
+    method:'POST',body:JSON.stringify({facility_type:facilityType,request_type:facilityRequestType,reason:facilityReason.trim(),details})
+   });
+   setFacilityRequests(old=>[result,...old]);setFacilityReason('');
+   setFacilityMessage('Request submitted. Your school team must approve it before any official allocation changes.');
+  }catch(err:any){setFacilityError(err.message||'Could not submit facility request')}
+  finally{setFacilitySubmitting(false)}
  }
  async function submitCertificate(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
@@ -458,6 +497,46 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
       </>}
      </>}
     </>}
+   </section>
+   <section className="parent-portal-section parent-facilities-section">
+    <div className="panel-heading"><div><h4>Transport and hostel</h4><p>View school-approved allocations and request changes. Only authorized staff can change official records.</p></div><Bus size={20}/></div>
+    {facilityError&&<div className="error" role="alert">{facilityError}</div>}
+    {facilityMessage&&<div className="success" role="status">{facilityMessage}</div>}
+    {facilityLoading?<div className="empty-state">Loading facility information…</div>:<>
+     <div className="parent-facility-grid">
+      <article className="parent-facility-card"><h5>Transport allocation</h5>
+       {facilityData.transport?<dl><dt>Route</dt><dd>{facilityData.transport.route_name||'—'}</dd><dt>Vehicle</dt><dd>{facilityData.transport.vehicle_registration||'Not specified'}</dd><dt>Pickup</dt><dd>{facilityData.transport.pickup_point||'—'} {facilityData.transport.pickup_time}</dd><dt>Drop</dt><dd>{facilityData.transport.drop_point||'—'} {facilityData.transport.drop_time}</dd></dl>:<p>No active transport allocation is recorded for this student.</p>}
+      </article>
+      <article className="parent-facility-card"><h5>Hostel allocation</h5>
+       {facilityData.hostel?<dl><dt>Hostel</dt><dd>{facilityData.hostel.hostel_name||'—'}</dd><dt>Building</dt><dd>{facilityData.hostel.building||'—'}</dd><dt>Room / Bed</dt><dd>{facilityData.hostel.room_no||'—'} / {facilityData.hostel.bed_no||'—'}</dd><dt>Warden</dt><dd>{facilityData.hostel.warden_name||'—'}</dd></dl>:<p>No active hostel allocation is recorded for this student.</p>}
+      </article>
+     </div>
+    </>}
+    <form className="record-form parent-facility-form" onSubmit={submitFacilityRequest}>
+     <div className="form-heading"><h4>Submit a facility request</h4><p>Your request will be reviewed by the Transport Manager or Hostel Warden.</p></div>
+     <div className="parent-facility-fields">
+      <label>Facility<select value={facilityType} onChange={e=>{const v=e.target.value as 'transport'|'hostel';setFacilityType(v);setFacilityRequestType(v==='transport'?'pickup_change':'room_change')}}><option value="transport">Transport</option><option value="hostel">Hostel</option></select></label>
+      <label>Request type<select value={facilityRequestType} onChange={e=>setFacilityRequestType(e.target.value)}>
+       {facilityType==='transport'?<><option value="new_allocation">New allocation</option><option value="route_change">Route change</option><option value="pickup_change">Pickup point change</option><option value="drop_change">Drop point change</option><option value="discontinue">Discontinue transport</option></>:<><option value="new_allocation">New hostel allocation</option><option value="room_change">Room change</option><option value="bed_change">Bed change</option><option value="discontinue">Discontinue hostel</option></>}
+      </select></label>
+     </div>
+     {facilityType==='transport'?<div className="parent-facility-fields">
+      <label>Requested route<input value={facilityDetails.route_name} onChange={e=>setFacilityDetails(v=>({...v,route_name:e.target.value}))} maxLength={120}/></label>
+      <label>Pickup point<input value={facilityDetails.pickup_point} onChange={e=>setFacilityDetails(v=>({...v,pickup_point:e.target.value}))} maxLength={180}/></label>
+      <label>Drop point<input value={facilityDetails.drop_point} onChange={e=>setFacilityDetails(v=>({...v,drop_point:e.target.value}))} maxLength={180}/></label>
+      <label>Pickup time<input value={facilityDetails.pickup_time} onChange={e=>setFacilityDetails(v=>({...v,pickup_time:e.target.value}))} placeholder="07:30" maxLength={10}/></label>
+      <label>Drop time<input value={facilityDetails.drop_time} onChange={e=>setFacilityDetails(v=>({...v,drop_time:e.target.value}))} placeholder="16:00" maxLength={10}/></label>
+     </div>:<div className="parent-facility-fields">
+      <label>Requested room<input value={facilityDetails.room_no} onChange={e=>setFacilityDetails(v=>({...v,room_no:e.target.value}))} maxLength={40}/></label>
+      <label>Requested bed<input value={facilityDetails.bed_no} onChange={e=>setFacilityDetails(v=>({...v,bed_no:e.target.value}))} maxLength={40}/></label>
+     </div>}
+     <label>Reason<textarea required minLength={5} maxLength={500} value={facilityReason} onChange={e=>setFacilityReason(e.target.value)} placeholder="Explain why this change is needed."/></label>
+     <button className="primary" disabled={facilitySubmitting||!facilityReason.trim()}>{facilitySubmitting?'Submitting…':'Submit request'}</button>
+    </form>
+    <div className="table-wrap"><table><thead><tr><th>Facility</th><th>Request</th><th>Submitted</th><th>Status</th><th>School note</th></tr></thead><tbody>
+     {facilityRequests.map(item=><tr key={item.id}><td>{item.facility_type}</td><td>{item.request_type.replaceAll('_',' ')}</td><td>{new Date(item.created_at).toLocaleDateString('en-IN')}</td><td><span className={'status-badge '+item.status}>{item.status}</span></td><td>{item.reviewer_note||'—'}</td></tr>)}
+     {!facilityLoading&&!facilityRequests.length&&<tr><td colSpan={5}>No transport or hostel requests yet.</td></tr>}
+    </tbody></table></div>
    </section>
    <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Certificate applications</h4><p>Apply for school certificates and track the school's decision.</p></div></div>
