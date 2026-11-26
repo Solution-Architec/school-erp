@@ -129,11 +129,15 @@ const roleAccent:Record<string,string> = {
  transport_manager:'#b36b24', hostel_warden:'#9a5c86',
  security_guard:'#64748b', others:'#64748b', parent:'#267d9b'
 }
-const roleCatalog = Object.entries(roleLabels).filter(([key])=>key!=='super_admin'&&key!=='user'&&key!=='admin'&&key!=='accountant').map(([key,label])=>({
- role:label, roleKey:key,
- scope:roleDescriptions[key],
- level:key==='super_admin'?'Platform access':key==='parent'?'Linked-student access':'Role workspace'
-}))
+const additionalRoleKeys = ["school_hod","class_teacher","school_accountant","admission_officer","examination_controller","school_counsellor","school_receptionist","school_student","college_admin","college_principal","college_vice_principal","dean","college_hod","lecturer","college_professor","academic_coordinator","registrar","college_exam_controller","college_admission_officer","accounts_officer","college_librarian","lab_in_charge","placement_officer","college_student","university_admin","chancellor","vice_chancellor","university_registrar","university_dean","university_director","department_head","university_professor","research_supervisor","university_exam_controller","university_finance_officer","university_admission_officer","research_scholar","university_student","institute_admin","centre_director","other_academic_coordinator","batch_coordinator","trainer","admission_counsellor","admission_executive","other_accounts_officer","training_librarian","training_student"];
+const roleCatalog = [...new Set([...Object.keys(roleLabels), ...additionalRoleKeys])]
+ .filter(key=>key!=='super_admin'&&key!=='user'&&key!=='account'&&key!=='accountant')
+ .map(key=>({
+  role:roleLabels[key]||key.split('_').map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(' '),
+  roleKey:key,
+  scope:roleDescriptions[key]||'Institution-specific access based on academic, operational or administrative position.',
+  level:key==='parent'||key.endsWith('_student')?'Linked-student access':'Role workspace'
+ }))
 
 const DEMO_USERS = [
  {label:'Principal',email:'demo.principal@jovoo.in',schoolCode:'DEMO-SCHOOL'},
@@ -1177,7 +1181,7 @@ function DeveloperModulePermissionPanel({moduleList,roles,schools,request}:{modu
   <div className="permission-toolbar">
    <label className="auth-field">Permission scope<select value={scope} disabled={busy} onChange={e=>{const next=e.target.value as 'global'|'school';setScope(next);if(next==='school'&&!schoolId&&approvedSchools.length)setSchoolId(String(approvedSchools[0].id))}}><option value="global">ERP-wide (all clients)</option><option value="school">Client-wise (individual school)</option></select></label>
    {scope==='school'&&<label className="auth-field">Select client school<select value={schoolId} disabled={busy} onChange={e=>setSchoolId(e.target.value)}><option value="">Choose approved school</option>{approvedSchools.map(s=><option key={s.id} value={s.id}>{s.name} · {s.code}</option>)}</select></label>}
-   <label className="auth-field">Select role<select value={role} disabled={busy} onChange={e=>setRole(e.target.value)}>{roles.filter(r=>r.roleKey!=='super_admin'&&r.roleKey!=='parent').map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></label>
+   <label className="auth-field">Select role<select value={role} disabled={busy} onChange={e=>setRole(e.target.value)}>{roles.filter(r=>r.roleKey!=='super_admin').map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></label>
    <div className="permission-summary"><strong>{enabledCount} / {moduleList.length}</strong><span>modules with View enabled</span></div>
    <div className="permission-bulk-actions"><button type="button" className="secondary" disabled={busy||scope==='school'&&!schoolId} onClick={()=>setAll(true)}>Select all</button><button type="button" className="secondary" disabled={busy||scope==='school'&&!schoolId} onClick={()=>setAll(false)}>Clear all</button></div>
   </div>
