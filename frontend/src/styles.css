@@ -1207,3 +1207,14 @@ body{background:#050b1b;color:#e5edf8}
 .parent-message-item h5{margin:8px 0 4px;color:#bcd0eb;font-size:10px}
 .parent-message-item p{margin:5px 0 0;color:#d0def1;font-size:11px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:640px){.parent-leave-form,.parent-message-form{padding:11px}.parent-leave-form>button,.parent-message-form>button{width:100%}.parent-message-meta{align-items:flex-start;flex-direction:column;gap:4px}}
+
+
+/* Parent academic schedule views */
+.parent-homework-section,.parent-timetable-section{margin-top:22px}
+.parent-homework-section .table-wrap,.parent-timetable-section .table-wrap{margin-top:10px}
+.parent-homework-section td,.parent-timetable-section td{vertical-align:top}
+.parent-homework-section a{font-weight:700;color:#0e7490;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:720px){
+ .parent-homework-section .table-wrap,.parent-timetable-section .table-wrap{overflow-x:auto}
+ .parent-homework-section table,.parent-timetable-section table{min-width:680px}
+}
