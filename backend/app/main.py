@@ -172,9 +172,11 @@ ROLE_INSTITUTION_TYPES = {
 }
 
 RBAC_MODULES = {
-    "dashboard", "parent-portal", "chatbot", "approvals", "schools", "students", "staff",
-    "classes", "vehicles", "hostels", "documents", "maintenance", "fee-structures",
-    "student-fees", "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards", "homework", "student-leave", "parent-messages", "library-books", "library-loans"
+    "dashboard", "parent-portal", "parent-relationships", "notifications", "facility-requests",
+    "chatbot", "approvals", "schools", "developer-control", "students", "staff", "classes",
+    "vehicles", "hostels", "documents", "maintenance", "fee-structures", "student-fees",
+    "payments", "fee-reports", "attendance", "timetable", "exams", "report-cards",
+    "homework", "student-leave", "parent-messages", "library-books", "library-loans"
 }
 RBAC_ACTIONS = {"View", "Create", "Edit", "Delete", "Approve", "Export"}
 
@@ -251,6 +253,14 @@ DEFAULT_ROLE_MODULES.update({
     "training_student": ["dashboard", "chatbot", "homework", "timetable", "documents"],
 })
 
+# Workspace-only modules are part of the same role matrix as the core ERP modules.
+# Client overrides remain supported for every module/action combination.
+for _role in ("admin", "principal", "vice_principal", "user"):
+    DEFAULT_ROLE_MODULES.setdefault(_role, []).append("notifications")
+DEFAULT_ROLE_MODULES.setdefault("admin", []).append("parent-relationships")
+for _role in ("admin", "principal", "vice_principal", "transport_manager", "hostel_warden"):
+    DEFAULT_ROLE_MODULES.setdefault(_role, []).append("facility-requests")
+
 
 def write_audit_log(db: Session, actor: models.User, event_type: str, target_type: str = "", target_id: str = "", details: dict | None = None):
     db.add(models.AuditLog(
@@ -264,19 +274,81 @@ def write_audit_log(db: Session, actor: models.User, event_type: str, target_typ
 
 def _default_permission_matrix(role: str) -> dict[str, bool]:
     allowed_modules = set(DEFAULT_ROLE_MODULES.get(role, ["dashboard", "chatbot"]))
-    permissions: dict[str, bool] = {}
-    for module in RBAC_MODULES:
-        for action in RBAC_ACTIONS:
-            enabled = module in allowed_modules and action in {"View", "Create", "Edit", "Delete"}
-            if role == "parent" and module in {"student-leave", "parent-messages"}:
-                enabled = module in allowed_modules and action in {"View", "Create"}
-            if module == "approvals" and action == "Approve" and module in allowed_modules:
-                enabled = True
-            if module == "student-leave" and action == "Approve" and role in {
-                "admin", "principal", "vice_principal", "teacher", "user"
-            }:
-                enabled = True
-            permissions[f"{module}:{action}"] = enabled
+    permissions = {f"{module}:{action}": False for module in RBAC_MODULES for action in RBAC_ACTIONS}
+    for module in allowed_modules:
+        if module in RBAC_MODULES:
+            permissions[f"{module}:View"] = True
+
+    leadership = {
+        "admin", "user", "principal", "vice_principal", "college_admin",
+        "college_principal", "college_vice_principal", "dean", "university_admin",
+        "chancellor", "vice_chancellor", "institute_admin", "centre_director",
+    }
+    teaching = {
+        "teacher", "class_teacher", "school_hod", "lecturer", "college_professor",
+        "college_hod", "university_professor", "department_head", "research_supervisor",
+        "academic_coordinator", "other_academic_coordinator", "batch_coordinator", "trainer",
+    }
+    finance = {
+        "account", "accountant", "school_accountant", "accounts_officer",
+        "university_finance_officer", "other_accounts_officer",
+    }
+    library = {"librarian", "college_librarian", "training_librarian"}
+    operations = {"transport_manager", "hostel_warden", "lab_assistant", "lab_in_charge"}
+    admissions = {
+        "admission_officer", "college_admission_officer", "university_admission_officer",
+        "admission_counsellor", "admission_executive", "school_receptionist",
+    }
+    teaching_modules = {
+        "students", "classes", "attendance", "timetable", "exams", "report-cards",
+        "homework", "student-leave", "parent-messages", "documents",
+    }
+    finance_modules = {"fee-structures", "student-fees", "payments", "fee-reports"}
+
+    for module in allowed_modules:
+        if module not in RBAC_MODULES:
+            continue
+        if role in leadership:
+            if module not in {"parent-portal", "developer-control"}:
+                permissions[f"{module}:Create"] = True
+                permissions[f"{module}:Edit"] = True
+            if role in {"admin", "user", "college_admin", "university_admin", "institute_admin"}:
+                if module not in {"parent-portal", "developer-control", "parent-messages"}:
+                    permissions[f"{module}:Delete"] = True
+            if module in {"approvals", "student-leave", "facility-requests"}:
+                permissions[f"{module}:Approve"] = True
+            if module == "parent-relationships":
+                permissions[f"{module}:Create"] = role == "admin"
+                permissions[f"{module}:Edit"] = role == "admin"
+            if module != "developer-control":
+                permissions[f"{module}:Export"] = True
+        elif role in teaching and module in teaching_modules:
+            permissions[f"{module}:Create"] = module in {
+                "attendance", "timetable", "exams", "report-cards", "homework",
+                "student-leave", "parent-messages",
+            }
+            permissions[f"{module}:Edit"] = module in {
+                "attendance", "timetable", "report-cards", "homework", "student-leave",
+            }
+            permissions[f"{module}:Approve"] = module == "student-leave" and role in {"teacher", "class_teacher"}
+        elif role in finance and module in finance_modules:
+            permissions[f"{module}:Create"] = module in {"fee-structures", "student-fees", "payments"}
+            permissions[f"{module}:Edit"] = module in {"fee-structures", "student-fees"}
+            permissions[f"{module}:Export"] = module == "fee-reports"
+        elif role in library and module in {"library-books", "library-loans"}:
+            permissions[f"{module}:Create"] = True
+            permissions[f"{module}:Edit"] = True
+        elif role in operations and module in {"vehicles", "hostels", "maintenance", "facility-requests", "documents"}:
+            permissions[f"{module}:Create"] = module in {"vehicles", "hostels", "maintenance"}
+            permissions[f"{module}:Edit"] = module in {"vehicles", "hostels", "maintenance"}
+            permissions[f"{module}:Approve"] = module == "facility-requests"
+        elif role in admissions and module in {"students", "documents", "approvals"}:
+            permissions[f"{module}:Create"] = module in {"students", "documents"}
+            permissions[f"{module}:Edit"] = module in {"students", "documents"}
+            permissions[f"{module}:Approve"] = module == "approvals"
+        elif role == "parent" and module in {"student-leave", "parent-messages"}:
+            permissions[f"{module}:Create"] = True
+
     return permissions
 
 
@@ -377,7 +449,10 @@ def my_module_permissions(db: Session = Depends(get_db), user: models.User = Dep
     if user.role == "super_admin":
         return {"role": user.role, "configured": True, "permissions": {"*": True}}
     scope = _permission_scope_matrix(db, user.role, user.school_id)
-    return {"role": user.role, "school_id": user.school_id, "configured": scope["school_configured"] or scope["global_configured"], "permissions": scope["permissions"]}
+    # Return one effective matrix so navigation and API enforcement share the same defaults.
+    return {"role": user.role, "school_id": user.school_id, "configured": True,
+            "permissions": scope["permissions"], "global_configured": scope["global_configured"],
+            "school_configured": scope["school_configured"]}
 
 
 @app.get("/api/rbac/audit-logs", tags=["rbac"])
