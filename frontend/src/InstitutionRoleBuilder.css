@@ -1,0 +1,87 @@
+.institution-role-builder{display:flex;flex-direction:column;gap:15px;color:#183343}
+.institution-role-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:23px 25px;border-radius:15px;background:linear-gradient(115deg,#12344f,#146c68);color:#fff}
+.institution-role-kicker{display:flex;align-items:center;gap:7px;color:#0b887c;font-size:10px;font-weight:800;letter-spacing:1.05px}
+.institution-role-hero .institution-role-kicker{color:#b9e9df}
+.institution-role-hero h2{font:800 24px Manrope,sans-serif;letter-spacing:-.5px;margin:9px 0 6px}
+.institution-role-hero p{font-size:11px;line-height:1.6;color:#d6e8e9;max-width:760px;margin:0 0 8px}
+.institution-role-hero small{font-size:10px;color:#b9d7d7}
+.institution-role-hero>.primary{background:#fff;color:#126c67;border-color:#fff;flex-shrink:0}
+.institution-role-alert{display:flex;align-items:center;gap:9px;padding:11px 13px;border-radius:8px;font-size:11px}
+.institution-role-alert span{flex:1}
+.institution-role-alert button{border:0;background:transparent;color:inherit;display:grid;place-items:center}
+.institution-role-alert.error{background:#fff0f0;color:#a73535;border:1px solid #f5d6d6}
+.institution-role-alert.success{background:#eaf8f1;color:#197451;border:1px solid #cdeedd}
+.institution-role-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.institution-role-stats article{display:flex;flex-direction:column;gap:5px;padding:13px 15px;border:1px solid #e4ebef;border-radius:10px;background:#fff}
+.institution-role-stats span{font-size:10px;color:#718692}
+.institution-role-stats strong{font:800 22px Manrope,sans-serif;color:#1d4655}
+.institution-role-stats small{font-size:9px;color:#8b9aa3}
+.institution-role-tabs{display:flex;align-items:center;gap:7px;padding:5px;border:1px solid #e4ebef;border-radius:10px;background:#fff}
+.institution-role-tabs button{display:flex;align-items:center;gap:7px;padding:9px 12px;border:0;border-radius:7px;background:transparent;color:#718692;font-size:10px;font-weight:700;cursor:pointer}
+.institution-role-tabs button.active{background:#eaf6f3;color:#11786e}
+.institution-role-tabs button.refresh{margin-left:auto}
+.institution-role-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.institution-role-card{padding:15px;border:1px solid #e3ebef;border-radius:11px;background:#fff;min-width:0}
+.institution-role-card.selected{border-color:#9fd5cb}
+.institution-role-card-head{display:flex;align-items:center;gap:9px}
+.institution-role-avatar{height:34px;width:34px;display:grid;place-items:center;border-radius:9px;background:#e8f4f2;color:#0e8077;flex-shrink:0}
+.institution-role-card-title{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.institution-role-card-title strong{font-size:12px;color:#294655}
+.institution-role-card-title small{font-size:9px;color:#8796a0}
+.institution-role-status{display:inline-flex;padding:5px 8px;border-radius:20px;font-size:9px;font-weight:800;white-space:nowrap}
+.institution-role-status.active{background:#e7f6ee;color:#21754f}
+.institution-role-status.inactive{background:#fff0e8;color:#a45e2b}
+.institution-role-card>p{font-size:10px;color:#788c98;line-height:1.5;min-height:30px;margin:11px 0}
+.institution-role-meta{display:flex;gap:7px 12px;flex-wrap:wrap;padding:9px 0;border-top:1px solid #edf1f3;border-bottom:1px solid #edf1f3}
+.institution-role-meta span{font-size:9px;color:#6e8490}
+.institution-role-permission-chips{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}
+.institution-role-permission-chips span{padding:5px 7px;border-radius:5px;background:#f2f6f7;color:#617986;font-size:9px}
+.institution-role-assign-button{margin-top:4px}
+.institution-role-assignment-panel{padding:17px;border:1px solid #e4ebef;border-radius:11px;background:#fff}
+.institution-role-assignment-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;margin-bottom:14px}
+.institution-role-assignment-head h3{font:800 14px Manrope,sans-serif;color:#294655;margin:0 0 5px}
+.institution-role-assignment-head p{font-size:10px;color:#81919b;margin:0;line-height:1.5}
+.institution-role-assignment-actions{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.institution-role-assignment-actions label{display:flex;align-items:center;gap:6px;font-size:10px;color:#6c818e}
+.institution-role-assignment-actions input{accent-color:#0f8077}
+.institution-role-table-wrap{width:100%;overflow:auto}
+.institution-role-table-wrap table{width:100%;border-collapse:collapse;min-width:760px}
+.institution-role-table-wrap th{padding:10px;text-align:left;background:#f5f8f9;color:#70838e;font-size:9px;text-transform:uppercase;letter-spacing:.5px}
+.institution-role-table-wrap td{padding:11px 10px;border-bottom:1px solid #edf1f3;color:#506a78;font-size:10px;vertical-align:middle}
+.institution-role-table-wrap td strong,.institution-role-table-wrap td small{display:block}
+.institution-role-table-wrap td strong{font-size:10px;color:#294655}
+.institution-role-table-wrap td small{font-size:9px;color:#82929c;margin-top:3px}
+.institution-role-table-wrap .danger-text{color:#a43f3f}
+.institution-role-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:35px 14px;text-align:center;color:#81919b;font-size:10px;grid-column:1/-1}
+.institution-role-empty svg{color:#13877c}
+.institution-role-empty strong{font-size:12px;color:#385665}
+.institution-role-empty.compact{padding:20px}
+.institution-role-modal-backdrop{position:fixed;inset:0;z-index:110;background:#10243299;display:grid;place-items:center;padding:18px}
+.institution-role-modal{width:min(780px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:15px;padding:22px;box-shadow:0 24px 70px #10243244;display:flex;flex-direction:column;gap:15px}
+.institution-role-modal.role-create-modal{width:min(980px,100%)}
+.institution-role-modal.assign-modal{width:min(620px,100%)}
+.institution-role-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.institution-role-modal-head h3{font:800 19px Manrope,sans-serif;color:#1d4050;margin:7px 0 0}
+.institution-role-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.institution-role-modal label{display:flex;flex-direction:column;gap:6px;color:#526b78;font-size:10px;font-weight:700}
+.institution-role-modal .wide{grid-column:1/-1}
+.institution-role-modal input:not([type=checkbox]),.institution-role-modal select,.institution-role-modal textarea{width:100%;border:1px solid #dce5e9;border-radius:8px;padding:10px;background:#fff;color:#243b4b;font:inherit;font-size:11px}
+.institution-role-modal textarea{min-height:65px;resize:vertical}
+.institution-role-template-note{display:flex;flex-direction:column;gap:5px;padding:11px 13px;border:1px solid #cce5df;border-radius:8px;background:#f3faf8}
+.institution-role-template-note strong{font-size:11px;color:#21665f}
+.institution-role-template-note span,.institution-role-template-note small{font-size:9px;color:#6f8988;line-height:1.5}
+.institution-role-policy-area{border-top:1px solid #edf1f3;padding-top:14px}
+.institution-role-policy-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.institution-role-policy-head h4{font:800 13px Manrope,sans-serif;color:#294655;margin:0 0 4px}
+.institution-role-policy-head p{font-size:9px;color:#82929c;margin:0}
+.institution-role-policy-module{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 11px;border:1px solid #e9eef0;border-radius:8px;margin:7px 0}
+.institution-role-policy-module>div:first-child{display:flex;flex-direction:column;gap:4px;min-width:130px}
+.institution-role-policy-module strong{font-size:10px;color:#294655}
+.institution-role-policy-module small{font-size:9px;color:#82929c}
+.institution-role-policy-actions{display:flex;gap:8px 13px;flex-wrap:wrap}
+.institution-role-policy-actions label{display:flex;align-items:center;flex-direction:row;gap:5px;font-size:10px}
+.institution-role-policy-actions input{accent-color:#0f8077}
+.institution-role-help{padding:10px 12px;border-radius:8px;background:#f3f7f8;color:#718590;font-size:10px;line-height:1.5;margin:0}
+.institution-role-modal-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:4px}
+@media(max-width:850px){.institution-role-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.institution-role-cards{grid-template-columns:1fr}.institution-role-assignment-head{flex-direction:column}.institution-role-assignment-actions{width:100%;justify-content:space-between}}
+@media(max-width:620px){.institution-role-hero{flex-direction:column;padding:19px}.institution-role-hero h2{font-size:21px}.institution-role-stats{gap:7px}.institution-role-stats article{padding:11px}.institution-role-tabs{flex-wrap:wrap}.institution-role-tabs button{padding:8px}.institution-role-form-grid{grid-template-columns:1fr}.institution-role-modal .wide{grid-column:auto}.institution-role-modal{padding:16px}.institution-role-policy-module{align-items:flex-start;flex-direction:column}.institution-role-policy-head{align-items:flex-start;flex-direction:column}.institution-role-assignment-actions{align-items:flex-start;flex-direction:column}}
