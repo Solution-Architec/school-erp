@@ -504,7 +504,7 @@ function ParentPortal({request,userRole,currentUserId,refreshKey,onLoadingChange
  }
  return <div className="panel">
   <div className="panel-heading">
-   <div><h3>Family Portal</h3><p>View information for students linked to your parent account.</p></div>
+   <div><h3>Parent Workspace</h3><p>One secure place to view school information for every child linked to your parent account.</p></div>
    <Users size={20}/>
   </div>
   {userRole!=='parent'?<div className="empty-state"><strong>Parent account required</strong><p>The Parent Portal is available only to Parent accounts. Switch to a Parent demo account to view linked students, attendance, and fee balances.</p></div>
