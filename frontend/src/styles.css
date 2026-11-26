@@ -1077,3 +1077,57 @@ body{background:#050b1b;color:#e5edf8}
 .chat-user-question{background:#0b3a57;color:#bae6fd}.chat-assistant-answer{background:#0b1730;color:#dce8f8}
 @media(max-width:1100px){.content{padding:22px 18px}}
 @media(max-width:720px){.content{padding:18px 12px}.topbar{background:#071126}.sidebar{background:#071126}}
+/* Parent Portal - Certificate Application Form */
+.parent-certificate-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1.2fr);
+  gap: 14px 18px;
+  align-items: end;
+  padding: 18px;
+}
+
+.parent-certificate-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  font-weight: 600;
+}
+
+.parent-certificate-form select {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.parent-certificate-form textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.parent-certificate-form button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 40px;
+  padding: 9px 18px;
+}
+
+/* Stack fields on mobile */
+@media (max-width: 640px) {
+  .parent-certificate-form {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .parent-certificate-form button {
+    grid-column: 1;
+    width: 100%;
+  }
+}
