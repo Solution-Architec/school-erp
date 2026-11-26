@@ -44,6 +44,22 @@ class NotificationRead(Base):
     read_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class NotificationPreference(Base):
+    __tablename__ = "notification_preferences"
+    __table_args__ = (UniqueConstraint("parent_user_id", name="uq_notification_preference_parent"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    parent_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), nullable=False, index=True)
+    in_app_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    announcement: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    attendance: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    homework: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    examination: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    fees: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    general: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class NotificationCreate(BaseModel):
     title: str = Field(min_length=3, max_length=180)
     body: str = Field(min_length=3, max_length=5000)
@@ -53,6 +69,26 @@ class NotificationCreate(BaseModel):
     section: str = Field(default="", max_length=40)
     student_id: int | None = None
     is_published: bool = True
+
+
+class NotificationPreferenceUpdate(BaseModel):
+    in_app_enabled: bool | None = None
+    announcement: bool | None = None
+    attendance: bool | None = None
+    homework: bool | None = None
+    examination: bool | None = None
+    fees: bool | None = None
+    general: bool | None = None
+
+
+PREFERENCE_FIELDS = (
+    "in_app_enabled", "announcement", "attendance", "homework",
+    "examination", "fees", "general",
+)
+
+
+def _preference_payload(row: NotificationPreference | None) -> dict:
+    return {field: getattr(row, field, True) if row else True for field in PREFERENCE_FIELDS}
 
 
 STAFF_ROLES = {"admin", "principal", "vice_principal", "user"}
@@ -161,8 +197,16 @@ def list_parent_notifications(db: Session = Depends(get_db), user=Depends(curren
     read_ids = set(db.scalars(
         select(NotificationRead.notification_id).where(NotificationRead.parent_user_id == user.id)
     ).all())
+    preferences = db.scalar(select(NotificationPreference).where(
+        NotificationPreference.parent_user_id == user.id,
+        NotificationPreference.school_id == user.school_id,
+    ))
+    if preferences and not preferences.in_app_enabled:
+        return []
     result = []
     for row in rows:
+        if preferences and not getattr(preferences, row.category, True):
+            continue
         matched = _eligible(row, students)
         if not matched:
             continue
@@ -204,6 +248,50 @@ def mark_parent_notification_read(notification_id: int, db: Session = Depends(ge
         ))
         db.commit()
     return {"notification_id": row.id, "is_read": True}
+
+
+@router.get("/api/parent/notification-preferences")
+def get_parent_notification_preferences(db: Session = Depends(get_db), user=Depends(current_user)):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent access required")
+    row = db.scalar(select(NotificationPreference).where(
+        NotificationPreference.parent_user_id == user.id,
+        NotificationPreference.school_id == user.school_id,
+    ))
+    return _preference_payload(row)
+
+
+@router.patch("/api/parent/notification-preferences")
+def update_parent_notification_preferences(
+    payload: NotificationPreferenceUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent access required")
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status_code=422, detail="Provide at least one notification preference")
+    row = db.scalar(select(NotificationPreference).where(
+        NotificationPreference.parent_user_id == user.id,
+        NotificationPreference.school_id == user.school_id,
+    ))
+    if row is None:
+        row = NotificationPreference(parent_user_id=user.id, school_id=user.school_id)
+        db.add(row)
+    for field, value in changes.items():
+        setattr(row, field, value)
+    db.flush()
+    db.add(models.AuditLog(
+        actor_user_id=user.id,
+        event_type="notification.preferences.updated",
+        target_type="notification_preference",
+        target_id=str(row.id),
+        details=f"school_id={user.school_id}; fields={','.join(sorted(changes))}",
+    ))
+    db.commit()
+    db.refresh(row)
+    return _preference_payload(row)
 
 
 def create_event_notification(
