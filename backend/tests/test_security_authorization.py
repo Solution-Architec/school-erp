@@ -144,3 +144,27 @@ def test_all_workspace_modules_are_registered_for_rbac():
         "library-books", "library-loans", "vehicles", "hostels", "documents",
         "maintenance", "fee-structures", "student-fees", "payments", "fee-reports",
     }.issubset(RBAC_MODULES)
+
+
+def test_every_registered_school_position_has_a_default_permission_profile():
+    from backend.app.main import RBAC_ROLES, DEFAULT_ROLE_MODULES, _default_permission_matrix
+
+    assert RBAC_ROLES.issubset(DEFAULT_ROLE_MODULES)
+    for role in RBAC_ROLES:
+        matrix = _default_permission_matrix(role)
+        assert "dashboard:View" in matrix
+        assert all(isinstance(value, bool) for value in matrix.values())
+
+
+def test_parent_and_school_leadership_self_service_permissions_are_limited():
+    from backend.app.main import _default_permission_matrix
+
+    parent = _default_permission_matrix("parent")
+    assert parent["parent-portal:Edit"] is True
+    assert parent["parent-portal:Delete"] is False
+
+    principal = _default_permission_matrix("principal")
+    vice_principal = _default_permission_matrix("vice_principal")
+    assert principal["notifications:Edit"] is True
+    assert vice_principal["notifications:Edit"] is True
+    assert principal["parent-relationships:View"] is False
