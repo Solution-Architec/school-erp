@@ -25,6 +25,7 @@ from . import models, schemas
 from .security import JWT_SECRET_KEY, hash_password, verify_password, create_access_token, current_user, require_roles, require_module_permission
 from .platform_control import router as platform_control_router
 from .platform_operations import router as platform_operations_router
+from .parent_services import router as parent_services_router
 
 # Explicit legacy school roles used by route-level fallback authorization.
 STANDARD_ROLES = ("user", "admin", "accountant", "teacher", "transport_manager", "hostel_warden", "student", "principal", "vice_principal", "account", "clerk", "office_assistant", "librarian", "lab_assistant", "it_administrator", "security_guard", "others")
@@ -115,6 +116,7 @@ app = FastAPI(title="EduNexus Education Platform API", version="0.2.0",
               lifespan=lifespan)
 app.include_router(platform_control_router)
 app.include_router(platform_operations_router)
+app.include_router(parent_services_router)
 origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "http://localhost,http://localhost:5173").split(",") if x.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
