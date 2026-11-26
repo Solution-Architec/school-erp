@@ -193,3 +193,33 @@ def publish_template_version(
     version.published_by = actor_user_id
     version.published_at = datetime.utcnow()
     return version
+
+
+def retire_template_version(
+    db: Session,
+    *,
+    version_id: int,
+    actor_user_id: int,
+) -> models.RbacRoleTemplateVersion:
+    """Retire a published version without rewriting its immutable policy."""
+    version = db.get(models.RbacRoleTemplateVersion, version_id)
+    if version is None:
+        raise ValueError("Template version not found")
+    if version.status != "published":
+        raise ValueError("Only a published template version can be retired")
+    version.status = "retired"
+    return version
+
+
+def set_role_template_active(
+    db: Session,
+    *,
+    template_id: int,
+    is_active: bool,
+) -> models.RbacRoleTemplate:
+    """Pause or reactivate a template; existing adopted roles are not modified."""
+    template = db.get(models.RbacRoleTemplate, template_id)
+    if template is None:
+        raise ValueError("Role template not found")
+    template.is_active = is_active
+    return template
