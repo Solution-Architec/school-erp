@@ -1139,8 +1139,9 @@ function DeveloperModulePermissionPanel({moduleList,roles,schools,request}:{modu
  const [message,setMessage]=useState('');
  const [error,setError]=useState('');
  const actions=['View','Create','Edit','Delete','Approve','Export'];
+ const editableModules=moduleList.filter(m=>m.key!=='developer-control');
  const approvedSchools=schools.filter(s=>s.approval_status==='approved'&&s.is_active!==false);
- const enabledCount=moduleList.filter(m=>permissions[m.key+':View']).length;
+ const enabledCount=editableModules.filter(m=>permissions[m.key+':View']).length;
  const schoolQuery=scope==='school'&&schoolId?'?school_id='+encodeURIComponent(schoolId):'';
  const endpoint='/api/rbac/roles/'+encodeURIComponent(role)+'/permissions'+schoolQuery;
  async function loadPermissions(){
@@ -1153,12 +1154,12 @@ function DeveloperModulePermissionPanel({moduleList,roles,schools,request}:{modu
  useEffect(()=>{loadPermissions()},[role,scope,schoolId]);
  useEffect(()=>{let active=true;request('/api/rbac/audit-logs?limit=8').then(result=>{if(active)setAudit(result||[])}).catch(()=>{if(active)setAudit([])});return()=>{active=false}},[]);
  function toggle(key:string,action:string,value:boolean){setPermissions(old=>({...old,[key+':'+action]:value}))}
- function setAll(value:boolean){setPermissions(Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,value]))))}
+ function setAll(value:boolean){setPermissions(old=>({...old,...Object.fromEntries(editableModules.flatMap(m=>actions.map(a=>[m.key+':'+a,value])))}))}
  async function save(){
   if(scope==='school'&&!schoolId){setError('Select a client school before saving.');return}
   setBusy(true);setError('');setMessage('');
   try{
-   const complete=Object.fromEntries(moduleList.flatMap(m=>actions.map(a=>[m.key+':'+a,Boolean(permissions[m.key+':'+a])])));
+   const complete=Object.fromEntries(editableModules.flatMap(m=>actions.map(a=>[m.key+':'+a,Boolean(permissions[m.key+':'+a])])));
    const url='/api/rbac/roles/'+encodeURIComponent(role)+'/permissions'+(scope==='school'?'?school_id='+encodeURIComponent(schoolId):'');
    const result=await request(url,{method:'PUT',body:JSON.stringify({permissions:complete})});
    setPermissions(complete);setConfigured(true);setGlobalConfigured(scope==='global'||globalConfigured);setSchoolConfigured(scope==='school'||schoolConfigured);
@@ -1182,14 +1183,14 @@ function DeveloperModulePermissionPanel({moduleList,roles,schools,request}:{modu
    <label className="auth-field">Permission scope<select value={scope} disabled={busy} onChange={e=>{const next=e.target.value as 'global'|'school';setScope(next);if(next==='school'&&!schoolId&&approvedSchools.length)setSchoolId(String(approvedSchools[0].id))}}><option value="global">ERP-wide (all clients)</option><option value="school">Client-wise (individual school)</option></select></label>
    {scope==='school'&&<label className="auth-field">Select client school<select value={schoolId} disabled={busy} onChange={e=>setSchoolId(e.target.value)}><option value="">Choose approved school</option>{approvedSchools.map(s=><option key={s.id} value={s.id}>{s.name} · {s.code}</option>)}</select></label>}
    <label className="auth-field">Select role<select value={role} disabled={busy} onChange={e=>setRole(e.target.value)}>{roles.filter(r=>r.roleKey!=='super_admin').map(r=><option key={r.roleKey} value={r.roleKey}>{r.role}</option>)}</select></label>
-   <div className="permission-summary"><strong>{enabledCount} / {moduleList.length}</strong><span>modules with View enabled</span></div>
+   <div className="permission-summary"><strong>{enabledCount} / {editableModules.length}</strong><span>modules with View enabled</span></div>
    <div className="permission-bulk-actions"><button type="button" className="secondary" disabled={busy||scope==='school'&&!schoolId} onClick={()=>setAll(true)}>Select all</button><button type="button" className="secondary" disabled={busy||scope==='school'&&!schoolId} onClick={()=>setAll(false)}>Clear all</button></div>
   </div>
   {scope==='school'&&!schoolId&&<p className="status-note">Choose an approved school to configure its permissions. Approvals pending from Developer are not available here.</p>}
   {scope==='school'&&schoolId&&!schoolConfigured&&<p className="status-note">This client has no custom matrix for this role. The displayed permissions are inherited from ERP-wide settings{globalConfigured?'':' or the system defaults'} until you save a client-specific override.</p>}
   {scope==='global'&&!configured&&<p className="status-note">Showing the existing system defaults for this role. Save to create ERP-wide permissions that apply to all clients unless overridden.</p>}
   {error&&<div className="error auth-message" role="alert">{error}</div>}{message&&<div className="success auth-message" role="status">{message}</div>}
-  <div className="table-wrap permission-table-wrap"><table className="permission-table"><thead><tr><th>Module</th>{actions.map(a=><th key={a}>{a}</th>)}</tr></thead><tbody>{moduleList.map(m=><tr key={m.key}><td><strong>{m.label}</strong><small>{m.description}</small></td>{actions.map(a=><td key={a}><input aria-label={m.label+' '+a+' permission'} type="checkbox" disabled={busy||(scope==='school'&&!schoolId)} checked={Boolean(permissions[m.key+':'+a])} onChange={e=>toggle(m.key,a,e.target.checked)}/></td>)}</tr>)}</tbody></table></div>
+  <div className="table-wrap permission-table-wrap"><table className="permission-table"><thead><tr><th>Module</th>{actions.map(a=><th key={a}>{a}</th>)}</tr></thead><tbody>{editableModules.map(m=><tr key={m.key}><td><strong>{m.label}</strong><small>{m.description}</small></td>{actions.map(a=><td key={a}><input aria-label={m.label+' '+a+' permission'} type="checkbox" disabled={busy||(scope==='school'&&!schoolId)} checked={Boolean(permissions[m.key+':'+a])} onChange={e=>toggle(m.key,a,e.target.checked)}/></td>)}</tr>)}</tbody></table></div>
   <div className="permission-footer"><span>{role.replaceAll('_',' ')} · {Object.values(permissions).filter(Boolean).length} permissions selected</span><div className="permission-bulk-actions">{scope==='school'&&schoolConfigured&&<button type="button" className="secondary" disabled={busy} onClick={resetToGlobal}>Reset to ERP-wide defaults</button>}<button type="button" className="primary" disabled={busy||(scope==='school'&&!schoolId)} onClick={save}>{busy?'Saving…':scope==='school'?'Save client permissions':'Save ERP-wide permissions'}</button></div></div>
   <p className="status-note">School-specific permissions take precedence over ERP-wide defaults. Resetting a client removes its override and restores inheritance. Developer access remains platform-wide.</p>
   <div className="permission-audit"><div className="panel-heading"><div><h3>Recent access changes</h3><p>Latest role-permission updates</p></div><span className="record-count">{audit.length} events</span></div><div className="table-wrap"><table><thead><tr><th>Event</th><th>Scope / role</th><th>Time</th></tr></thead><tbody>{audit.map(item=><tr key={item.id}><td>{item.event_type}</td><td>{item.target_id||'—'}</td><td>{item.created_at?new Date(item.created_at).toLocaleString('en-IN'):'—'}</td></tr>)}{!audit.length&&<tr><td colSpan={3}><div className="empty-state compact-empty"><strong>No access changes recorded yet</strong><p>Saved role-permission changes will appear here.</p></div></td></tr>}</tbody></table></div></div>
