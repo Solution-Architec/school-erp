@@ -241,6 +241,12 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
  const [fees,setFees]=useState<any[]>([]);
  const [attendance,setAttendance]=useState<any[]>([]);
  const [examResults,setExamResults]=useState<any[]>([]);
+ const [reportYear,setReportYear]=useState('all');
+ const [reportMonth,setReportMonth]=useState('all');
+ const [reportExam,setReportExam]=useState('all');
+ const [reportSubject,setReportSubject]=useState('all');
+ const [reportQuestion,setReportQuestion]=useState('');
+ const [reportAnswer,setReportAnswer]=useState('');
  const [certificateApplications,setCertificateApplications]=useState<any[]>([]);
  const [error,setError]=useState('');
  const [feesError,setFeesError]=useState('');
@@ -320,6 +326,41 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   return()=>{active=false};
  },[childId,userRole,refreshKey]);
 
+ const reportYears=useMemo(()=>Array.from(new Set(examResults.map(r=>r.academic_year).filter(Boolean))).sort().reverse(),[examResults]);
+ const reportExams=useMemo(()=>Array.from(new Set(examResults.map(r=>r.exam_name).filter(Boolean))).sort(),[examResults]);
+ const reportSubjects=useMemo(()=>Array.from(new Set(examResults.map(r=>r.subject).filter(Boolean))).sort(),[examResults]);
+ const filteredExamResults=useMemo(()=>examResults.filter(r=>{
+  const d=new Date(r.exam_date+'T00:00:00');
+  return (reportYear==='all'||r.academic_year===reportYear)&&(reportMonth==='all'||String(d.getMonth()+1)===reportMonth)&&(reportExam==='all'||r.exam_name===reportExam)&&(reportSubject==='all'||r.subject===reportSubject);
+ }).sort((a,b)=>a.exam_date.localeCompare(b.exam_date)),[examResults,reportYear,reportMonth,reportExam,reportSubject]);
+ const reportStats=useMemo(()=>{
+  const obtained=filteredExamResults.reduce((sum,r)=>sum+Number(r.marks_obtained||0),0),maximum=filteredExamResults.reduce((sum,r)=>sum+Number(r.max_marks||0),0),passed=filteredExamResults.filter(r=>r.result==='passed').length;
+  return {count:filteredExamResults.length,obtained,maximum,percentage:maximum?obtained/maximum*100:0,passed,failed:filteredExamResults.length-passed};
+ },[filteredExamResults]);
+ const subjectProgress=useMemo(()=>{
+  const groups=new Map<string,{obtained:number;maximum:number;count:number}>();
+  filteredExamResults.forEach(r=>{const key=r.subject||'Other',v=groups.get(key)||{obtained:0,maximum:0,count:0};v.obtained+=Number(r.marks_obtained||0);v.maximum+=Number(r.max_marks||0);v.count++;groups.set(key,v)});
+  return Array.from(groups,([subject,v])=>({subject,percentage:v.maximum?v.obtained/v.maximum*100:0,obtained:v.obtained,maximum:v.maximum,count:v.count})).sort((a,b)=>b.percentage-a.percentage);
+ },[filteredExamResults]);
+ const examProgress=useMemo(()=>{
+  const groups=new Map<string,{label:string;date:string;obtained:number;maximum:number}>();
+  filteredExamResults.forEach(r=>{const key=r.exam_name+'|'+r.exam_date,v=groups.get(key)||{label:r.exam_name,date:r.exam_date,obtained:0,maximum:0};v.obtained+=Number(r.marks_obtained||0);v.maximum+=Number(r.max_marks||0);groups.set(key,v)});
+  return Array.from(groups.values()).sort((a,b)=>a.date.localeCompare(b.date)).map(v=>({...v,percentage:v.maximum?v.obtained/v.maximum*100:0}));
+ },[filteredExamResults]);
+ function askAcademicReport(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();const q=reportQuestion.trim().toLowerCase();if(!q)return;
+  let year='all',month='all',exam='all',subject='all';
+  const matchedYear=reportYears.find(y=>q.includes(String(y).toLowerCase()));if(matchedYear)year=matchedYear;
+  const monthNames=['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const monthIndex=monthNames.findIndex(m=>q.includes(m));if(monthIndex>=0)month=String(monthIndex+1);
+  const matchedExam=reportExams.find(x=>q.includes(x.toLowerCase()));if(matchedExam)exam=matchedExam;
+  const matchedSubject=reportSubjects.find(x=>q.includes(x.toLowerCase()));if(matchedSubject)subject=matchedSubject;
+  if(q.includes('all year')||q.includes('entire year')||q.includes('annual')||q.includes('whole year')){year='all';month='all'}
+  setReportYear(year);setReportMonth(month);setReportExam(exam);setReportSubject(subject);
+  const labels=[year!=='all'?year:'all available years',month!=='all'?monthNames[Number(month)-1]:'all months',exam!=='all'?exam:'all exams',subject!=='all'?subject:'all subjects'];
+  setReportAnswer('Showing '+labels.join(' · ')+'. '+(q.includes('compare')?'The exam trend below compares the available exam records.':'Your summary and graphs have been updated using published marks.'));
+  setReportQuestion('');
+ }
  async function submitCertificate(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
   if(!childId||!certificatePurpose.trim()||certificateSubmitting)return;
@@ -380,19 +421,43 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
      </table>
     </div>}
    </section>
-   <section className="parent-portal-section">
-    <div className="panel-heading"><div><h4>Recent exam results</h4><p>Published marks and result status for the selected student.</p></div></div>
-    {examResultsError?<div className="error" role="alert">{examResultsError}</div>
-    :<div className="table-wrap">
-     <table>
-      <thead><tr><th>Exam</th><th>Subject</th><th>Date</th><th>Academic year</th><th>Marks</th><th>Pass marks</th><th>Result</th></tr></thead>
-      <tbody>
-       {examResults.map(result=><tr key={result.id}><td>{result.exam_name}</td><td>{result.subject}</td><td>{result.exam_date}</td><td>{result.academic_year||'—'}</td><td><strong>{result.marks_obtained}</strong> / {result.max_marks}</td><td>{result.pass_marks}</td><td><span className={'status-badge '+result.result}>{result.result}</span></td></tr>)}
-       {examResultsLoading&&<tr><td colSpan={7}>Loading exam results…</td></tr>}
-       {!examResultsLoading&&!examResults.length&&<tr><td colSpan={7}>No exam results have been published for this student yet.</td></tr>}
-      </tbody>
-     </table>
-    </div>}
+   <section className="parent-portal-section parent-academic-report">
+    <div className="panel-heading"><div><h4>Student academic progress</h4><p>Explore published marks by academic year, month, exam or subject.</p></div><Award size={20}/></div>
+    {examResultsError?<div className="error" role="alert">{examResultsError}</div>:<>
+     <div className="academic-chat">
+      <div className="academic-chat-heading"><MessageCircle size={17}/><div><strong>Ask about academic performance</strong><span>Try “Show March results”, “Compare exams”, or “Show the entire year”.</span></div></div>
+      <form onSubmit={askAcademicReport} className="academic-chat-form"><input value={reportQuestion} onChange={e=>setReportQuestion(e.target.value)} placeholder="Ask for a month, academic year, exam or subject…" aria-label="Ask about academic performance"/><button className="primary" disabled={!reportQuestion.trim()}>Show report</button></form>
+      {reportAnswer&&<p className="academic-chat-answer" role="status">{reportAnswer}</p>}
+     </div>
+     <div className="academic-report-filters">
+      <label>Academic year<select value={reportYear} onChange={e=>setReportYear(e.target.value)}><option value="all">All available years</option>{reportYears.map(y=><option key={y} value={y}>{y}</option>)}</select></label>
+      <label>Month<select value={reportMonth} onChange={e=>setReportMonth(e.target.value)}><option value="all">All months</option>{['January','February','March','April','May','June','July','August','September','October','November','December'].map((m,i)=><option key={m} value={String(i+1)}>{m}</option>)}</select></label>
+      <label>Exam<select value={reportExam} onChange={e=>setReportExam(e.target.value)}><option value="all">All exams</option>{reportExams.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+      <label>Subject<select value={reportSubject} onChange={e=>setReportSubject(e.target.value)}><option value="all">All subjects</option>{reportSubjects.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+      <button type="button" className="secondary academic-reset" onClick={()=>{setReportYear('all');setReportMonth('all');setReportExam('all');setReportSubject('all');setReportAnswer('Showing all published exam results.')}}>Reset filters</button>
+     </div>
+     {examResultsLoading?<div className="empty-state"><strong>Loading academic report…</strong></div>:!examResults.length?<div className="empty-state"><strong>No exam results published yet</strong><p>When the school publishes report-card marks, the annual report and graphs will appear here.</p></div>:<>
+      <div className="academic-summary-grid">
+       <div className="academic-summary-card"><span>Overall percentage</span><strong>{reportStats.count?reportStats.percentage.toFixed(1)+'%':'—'}</strong><small>For selected filters</small></div>
+       <div className="academic-summary-card"><span>Marks obtained</span><strong>{reportStats.count?reportStats.obtained.toFixed(1)+' / '+reportStats.maximum.toFixed(1):'—'}</strong><small>{reportStats.count} subject exam records</small></div>
+       <div className="academic-summary-card"><span>Passed</span><strong>{reportStats.count?reportStats.passed:'—'}</strong><small>{reportStats.failed} failed records</small></div>
+       <div className="academic-summary-card"><span>Top subject</span><strong>{subjectProgress[0]?.subject||'—'}</strong><small>{subjectProgress.length?subjectProgress[0].percentage.toFixed(1)+'% average':'No data'}</small></div>
+      </div>
+      {!filteredExamResults.length?<div className="empty-state"><strong>No results match these filters</strong><p>Try another month, exam, subject or academic year.</p></div>:<>
+       <div className="academic-graphs-grid">
+        <div className="academic-graph-card"><h5>Subject-wise performance</h5><p>Average percentage based on published marks</p>
+         {subjectProgress.map(item=><div className="academic-bar-row" key={item.subject}><div><strong>{item.subject}</strong><span>{item.percentage.toFixed(1)}% · {item.obtained.toFixed(1)}/{item.maximum.toFixed(1)}</span></div><div className="academic-bar-track"><span style={{width:Math.max(0,Math.min(100,item.percentage))+'%'}}/></div></div>)}
+        </div>
+        <div className="academic-graph-card"><h5>Exam progress over time</h5><p>Combined percentage for each exam date</p>
+         {examProgress.map(item=><div className="academic-bar-row" key={item.label+'-'+item.date}><div><strong>{item.label}</strong><span>{new Date(item.date+'T00:00:00').toLocaleDateString('en-IN')} · {item.percentage.toFixed(1)}%</span></div><div className="academic-bar-track"><span style={{width:Math.max(0,Math.min(100,item.percentage))+'%'}}/></div></div>)}
+        </div>
+       </div>
+       <div className="table-wrap academic-results-table"><table><thead><tr><th>Exam</th><th>Subject</th><th>Date</th><th>Academic year</th><th>Marks</th><th>Pass marks</th><th>Result</th></tr></thead><tbody>
+        {filteredExamResults.map(result=><tr key={result.id}><td>{result.exam_name}</td><td>{result.subject}</td><td>{result.exam_date}</td><td>{result.academic_year||'—'}</td><td><strong>{result.marks_obtained}</strong> / {result.max_marks}</td><td>{result.pass_marks}</td><td><span className={'status-badge '+result.result}>{result.result}</span></td></tr>)}
+       </tbody></table></div>
+      </>}
+     </>}
+    </>}
    </section>
    <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Certificate applications</h4><p>Apply for school certificates and track the school's decision.</p></div></div>
