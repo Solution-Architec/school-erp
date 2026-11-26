@@ -403,6 +403,7 @@ class CertificateApplicationOut(BaseModel):
     created_at: datetime
     reviewed_at: datetime | None
     certificate_number: str | None = None
+    certificate_issue_id: int | None = None
     issued_at: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -424,6 +425,7 @@ class CertificateApplicationStaffOut(BaseModel):
     created_at: datetime
     reviewed_at: datetime | None
     certificate_number: str | None = None
+    certificate_issue_id: int | None = None
     issued_at: datetime | None = None
 
 
