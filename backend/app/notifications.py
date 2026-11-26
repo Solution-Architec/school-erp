@@ -220,8 +220,8 @@ def create_school_notification(payload: NotificationCreate, db: Session = Depend
 
 @router.get("/api/school/parent-reminder-settings")
 def get_school_parent_reminder_settings(db: Session = Depends(get_db), user=Depends(require_module_permission("notifications", "View", *STAFF_ROLES))):
-    if user.role not in {"admin", "principal", "vice_principal"} or not user.school_id:
-        raise HTTPException(status_code=403, detail="School leadership access required")
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="School account required")
     row = db.scalar(select(SchoolReminderSettings).where(
         SchoolReminderSettings.school_id == user.school_id
     ))
