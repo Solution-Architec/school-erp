@@ -317,7 +317,7 @@ def _default_permission_matrix(role: str) -> dict[str, bool]:
             if role in {"admin", "user", "college_admin", "university_admin", "institute_admin"}:
                 if module not in {"parent-portal", "developer-control", "parent-messages"}:
                     permissions[f"{module}:Delete"] = True
-            if module in {"approvals", "student-leave", "facility-requests"}:
+            if module in {"approvals", "student-leave", "facility-requests", "certificate-management"}:
                 permissions[f"{module}:Approve"] = True
             if module == "parent-relationships":
                 permissions[f"{module}:Create"] = role == "admin"
@@ -968,8 +968,8 @@ def parent_submit_leave(payload: schemas.StudentLeaveIn, db: Session = Depends(g
 @app.post("/api/student-leave/{item_id}/review", response_model=schemas.StudentLeaveOut, tags=["student-leave"])
 def review_student_leave(item_id: int, decision: schemas.StudentLeaveReviewIn, db: Session = Depends(get_db),
                          user: models.User = Depends(require_module_permission("student-leave", "Approve", *STANDARD_ROLES))):
-    if user.role not in {"super_admin", "admin", "principal", "vice_principal", "teacher", "user"}:
-        raise HTTPException(status_code=403, detail="School staff permission required to review leave")
+    if user.role == "parent" or (user.role != "super_admin" and not user.school_id):
+        raise HTTPException(status_code=403, detail="School staff account required")
     obj = db.get(models.StudentLeaveRequest, item_id)
     if not obj or (user.role != "super_admin" and obj.school_id != user.school_id):
         raise HTTPException(status_code=404, detail="Leave request not found")
@@ -1001,8 +1001,6 @@ def parent_message_contacts(student_id: int, db: Session = Depends(get_db),
 @app.get("/api/parent-messages", response_model=list[schemas.ParentTeacherMessageOut], tags=["parent-messages"])
 def list_parent_teacher_messages(db: Session = Depends(get_db),
                                  user: models.User = Depends(require_module_permission("parent-messages", "View", *STANDARD_ROLES, "parent"))):
-    if user.role not in {"parent", "teacher", "principal", "vice_principal", "admin", "user"}:
-        raise HTTPException(status_code=403, detail="Parent or authorized school staff account required")
     if not user.school_id:
         raise HTTPException(status_code=403, detail="Your account is not assigned to a school")
     stmt = select(models.ParentTeacherMessage).where(
@@ -1022,8 +1020,8 @@ def list_parent_teacher_messages(db: Session = Depends(get_db),
 @app.post("/api/parent-messages", response_model=schemas.ParentTeacherMessageOut, tags=["parent-messages"])
 def send_parent_teacher_message(payload: schemas.ParentTeacherMessageIn, db: Session = Depends(get_db),
                                 user: models.User = Depends(require_module_permission("parent-messages", "Create", *STANDARD_ROLES, "parent"))):
-    if user.role not in ("parent", "teacher", "principal", "vice_principal", "admin", "user") or not user.school_id:
-        raise HTTPException(status_code=403, detail="School parent or teaching account required")
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="School account required")
     student = db.get(models.Student, payload.student_id)
     recipient = db.get(models.User, payload.recipient_user_id)
     if (not student or student.school_id != user.school_id or not recipient
@@ -2109,7 +2107,7 @@ def parent_submit_certificate_application(
 def list_certificate_applications(
     status: str = Query(default="all", pattern="^(all|pending|approved|rejected)$"),
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("admin", "principal", "vice_principal")),
+    user: models.User = Depends(require_module_permission("certificate-management", "View", "admin", "principal", "vice_principal")),
 ):
     if not user.school_id:
         raise HTTPException(status_code=403, detail="School staff account required")
@@ -2157,7 +2155,7 @@ def review_certificate_application(
     application_id: int,
     decision: schemas.CertificateApplicationReviewIn,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("admin", "principal", "vice_principal")),
+    user: models.User = Depends(require_module_permission("certificate-management", "Approve", "admin", "principal", "vice_principal")),
 ):
     if not user.school_id:
         raise HTTPException(status_code=403, detail="School staff account required")
@@ -2189,7 +2187,7 @@ def review_certificate_application(
 def issue_certificate_application(
     application_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("admin", "principal", "vice_principal")),
+    user: models.User = Depends(require_module_permission("certificate-management", "Approve", "admin", "principal", "vice_principal")),
 ):
     if not user.school_id:
         raise HTTPException(status_code=403, detail="School staff account required")
@@ -2299,7 +2297,7 @@ def _certificate_pdf_response(db: Session, issue: models.CertificateIssue, audit
 def download_certificate_for_staff(
     issue_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_roles("admin", "principal", "vice_principal")),
+    user: models.User = Depends(require_module_permission("certificate-management", "View", "admin", "principal", "vice_principal")),
 ):
     if not user.school_id:
         raise HTTPException(status_code=403, detail="School staff account required")
@@ -2318,7 +2316,7 @@ def download_certificate_for_parent(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_module_permission("parent-portal", "View", "parent")),
 ):
-    if not user.school_id:
+    if user.role != "parent" or not user.school_id:
         raise HTTPException(status_code=403, detail="Parent account required")
     issue = db.scalar(select(models.CertificateIssue).where(
         models.CertificateIssue.id == issue_id,
@@ -2340,6 +2338,8 @@ def download_certificate_for_parent(
 @app.get("/api/parent/children/{student_id}/fees", tags=["parent-portal"])
 def parent_child_fees(student_id: int, db: Session = Depends(get_db),
                       user: models.User = Depends(require_module_permission("parent-portal", "View", "parent"))):
+    if user.role != "parent" or not user.school_id:
+        raise HTTPException(status_code=403, detail="Parent account required")
     allowed = db.scalar(select(models.ParentStudentLink.id).where(
         models.ParentStudentLink.parent_user_id == user.id,
         models.ParentStudentLink.student_id == student_id,

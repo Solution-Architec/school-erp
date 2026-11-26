@@ -135,8 +135,8 @@ STAFF_ROLES = {"admin", "principal", "vice_principal", "user"}
 
 
 def _school_staff(user):
-    if user.role not in STAFF_ROLES or not user.school_id:
-        raise HTTPException(status_code=403, detail="School staff access required")
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="School account required")
     return int(user.school_id)
 
 
@@ -220,8 +220,8 @@ def create_school_notification(payload: NotificationCreate, db: Session = Depend
 
 @router.get("/api/school/parent-reminder-settings")
 def get_school_parent_reminder_settings(db: Session = Depends(get_db), user=Depends(require_module_permission("notifications", "View", *STAFF_ROLES))):
-    if user.role not in {"admin", "principal", "vice_principal"} or not user.school_id:
-        raise HTTPException(status_code=403, detail="School leadership access required")
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="School account required")
     row = db.scalar(select(SchoolReminderSettings).where(
         SchoolReminderSettings.school_id == user.school_id
     ))
@@ -234,8 +234,8 @@ def update_school_parent_reminder_settings(
     db: Session = Depends(get_db),
     user=Depends(require_module_permission("notifications", "Edit", *STAFF_ROLES)),
 ):
-    if user.role not in {"admin", "principal", "vice_principal"} or not user.school_id:
-        raise HTTPException(status_code=403, detail="School leadership access required")
+    if not user.school_id:
+        raise HTTPException(status_code=403, detail="School account required")
     changes = payload.model_dump(exclude_unset=True)
     if not changes or any(value is None for value in changes.values()):
         raise HTTPException(status_code=422, detail="Provide valid reminder settings")
