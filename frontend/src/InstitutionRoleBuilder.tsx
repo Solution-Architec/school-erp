@@ -60,7 +60,7 @@ export default function InstitutionRoleBuilder({request}:{request:Request}) {
  useEffect(()=>{void load()},[])
 
  function beginCreate() {
-  setSelectedTemplate(String(templates[0]?.version_id||''));setRoleName('');setRoleKey('');setRoleDescription('');setPolicy([])
+  setSelectedTemplate(String(templates[0]?.version_id||''));setRoleName('');setRoleKey('');setRoleDescription('');setPolicy((templates[0]?.permissions||[]).map(item=>({module_key:item.module_key,actions:[...item.actions],scope:item.scope})))
   setError('');setNotice('');setShowCreate(true)
  }
  function chooseTemplate(id:string) {
