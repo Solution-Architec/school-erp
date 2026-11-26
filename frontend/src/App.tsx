@@ -9,6 +9,7 @@ type ModuleDef = { key:string; label:string; icon:any; endpoint?:string; fields?
 const modules: ModuleDef[] = [
  {key:'dashboard',label:'Dashboard',icon:LayoutDashboard,description:'School overview and operational alerts'},
  {key:'parent-portal',label:'Parent Portal',icon:Users,description:'Family attendance, exam results, certificates and fee balances'},
+ {key:'facility-requests',label:'Transport & Hostel Requests',icon:Bus,description:'Review parent transport and hostel allocation requests'},
  {key:'chatbot',label:'Help Assistant',icon:Activity,description:'School FAQ and guided help'},
  {key:'approvals',label:'Staff Approvals',icon:Users,description:'Review verified staff account requests'},
  {key:'schools',label:'Schools',icon:Building2,endpoint:'/api/schools',description:'Register schools and assign school-owner accounts',fields:[{key:'name',label:'School name',required:true},{key:'code',label:'School code',required:true}]},
@@ -99,9 +100,9 @@ const roleDescriptions:Record<string,string> = {
 const roleModuleAccess:Record<string,string[]> = {
  super_admin:['developer-control'],
  user:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
- admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
- principal:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
- vice_principal:['dashboard','chatbot','students','staff','classes','documents','maintenance','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
+ admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests'],
+ principal:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests'],
+ vice_principal:['dashboard','chatbot','students','staff','classes','documents','maintenance','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests'],
  teacher:['dashboard','chatbot','students','classes','documents','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages'],
  account:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
  accountant:['dashboard','chatbot','students','fee-structures','student-fees','payments','fee-reports'],
@@ -110,8 +111,8 @@ const roleModuleAccess:Record<string,string[]> = {
  librarian:['dashboard','chatbot','students','documents','library-books','library-loans'],
  lab_assistant:['dashboard','chatbot','documents','maintenance'],
  it_administrator:['dashboard','chatbot','staff','documents','maintenance','approvals'],
- transport_manager:['dashboard','chatbot','students','vehicles','documents','maintenance'],
- hostel_warden:['dashboard','chatbot','students','hostels','documents','maintenance'],
+ transport_manager:['dashboard','chatbot','students','vehicles','documents','maintenance','facility-requests'],
+ hostel_warden:['dashboard','chatbot','students','hostels','documents','maintenance','facility-requests'],
  security_guard:['dashboard','chatbot','students'],
  others:['dashboard','chatbot'],
  parent:['parent-portal','chatbot','student-leave','parent-messages']
@@ -248,6 +249,16 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
  const [reportQuestion,setReportQuestion]=useState('');
  const [reportAnswer,setReportAnswer]=useState('');
  const [certificateApplications,setCertificateApplications]=useState<any[]>([]);
+ const [facilityData,setFacilityData]=useState<any>({transport:null,hostel:null});
+ const [facilityRequests,setFacilityRequests]=useState<any[]>([]);
+ const [facilityType,setFacilityType]=useState<'transport'|'hostel'>('transport');
+ const [facilityRequestType,setFacilityRequestType]=useState('pickup_change');
+ const [facilityReason,setFacilityReason]=useState('');
+ const [facilityDetails,setFacilityDetails]=useState({vehicle_id:'',route_name:'',pickup_point:'',drop_point:'',pickup_time:'',drop_time:'',hostel_id:'',room_no:'',bed_no:''});
+ const [facilityError,setFacilityError]=useState('');
+ const [facilityMessage,setFacilityMessage]=useState('');
+ const [facilityLoading,setFacilityLoading]=useState(false);
+ const [facilitySubmitting,setFacilitySubmitting]=useState(false);
  const [error,setError]=useState('');
  const [feesError,setFeesError]=useState('');
  const [attendanceError,setAttendanceError]=useState('');
@@ -290,6 +301,10 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   setAttendance([]);
   setExamResults([]);
   setCertificateApplications([]);
+  setFacilityData({transport:null,hostel:null});
+  setFacilityRequests([]);
+  setFacilityError('');
+  setFacilityMessage('');
   setFeesError('');
   setAttendanceError('');
   setExamResultsError('');
@@ -312,6 +327,13 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
     .then((data:any[])=>{if(active)setExamResults(data)})
     .catch((e:any)=>{if(active)setExamResultsError(e.message)})
     .finally(()=>{if(active)setExamResultsLoading(false)});
+   setFacilityLoading(true);
+   Promise.all([
+    request('/api/parent/children/'+encodedChildId+'/facilities'),
+    request('/api/parent/children/'+encodedChildId+'/facility-requests')
+   ]).then(([facilities,requests])=>{if(active){setFacilityData(facilities);setFacilityRequests(requests)}})
+    .catch((e:any)=>{if(active)setFacilityError(e.message||'Could not load transport and hostel details')})
+    .finally(()=>{if(active)setFacilityLoading(false)});
    setCertificateApplicationsLoading(true);
    request('/api/parent/children/'+encodedChildId+'/certificate-applications')
     .then((data:any[])=>{if(active)setCertificateApplications(data)})
@@ -360,6 +382,24 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   const labels=[year!=='all'?year:'all available years',month!=='all'?monthNames[Number(month)-1]:'all months',exam!=='all'?exam:'all exams',subject!=='all'?subject:'all subjects'];
   setReportAnswer('Showing '+labels.join(' · ')+'. '+(q.includes('compare')?'The exam trend below compares the available exam records.':'Your summary and graphs have been updated using published marks.'));
   setReportQuestion('');
+ }
+ async function submitFacilityRequest(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();
+  if(!childId||!facilityReason.trim()||facilitySubmitting)return;
+  setFacilitySubmitting(true);setFacilityError('');setFacilityMessage('');
+  const keys=facilityType==='transport'
+   ?['vehicle_id','route_name','pickup_point','drop_point','pickup_time','drop_time']
+   :['hostel_id','room_no','bed_no'];
+  const details:Record<string,string|number>={};
+  keys.forEach(key=>{const value=(facilityDetails as any)[key];if(value.trim()){details[key]=(key==='vehicle_id'||key==='hostel_id')?Number(value):value.trim()}});
+  try{
+   const result=await request('/api/parent/children/'+encodeURIComponent(childId)+'/facility-requests',{
+    method:'POST',body:JSON.stringify({facility_type:facilityType,request_type:facilityRequestType,reason:facilityReason.trim(),details})
+   });
+   setFacilityRequests(old=>[result,...old]);setFacilityReason('');
+   setFacilityMessage('Request submitted. Your school team must approve it before any official allocation changes.');
+  }catch(err:any){setFacilityError(err.message||'Could not submit facility request')}
+  finally{setFacilitySubmitting(false)}
  }
  async function submitCertificate(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
@@ -459,6 +499,46 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
      </>}
     </>}
    </section>
+   <section className="parent-portal-section parent-facilities-section">
+    <div className="panel-heading"><div><h4>Transport and hostel</h4><p>View school-approved allocations and request changes. Only authorized staff can change official records.</p></div><Bus size={20}/></div>
+    {facilityError&&<div className="error" role="alert">{facilityError}</div>}
+    {facilityMessage&&<div className="success" role="status">{facilityMessage}</div>}
+    {facilityLoading?<div className="empty-state">Loading facility information…</div>:<>
+     <div className="parent-facility-grid">
+      <article className="parent-facility-card"><h5>Transport allocation</h5>
+       {facilityData.transport?<dl><dt>Route</dt><dd>{facilityData.transport.route_name||'—'}</dd><dt>Vehicle</dt><dd>{facilityData.transport.vehicle_registration||'Not specified'}</dd><dt>Pickup</dt><dd>{facilityData.transport.pickup_point||'—'} {facilityData.transport.pickup_time}</dd><dt>Drop</dt><dd>{facilityData.transport.drop_point||'—'} {facilityData.transport.drop_time}</dd></dl>:<p>No active transport allocation is recorded for this student.</p>}
+      </article>
+      <article className="parent-facility-card"><h5>Hostel allocation</h5>
+       {facilityData.hostel?<dl><dt>Hostel</dt><dd>{facilityData.hostel.hostel_name||'—'}</dd><dt>Building</dt><dd>{facilityData.hostel.building||'—'}</dd><dt>Room / Bed</dt><dd>{facilityData.hostel.room_no||'—'} / {facilityData.hostel.bed_no||'—'}</dd><dt>Warden</dt><dd>{facilityData.hostel.warden_name||'—'}</dd></dl>:<p>No active hostel allocation is recorded for this student.</p>}
+      </article>
+     </div>
+    </>}
+    <form className="record-form parent-facility-form" onSubmit={submitFacilityRequest}>
+     <div className="form-heading"><h4>Submit a facility request</h4><p>Your request will be reviewed by the Transport Manager or Hostel Warden.</p></div>
+     <div className="parent-facility-fields">
+      <label>Facility<select value={facilityType} onChange={e=>{const v=e.target.value as 'transport'|'hostel';setFacilityType(v);setFacilityRequestType(v==='transport'?'pickup_change':'room_change')}}><option value="transport">Transport</option><option value="hostel">Hostel</option></select></label>
+      <label>Request type<select value={facilityRequestType} onChange={e=>setFacilityRequestType(e.target.value)}>
+       {facilityType==='transport'?<><option value="new_allocation">New allocation</option><option value="route_change">Route change</option><option value="pickup_change">Pickup point change</option><option value="drop_change">Drop point change</option><option value="discontinue">Discontinue transport</option></>:<><option value="new_allocation">New hostel allocation</option><option value="room_change">Room change</option><option value="bed_change">Bed change</option><option value="discontinue">Discontinue hostel</option></>}
+      </select></label>
+     </div>
+     {facilityType==='transport'?<div className="parent-facility-fields">
+      <label>Requested route<input value={facilityDetails.route_name} onChange={e=>setFacilityDetails(v=>({...v,route_name:e.target.value}))} maxLength={120}/></label>
+      <label>Pickup point<input value={facilityDetails.pickup_point} onChange={e=>setFacilityDetails(v=>({...v,pickup_point:e.target.value}))} maxLength={180}/></label>
+      <label>Drop point<input value={facilityDetails.drop_point} onChange={e=>setFacilityDetails(v=>({...v,drop_point:e.target.value}))} maxLength={180}/></label>
+      <label>Pickup time<input value={facilityDetails.pickup_time} onChange={e=>setFacilityDetails(v=>({...v,pickup_time:e.target.value}))} placeholder="07:30" maxLength={10}/></label>
+      <label>Drop time<input value={facilityDetails.drop_time} onChange={e=>setFacilityDetails(v=>({...v,drop_time:e.target.value}))} placeholder="16:00" maxLength={10}/></label>
+     </div>:<div className="parent-facility-fields">
+      <label>Requested room<input value={facilityDetails.room_no} onChange={e=>setFacilityDetails(v=>({...v,room_no:e.target.value}))} maxLength={40}/></label>
+      <label>Requested bed<input value={facilityDetails.bed_no} onChange={e=>setFacilityDetails(v=>({...v,bed_no:e.target.value}))} maxLength={40}/></label>
+     </div>}
+     <label>Reason<textarea required minLength={5} maxLength={500} value={facilityReason} onChange={e=>setFacilityReason(e.target.value)} placeholder="Explain why this change is needed."/></label>
+     <button className="primary" disabled={facilitySubmitting||!facilityReason.trim()}>{facilitySubmitting?'Submitting…':'Submit request'}</button>
+    </form>
+    <div className="table-wrap"><table><thead><tr><th>Facility</th><th>Request</th><th>Submitted</th><th>Status</th><th>School note</th></tr></thead><tbody>
+     {facilityRequests.map(item=><tr key={item.id}><td>{item.facility_type}</td><td>{item.request_type.replaceAll('_',' ')}</td><td>{new Date(item.created_at).toLocaleDateString('en-IN')}</td><td><span className={'status-badge '+item.status}>{item.status}</span></td><td>{item.reviewer_note||'—'}</td></tr>)}
+     {!facilityLoading&&!facilityRequests.length&&<tr><td colSpan={5}>No transport or hostel requests yet.</td></tr>}
+    </tbody></table></div>
+   </section>
    <section className="parent-portal-section">
     <div className="panel-heading"><div><h4>Certificate applications</h4><p>Apply for school certificates and track the school's decision.</p></div></div>
     <form className="record-form parent-certificate-form" onSubmit={submitCertificate}>
@@ -482,6 +562,70 @@ function ParentPortal({request,userRole,refreshKey,onLoadingChange}:{request:(ur
   </>}
  </div>
 }
+function FacilityRequestsPanel({request,userRole,refreshKey}:{request:(url:string,options?:RequestInit)=>Promise<any>;userRole:string;refreshKey:number}) {
+ const allowedTypes=userRole==='transport_manager'?['transport']:userRole==='hostel_warden'?['hostel']:['transport','hostel'];
+ const [facilityType,setFacilityType]=useState<'transport'|'hostel'>(allowedTypes[0] as 'transport'|'hostel');
+ const [rows,setRows]=useState<any[]>([]);
+ const [assets,setAssets]=useState<any[]>([]);
+ const [selectedAsset,setSelectedAsset]=useState<Record<number,string>>({});
+ const [loading,setLoading]=useState(false);
+ const [error,setError]=useState('');
+ const [note,setNote]=useState<Record<number,string>>({});
+ const [busy,setBusy]=useState<number|null>(null);
+ const [message,setMessage]=useState('');
+ useEffect(()=>{
+  let active=true;setLoading(true);setError('');
+  const inventoryUrl=facilityType==='transport'?'/api/vehicles':'/api/hostels';
+  Promise.all([
+   request('/api/facility-requests?facility_type='+facilityType),
+   request(inventoryUrl)
+  ]).then(([data,inventory])=>{if(active){setRows(data);setAssets(inventory)}})
+   .catch((e:any)=>{if(active)setError(e.message||'Could not load requests and allocation inventory')})
+   .finally(()=>{if(active)setLoading(false)});
+  return()=>{active=false};
+ },[facilityType,refreshKey]);
+ async function review(id:number,status:'approved'|'rejected'){
+  setBusy(id);setError('');setMessage('');
+  const assetId=selectedAsset[id];
+  const details=status==='approved'&&assetId
+   ?(facilityType==='transport'?{vehicle_id:Number(assetId)}:{hostel_id:Number(assetId)}):{};
+  try{
+   await request('/api/facility-requests/'+id+'/review',{method:'POST',body:JSON.stringify({status,reviewer_note:note[id]||'',details})});
+   setRows(old=>old.map(row=>row.id===id?{...row,status,reviewer_note:note[id]||''}:row));
+   setMessage('Request '+status+'.');
+  }catch(e:any){setError(e.message||'Could not review request')}
+  finally{setBusy(null)}
+ }
+ return <div className="panel">
+  <div className="panel-heading"><div><h3>Parent facility requests</h3><p>Review parent requests. Approval updates the official student allocation.</p></div><ClipboardCheck size={20}/></div>
+  <label className="parent-child-select">Facility
+   <select value={facilityType} onChange={e=>setFacilityType(e.target.value as 'transport'|'hostel')}>
+    {allowedTypes.map(type=><option key={type} value={type}>{type==='transport'?'Transport':'Hostel'}</option>)}
+   </select>
+  </label>
+  {error&&<div className="error" role="alert">{error}</div>}
+  {message&&<div className="success" role="status">{message}</div>}
+  {loading?<div className="empty-state">Loading parent requests…</div>:<div className="table-wrap">
+   <table><thead><tr><th>Student ID</th><th>Request</th><th>Reason</th><th>Requested details</th><th>Status</th><th>Review note</th><th>Action</th></tr></thead><tbody>
+    {rows.map(row=><tr key={row.id}>
+     <td>{row.student_id}</td><td>{row.request_type.replaceAll('_',' ')}</td><td>{row.reason}</td>
+     <td>{Object.entries(row.details||{}).map(([k,v])=>String(v??'')).filter(Boolean).join(' · ')||'—'}</td>
+     <td><span className={'status-badge '+row.status}>{row.status}</span></td>
+     <td><input aria-label={'Review note for request '+row.id} value={note[row.id]??row.reviewer_note??''} onChange={e=>setNote(old=>({...old,[row.id]:e.target.value}))} maxLength={500}/></td>
+     <td>{row.status==='pending'?<div className="facility-review-actions">
+      <select aria-label={'Select official '+facilityType+' allocation for request '+row.id} value={selectedAsset[row.id]||''} onChange={e=>setSelectedAsset(old=>({...old,[row.id]:e.target.value}))}>
+       <option value="">Keep current / no new allocation</option>
+       {assets.filter((asset:any)=>asset.status==='active').map((asset:any)=><option key={asset.id} value={asset.id}>{facilityType==='transport'?asset.registration_no+' · '+(asset.route_name||'No route'):asset.name+' · '+(asset.building||'')+' · '+(asset.room_no||'')}</option>)}
+      </select>
+      <button className="primary" disabled={busy===row.id} onClick={()=>review(row.id,'approved')}>Approve</button><button className="secondary" disabled={busy===row.id} onClick={()=>review(row.id,'rejected')}>Reject</button>
+     </div>:'Reviewed'}</td>
+    </tr>)}
+    {!rows.length&&<tr><td colSpan={7}>No {facilityType} requests found.</td></tr>}
+   </tbody></table>
+  </div>}
+ </div>
+}
+
 function HelpAssistant({request}:{request:(url:string,options?:RequestInit)=>Promise<any>}) {
  const [question,setQuestion]=useState(''),[messages,setMessages]=useState<{q:string,a:string}[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState('');
  async function ask(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!question.trim()||busy)return;const q=question.trim();setQuestion('');setBusy(true);setError('');try{const result=await request('/api/chatbot/faq',{method:'POST',body:JSON.stringify({question:q})});setMessages(old=>[...old,{q,a:result.answer}])}catch(err:any){setError(err.message)}finally{setBusy(false)}}
@@ -617,7 +761,7 @@ function App(){
   <main className="main"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileNav(true)}><Menu/></button><div className="crumb">Workspace <span>/</span> <strong>{selected.label}</strong></div><span className="role-chip">{roleLabel}</span>{user.platform_workspace&&<button className="secondary" onClick={()=>returnToPlatformOwner()}>Return to Developer Control Centre</button>}{DEMO_MODE&&demoTestingActive&&user.role!=="super_admin"&&<button className="secondary" onClick={()=>{const password=window.prompt("Enter the shared demo password to return to Developer");if(password)switchDemoAccount("demo.developer@jovoo.in",password)}}>Return to Developer</button>}<div className="top-actions">{user.role!=='parent'&&<div className="student-global-search"><Search size={16}/><input aria-label="Find student across modules" placeholder="Find student by name / admission no." value={studentSearch} onChange={e=>setStudentSearch(e.target.value)}/>{studentResults.length>0&&<div className="student-search-results">{studentResults.map(s=><button type="button" key={s.id} onClick={()=>chooseStudent(s)}><strong>{s.full_name}</strong><span>{s.admission_no} · {s.class_name||'Class not set'} {s.section||''}</span></button>)}</div>}</div>}<div className="online-pill"><span/> System online</div><button className="icon-button" title="Notifications"><Bell size={19}/></button><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div></div></header>
   <div className="content">{loading&&<div className="workspace-refresh-overlay" role="status" aria-live="polite"><div className="workspace-refresh-indicator"><RefreshCw size={22}/><span>Refreshing workspace…</span></div></div>}{selectedStudent&&<div className="selected-student-context"><div><strong>Selected student: {selectedStudent.full_name}</strong><span>{selectedStudent.admission_no} · {selectedStudent.class_name||'Class not set'} {selectedStudent.section||''} · Guardian: {selectedStudent.guardian_name||'—'} · Phone: {selectedStudent.guardian_phone||'—'}</span></div><button type="button" className="secondary" onClick={()=>setSelectedStudent(null)}>Clear student</button></div>}<div className="page-heading"><div><p className="eyebrow">SCHOOL ERP / {selected.key.toUpperCase()}</p><h1>{selected.label}</h1><p className="muted">{selected.description}</p></div><div className="heading-actions"><button className="secondary" onClick={refreshCurrentView} disabled={loading} aria-label="Refresh current page"><RefreshCw size={16}/> {loading?'Refreshing…':'Refresh'}</button>{active==='students'&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<button className="secondary" onClick={downloadStudentTemplate}><Download size={16}/> Template</button><input id="student-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importStudents}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('student-bulk-file')?.click()}><Upload size={16}/> {importing?'Uploading…':'Bulk upload'}</button></>}{['staff','classes','vehicles','hostels','maintenance','fee-structures'].includes(active)&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<input id="module-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importModule}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('module-bulk-file')?.click()}><Upload size={16}/> {importing?'Importing…':'Import CSV / Excel'}</button></>}{selected.endpoint&&(user.role!=='super_admin'||active==='schools'||active==='staff'||['attendance','timetable','exams','report-cards','homework','student-leave','parent-messages'].includes(active))&&<button className="primary" onClick={()=>{setEditingRecordId(null);setForm(active==='student-fees'&&selectedStudent?{student_id:selectedStudent.id,term:'annual',discount:0}:{});setShowForm(true)}}><Plus size={17}/> Add record</button>}</div></div>
   {error&&<div className="error banner"><span>{error}</span><button onClick={()=>setError('')}><X size={16}/></button></div>}{notice&&<div className="success banner">{notice}<button onClick={()=>setNotice('')}><X size={16}/></button></div>}
-  {active==='parent-portal'?<ParentPortal request={request} userRole={user.role} refreshKey={refreshVersion} onLoadingChange={setLoading}/>:active==='chatbot'?<HelpAssistant request={request}/>:active==='developer-control'&&user.role==='super_admin'?<DeveloperControlCentre request={request} onEnterWorkspace={enterClientWorkspace} moduleList={modules} roles={roleCatalog}/>:active==='dashboard'?<>
+  {active==='parent-portal'?<ParentPortal request={request} userRole={user.role} refreshKey={refreshVersion} onLoadingChange={setLoading}/>:active==='facility-requests'?<FacilityRequestsPanel request={request} userRole={user.role} refreshKey={refreshVersion}/>:active==='chatbot'?<HelpAssistant request={request}/>:active==='developer-control'&&user.role==='super_admin'?<DeveloperControlCentre request={request} onEnterWorkspace={enterClientWorkspace} moduleList={modules} roles={roleCatalog}/>:active==='dashboard'?<>
     {DEMO_MODE&&demoTestingActive&&user.role==='super_admin'&&<div className="panel demo-role-testing-panel"><div className="panel-heading"><div><h3>Role testing workspace</h3><p>Open a real demo account to verify its dashboard and navigation. This does not change normal user access.</p></div><ShieldCheck size={20}/></div><div className="quick-grid"><label className="auth-field">Demo role<select value={demoTargetEmail} onChange={e=>setDemoTargetEmail(e.target.value)}><option value="">Choose a role to test…</option>{DEMO_USERS.filter(demo=>demo.email!=='demo.developer@jovoo.in').map(demo=><option key={demo.email} value={demo.email}>{demo.label}</option>)}</select></label><label className="auth-field">Shared demo password<input type="password" autoComplete="off" value={demoSwitchPassword} onChange={e=>setDemoSwitchPassword(e.target.value)} placeholder="Enter the password printed by the seeder"/></label><div><button className="primary" disabled={demoSwitchBusy||!demoTargetEmail||!demoSwitchPassword} onClick={()=>switchDemoAccount(demoTargetEmail)}>{demoSwitchBusy?'Opening workspace…':'Open selected role'}</button></div></div>{demoSwitchError&&<div className="error auth-message" role="alert">{demoSwitchError}</div>}</div>}
     <div className="welcome-panel"><div><span className="welcome-tag">{roleLabel.toUpperCase()} WORKSPACE</span><h2>Good to see you, {user.name.split(' ')[0]}</h2><p>{roleDescriptions[user.role]||'Your school workspace and assigned daily tasks.'} Use the options on the left to get started.</p></div><div className="welcome-icon"><GraduationCap size={44}/></div></div>
     <div className="stat-grid">{[{label:'Total students',key:'students',target:'students',icon:GraduationCap,tone:'teal'},{label:'Staff members',key:'staff',target:'staff',icon:Users,tone:'blue'},{label:'Classes & sections',key:'classes',target:'classes',icon:BookOpen,tone:'purple'},{label:'Transport vehicles',key:'vehicles',target:'vehicles',icon:Bus,tone:'orange'},{label:'Hostel rooms',key:'hostel_rooms',target:'hostels',icon:Building2,tone:'pink'},{label:'Open maintenance',key:'open_maintenance',target:'maintenance',icon:Wrench,tone:'red'},...(user.role==='super_admin'?[{label:'Schools',key:'schools',target:'schools',icon:Building2,tone:'purple'},{label:'Active accounts',key:'active_users',target:'schools',icon:Users,tone:'blue'}]:[])].filter(s=>hasModule(s.target)).map(s=>{const I=s.icon;return <div className="stat-card dashboard-link-card" key={s.key} role="link" tabIndex={0} onClick={()=>setActive(s.target)} onKeyDown={e=>{if(e.key==='Enter'){setActive(s.target)}}}><div className={`stat-icon ${s.tone}`}><I size={20}/></div><p>{s.label}</p><strong>{stats[s.key]??'—'}</strong><span className="stat-foot">{user.role==='super_admin'&&s.key==='schools'?stats.active_schools+' active · '+stats.inactive_schools+' inactive':'Current records · Click to open'}</span></div>})}</div>
