@@ -9,7 +9,9 @@ from app.rbac_templates import (
     create_role_template,
     create_template_version,
     publish_template_version,
-    replace_draft_policy,\n    retire_template_version,\n    set_role_template_active,
+    replace_draft_policy,
+    retire_template_version,
+    set_role_template_active,
 )
 
 
