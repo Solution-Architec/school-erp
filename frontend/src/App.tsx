@@ -9,6 +9,7 @@ type ModuleDef = { key:string; label:string; icon:any; endpoint?:string; fields?
 const modules: ModuleDef[] = [
  {key:'dashboard',label:'Dashboard',icon:LayoutDashboard,description:'School overview and operational alerts'},
  {key:'parent-portal',label:'Parent Workspace',icon:Users,description:'One secure family workspace for all linked children and school services'},
+ {key:'parent-relationships',label:'Parent Relationships',icon:Users,description:'Review and manage verified parent–student access for this school'},
  {key:'facility-requests',label:'Transport & Hostel Requests',icon:Bus,description:'Review parent transport and hostel allocation requests'},
  {key:'chatbot',label:'Help Assistant',icon:Activity,description:'School FAQ and guided help'},
  {key:'approvals',label:'Staff Approvals',icon:Users,description:'Review verified staff account requests'},
@@ -100,7 +101,7 @@ const roleDescriptions:Record<string,string> = {
 const roleModuleAccess:Record<string,string[]> = {
  super_admin:['developer-control'],
  user:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans'],
- admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests'],
+ admin:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests','parent-relationships'],
  principal:['dashboard','chatbot','approvals','students','staff','classes','vehicles','hostels','documents','maintenance','fee-structures','student-fees','payments','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests'],
  vice_principal:['dashboard','chatbot','students','staff','classes','documents','maintenance','fee-reports','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages','library-books','library-loans','facility-requests'],
  teacher:['dashboard','chatbot','students','classes','documents','attendance','timetable','exams','report-cards','homework','student-leave','parent-messages'],
@@ -959,7 +960,7 @@ function App(){
   <main className="main"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileNav(true)}><Menu/></button><div className="crumb">Workspace <span>/</span> <strong>{selected.label}</strong></div><span className="role-chip">{roleLabel}</span>{user.platform_workspace&&<button className="secondary" onClick={()=>returnToPlatformOwner()}>Return to Developer Control Centre</button>}{DEMO_MODE&&demoTestingActive&&user.role!=="super_admin"&&<button className="secondary" onClick={()=>{const password=window.prompt("Enter the shared demo password to return to Developer");if(password)switchDemoAccount("demo.developer@jovoo.in",password)}}>Return to Developer</button>}<div className="top-actions">{user.role!=='parent'&&<div className="student-global-search"><Search size={16}/><input aria-label="Find student across modules" placeholder="Find student by name / admission no." value={studentSearch} onChange={e=>setStudentSearch(e.target.value)}/>{studentResults.length>0&&<div className="student-search-results">{studentResults.map(s=><button type="button" key={s.id} onClick={()=>chooseStudent(s)}><strong>{s.full_name}</strong><span>{s.admission_no} · {s.class_name||'Class not set'} {s.section||''}</span></button>)}</div>}</div>}<div className="online-pill"><span/> System online</div><button className="icon-button" title="Notifications"><Bell size={19}/></button><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div></div></header>
   <div className="content">{loading&&<div className="workspace-refresh-overlay" role="status" aria-live="polite"><div className="workspace-refresh-indicator"><RefreshCw size={22}/><span>Refreshing workspace…</span></div></div>}{selectedStudent&&<div className="selected-student-context"><div><strong>Selected student: {selectedStudent.full_name}</strong><span>{selectedStudent.admission_no} · {selectedStudent.class_name||'Class not set'} {selectedStudent.section||''} · Guardian: {selectedStudent.guardian_name||'—'} · Phone: {selectedStudent.guardian_phone||'—'}</span></div><button type="button" className="secondary" onClick={()=>setSelectedStudent(null)}>Clear student</button></div>}<div className="page-heading"><div><p className="eyebrow">SCHOOL ERP / {selected.key.toUpperCase()}</p><h1>{selected.label}</h1><p className="muted">{selected.description}</p></div><div className="heading-actions"><button className="secondary" onClick={refreshCurrentView} disabled={loading} aria-label="Refresh current page"><RefreshCw size={16}/> {loading?'Refreshing…':'Refresh'}</button>{active==='students'&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<button className="secondary" onClick={downloadStudentTemplate}><Download size={16}/> Template</button><input id="student-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importStudents}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('student-bulk-file')?.click()}><Upload size={16}/> {importing?'Uploading…':'Bulk upload'}</button></>}{['staff','classes','vehicles','hostels','maintenance','fee-structures'].includes(active)&&user.role!=='parent'&&<>{user.role==='super_admin'&&<select aria-label="Import school" value={importSchoolId} onChange={e=>setImportSchoolId(e.target.value)}><option value="">Select school</option>{schools.map(sc=><option key={sc.id} value={sc.id}>{sc.name}</option>)}</select>}<input id="module-bulk-file" type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={importModule}/><button className="secondary" disabled={importing||(user.role==='super_admin'&&!importSchoolId)} onClick={()=>document.getElementById('module-bulk-file')?.click()}><Upload size={16}/> {importing?'Importing…':'Import CSV / Excel'}</button></>}{selected.endpoint&&(user.role!=='super_admin'||active==='schools'||active==='staff'||['attendance','timetable','exams','report-cards','homework','student-leave','parent-messages'].includes(active))&&<button className="primary" onClick={()=>{setEditingRecordId(null);setForm(active==='student-fees'&&selectedStudent?{student_id:selectedStudent.id,term:'annual',discount:0}:{});setShowForm(true)}}><Plus size={17}/> Add record</button>}</div></div>
   {error&&<div className="error banner"><span>{error}</span><button onClick={()=>setError('')}><X size={16}/></button></div>}{notice&&<div className="success banner">{notice}<button onClick={()=>setNotice('')}><X size={16}/></button></div>}
-  {active==='parent-portal'?<ParentPortal request={request} userRole={user.role} currentUserId={user.id} refreshKey={refreshVersion} onLoadingChange={setLoading}/>:active==='facility-requests'?<FacilityRequestsPanel request={request} userRole={user.role} refreshKey={refreshVersion}/>:active==='chatbot'?<HelpAssistant request={request}/>:active==='developer-control'&&user.role==='super_admin'?<DeveloperControlCentre request={request} onEnterWorkspace={enterClientWorkspace} moduleList={modules} roles={roleCatalog}/>:active==='dashboard'?<>
+  {active==='parent-portal'?<ParentPortal request={request} userRole={user.role} currentUserId={user.id} refreshKey={refreshVersion} onLoadingChange={setLoading}/>:active==='parent-relationships'?<ParentRelationshipPanel request={request}/>:active==='facility-requests'?<FacilityRequestsPanel request={request} userRole={user.role} refreshKey={refreshVersion}/>:active==='chatbot'?<HelpAssistant request={request}/>:active==='developer-control'&&user.role==='super_admin'?<DeveloperControlCentre request={request} onEnterWorkspace={enterClientWorkspace} moduleList={modules} roles={roleCatalog}/>:active==='dashboard'?<>
     {DEMO_MODE&&demoTestingActive&&user.role==='super_admin'&&<div className="panel demo-role-testing-panel"><div className="panel-heading"><div><h3>Role testing workspace</h3><p>Open a real demo account to verify its dashboard and navigation. This does not change normal user access.</p></div><ShieldCheck size={20}/></div><div className="quick-grid"><label className="auth-field">Demo role<select value={demoTargetEmail} onChange={e=>setDemoTargetEmail(e.target.value)}><option value="">Choose a role to test…</option>{DEMO_USERS.filter(demo=>demo.email!=='demo.developer@jovoo.in').map(demo=><option key={demo.email} value={demo.email}>{demo.label}</option>)}</select></label><label className="auth-field">Shared demo password<input type="password" autoComplete="off" value={demoSwitchPassword} onChange={e=>setDemoSwitchPassword(e.target.value)} placeholder="Enter the password printed by the seeder"/></label><div><button className="primary" disabled={demoSwitchBusy||!demoTargetEmail||!demoSwitchPassword} onClick={()=>switchDemoAccount(demoTargetEmail)}>{demoSwitchBusy?'Opening workspace…':'Open selected role'}</button></div></div>{demoSwitchError&&<div className="error auth-message" role="alert">{demoSwitchError}</div>}</div>}
     <div className="welcome-panel"><div><span className="welcome-tag">{roleLabel.toUpperCase()} WORKSPACE</span><h2>Good to see you, {user.name.split(' ')[0]}</h2><p>{roleDescriptions[user.role]||'Your school workspace and assigned daily tasks.'} Use the options on the left to get started.</p></div><div className="welcome-icon"><GraduationCap size={44}/></div></div>
     <div className="stat-grid">{[{label:'Total students',key:'students',target:'students',icon:GraduationCap,tone:'teal'},{label:'Staff members',key:'staff',target:'staff',icon:Users,tone:'blue'},{label:'Classes & sections',key:'classes',target:'classes',icon:BookOpen,tone:'purple'},{label:'Transport vehicles',key:'vehicles',target:'vehicles',icon:Bus,tone:'orange'},{label:'Hostel rooms',key:'hostel_rooms',target:'hostels',icon:Building2,tone:'pink'},{label:'Open maintenance',key:'open_maintenance',target:'maintenance',icon:Wrench,tone:'red'},...(user.role==='super_admin'?[{label:'Schools',key:'schools',target:'schools',icon:Building2,tone:'purple'},{label:'Active accounts',key:'active_users',target:'schools',icon:Users,tone:'blue'}]:[])].filter(s=>hasModule(s.target)).map(s=>{const I=s.icon;return <div className="stat-card dashboard-link-card" key={s.key} role="link" tabIndex={0} onClick={()=>setActive(s.target)} onKeyDown={e=>{if(e.key==='Enter'){setActive(s.target)}}}><div className={`stat-icon ${s.tone}`}><I size={20}/></div><p>{s.label}</p><strong>{stats[s.key]??'—'}</strong><span className="stat-foot">{user.role==='super_admin'&&s.key==='schools'?stats.active_schools+' active · '+stats.inactive_schools+' inactive':'Current records · Click to open'}</span></div>})}</div>
@@ -1040,6 +1041,80 @@ function App(){
   <footer className="footer"><span>© {new Date().getFullYear()} EduNexus</span><span>School operations platform</span></footer></div></main>
  </div>
  }
+
+
+function ParentRelationshipPanel({request}:{request:(url:string,options?:RequestInit)=>Promise<any>}) {
+ const [links,setLinks]=useState<any[]>([]);
+ const [query,setQuery]=useState('');
+ const [status,setStatus]=useState<'all'|'active'|'inactive'>('all');
+ const [busy,setBusy]=useState(false);
+ const [updating,setUpdating]=useState<number|null>(null);
+ const [error,setError]=useState('');
+ const [notice,setNotice]=useState('');
+ async function load(){
+  setBusy(true);setError('');
+  try{
+   const result=await request('/api/parent-links');
+   setLinks(Array.isArray(result)?result:[]);
+  }catch(err:any){setError(err.message||'Could not load parent relationships')}
+  finally{setBusy(false)}
+ }
+ useEffect(()=>{load()},[]);
+ const filtered=useMemo(()=>{
+  const term=query.trim().toLowerCase();
+  return links.filter(link=>(status==='all'||(status==='active'?Boolean(link.is_active):!link.is_active))&&(!term||[link.parent_name,link.parent_email,link.student_name,link.admission_no,link.class_name,link.section,link.relationship]
+   .some(value=>String(value||'').toLowerCase().includes(term))));
+ },[links,query]);
+ async function toggle(link:any){
+  const next=!link.is_active;
+  const action=next?'restore access to':'remove access to';
+  if(!window.confirm('Are you sure you want to '+action+' '+link.student_name+' for '+link.parent_name+'?'))return;
+  setUpdating(link.id);setError('');setNotice('');
+  try{
+   await request('/api/parent-links/'+link.id,{method:'PATCH',body:JSON.stringify({is_active:next})});
+   setLinks(current=>current.map(item=>item.id===link.id?{...item,is_active:next}:item));
+   setNotice(next?'Parent access restored.':'Parent access deactivated immediately.');
+  }catch(err:any){setError(err.message||'Could not update relationship')}
+  finally{setUpdating(null)}
+ }
+ return <section className="parent-relations-workspace">
+  <div className="parent-relations-hero">
+   <div><span className="parent-relations-eyebrow">FAMILY ACCESS GOVERNANCE</span><h2>Parent relationships</h2><p>Review which parent accounts can access each student. Access is granted only through approved, active school relationships.</p></div>
+   <div className="parent-relations-security"><ShieldCheck size={17}/> School-scoped access</div>
+  </div>
+  <div className="parent-relations-stats">
+   <div><span>Total relationships</span><strong>{links.length}</strong></div>
+   <div><span>Active access</span><strong>{links.filter(item=>item.is_active).length}</strong></div>
+   <div><span>Inactive access</span><strong>{links.filter(item=>!item.is_active).length}</strong></div>
+  </div>
+  <div className="panel parent-relations-panel">
+   <div className="parent-relations-toolbar">
+    <div><h3>Relationship register</h3><p>Search by parent, student, admission number or relationship.</p></div>
+    <button className="secondary" type="button" onClick={load} disabled={busy}><RefreshCw size={15}/>{busy?'Refreshing…':'Refresh'}</button>
+   </div>
+   <div className="parent-relations-filters">
+    <label className="parent-relations-search"><Search size={16}/><input aria-label="Search parent relationships" placeholder="Search parent or student…" value={query} onChange={event=>setQuery(event.target.value)}/></label>
+    <label className="parent-relations-status">Access status<select value={status} onChange={event=>setStatus(event.target.value as 'all'|'active'|'inactive')}><option value="all">All relationships</option><option value="active">Active only</option><option value="inactive">Inactive only</option></select></label>
+   </div>
+   {error&&<div className="error auth-message" role="alert">{error}</div>}
+   {notice&&<div className="success auth-message" role="status">{notice}</div>}
+   <div className="table-wrap">
+    <table className="parent-relations-table"><thead><tr><th>Parent account</th><th>Linked student</th><th>Relationship</th><th>Access</th><th>Action</th></tr></thead>
+    <tbody>{filtered.map(link=><tr key={link.id}>
+     <td><strong>{link.parent_name||'Parent account'}</strong><small>{link.parent_email||'Email not available'}</small></td>
+     <td><strong>{link.student_name||'Student'}</strong><small>{link.admission_no||'No admission number'} · {link.class_name||'Class not set'} {link.section||''}</small></td>
+     <td>{link.relationship||'parent'}</td>
+     <td><span className={'status-badge '+(link.is_active?'active':'inactive')}>{link.is_active?'Active':'Inactive'}</span></td>
+     <td><button type="button" className={link.is_active?'secondary':'primary'} disabled={updating===link.id} onClick={()=>toggle(link)}>{updating===link.id?'Updating…':link.is_active?'Deactivate':'Reactivate'}</button></td>
+    </tr>)}
+    {!filtered.length&&<tr><td colSpan={5}><div className="empty-state compact-empty"><strong>{busy?'Loading relationships…':'No parent relationships found'}</strong><p>{busy?'Please wait while the register loads.':query?'Try another search term or status filter.':'Approved parent–student links will appear here.'}</p></div></td></tr>}
+    </tbody></table>
+   </div>
+   <div className="parent-relations-footer"><span>{filtered.length} of {links.length} relationship(s)</span><span>Changes are audited · Parent access is enforced by the backend</span></div>
+  </div>
+ </section>
+}
+
 
 function DeveloperModulePermissionPanel({moduleList,roles,schools,request}:{moduleList:ModuleDef[];roles:{role:string;roleKey:string;scope:string;level:string}[];schools:any[];request:(url:string,options?:RequestInit)=>Promise<any>}) {
  const [role,setRole]=useState('teacher');
