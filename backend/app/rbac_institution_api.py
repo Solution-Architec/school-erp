@@ -208,6 +208,7 @@ def list_assignable_users(
 def list_role_assignments(
     user_id: int | None = None,
     role_id: int | None = None,
+    include_inactive: bool = False,
     user: models.User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
@@ -216,11 +217,10 @@ def list_role_assignments(
         select(models.UserRoleAssignment, models.User, models.InstitutionRole)
         .join(models.User, models.User.id == models.UserRoleAssignment.user_id)
         .join(models.InstitutionRole, models.InstitutionRole.id == models.UserRoleAssignment.role_id)
-        .where(
-            models.UserRoleAssignment.school_id == school_id,
-            models.UserRoleAssignment.is_active.is_(True),
-        )
+        .where(models.UserRoleAssignment.school_id == school_id)
     )
+    if not include_inactive:
+        stmt = stmt.where(models.UserRoleAssignment.is_active.is_(True))
     if user_id is not None:
         stmt = stmt.where(models.UserRoleAssignment.user_id == user_id)
     if role_id is not None:
