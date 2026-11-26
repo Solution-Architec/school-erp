@@ -15,7 +15,7 @@ from .rbac_institutions import (
     create_institution_role,
     set_role_assignment_active,
 )
-from .security import require_roles
+from .security import require_module_permission
 
 router = APIRouter(prefix="/api/institution/rbac", tags=["institution-rbac"])
 
@@ -107,7 +107,7 @@ def _assignment_out(assignment: models.UserRoleAssignment, user: models.User, ro
 
 @router.get("/context")
 def institution_rbac_context(
-    user: models.User = Depends(require_roles("admin")),
+    user: models.User = Depends(require_module_permission("institution-role-builder", "View", "admin")),
     db: Session = Depends(get_db),
 ):
     school_id = _school_id(user)
@@ -119,7 +119,7 @@ def institution_rbac_context(
 
 @router.get("/templates")
 def list_adoptable_templates(
-    user: models.User = Depends(require_roles("admin")),
+    user: models.User = Depends(require_module_permission("institution-role-builder", "View", "admin")),
     db: Session = Depends(get_db),
 ):
     school_id = _school_id(user)
@@ -155,7 +155,7 @@ def list_adoptable_templates(
 
 @router.get("/roles")
 def list_institution_roles(
-    user: models.User = Depends(require_roles("admin")),
+    user: models.User = Depends(require_module_permission("institution-role-builder", "View", "admin")),
     db: Session = Depends(get_db),
 ):
     school_id = _school_id(user)
@@ -170,7 +170,7 @@ def list_institution_roles(
 @router.post("/roles", status_code=201)
 def create_institution_role_api(
     payload: RoleCreateIn,
-    user: models.User = Depends(require_roles("admin")),
+    user: models.User = Depends(require_module_permission("institution-role-builder", "Create", "admin")),
     db: Session = Depends(get_db),
 ):
     school_id = _school_id(user)
@@ -192,7 +192,7 @@ def create_institution_role_api(
 
 @router.get("/users")
 def list_assignable_users(
-    user: models.User = Depends(require_roles("admin")),
+    user: models.User = Depends(require_module_permission("institution-role-builder", "View", "admin")),
     db: Session = Depends(get_db),
 ):
     school_id = _school_id(user)
@@ -216,7 +216,7 @@ def list_role_assignments(
     user_id: int | None = None,
     role_id: int | None = None,
     include_inactive: bool = False,
-    user: models.User = Depends(require_roles("admin")),
+    user: models.User = Depends(require_module_permission("institution-role-builder", "View", "admin")),
     db: Session = Depends(get_db),
 ):
     school_id = _school_id(user)
@@ -239,7 +239,7 @@ def list_role_assignments(
 @router.post("/assignments", status_code=201)
 def create_role_assignment_api(
     payload: AssignmentCreateIn,
-    user: models.User = Depends(require_roles("admin")),
+    user: models.User = Depends(require_module_permission("institution-role-builder", "Create", "admin")),
     db: Session = Depends(get_db),
 ):
     school_id = _school_id(user)
@@ -267,7 +267,7 @@ def create_role_assignment_api(
 def update_role_assignment_api(
     assignment_id: int,
     payload: AssignmentActiveIn,
-    user: models.User = Depends(require_roles("admin")),
+    user: models.User = Depends(require_module_permission("institution-role-builder", "Edit", "admin")),
     db: Session = Depends(get_db),
 ):
     school_id = _school_id(user)
