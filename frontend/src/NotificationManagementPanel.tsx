@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { Bell, Plus, RefreshCw, Send } from 'lucide-react'
 
 type StudentOption={id:number;full_name:string;class_name?:string;section?:string;admission_no?:string}
@@ -28,7 +29,7 @@ export default function NotificationManagementPanel({request}:{request:(url:stri
   finally{setLoading(false)}
  }
  useEffect(()=>{load()},[])
- async function publish(e:React.FormEvent<HTMLFormElement>){
+ async function publish(e:FormEvent<HTMLFormElement>){
   e.preventDefault()
   if(busy)return
   setBusy(true);setError('');setNotice('')
