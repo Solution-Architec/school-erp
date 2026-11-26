@@ -8,8 +8,9 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from .database import get_db
-from .models import User, RolePermission, School, ClientSubscription, AuditLog
+from .models import User, School, ClientSubscription, AuditLog
 from .security_config import load_jwt_secret
+from .rbac_resolver import resolve_effective_permission
 
 # Fail closed during application import/startup: there is no development fallback.
 JWT_SECRET_KEY = load_jwt_secret()
@@ -105,47 +106,26 @@ def require_roles(*roles: str):
 
 
 def require_module_permission(module_key: str, action: str, *fallback_roles: str):
-    """Use saved role grants when configured; otherwise preserve legacy route policy."""
+    """Authorize through active institution roles, then the compatible legacy policy.
+
+    Custom-role decisions are evaluated on every request so assignment revocation,
+    role deactivation and validity windows take effect immediately. If no active
+    custom role decides this module/action, the resolver preserves the existing
+    RolePermission, default-matrix and route-fallback order.
+    """
     def checker(user: User = Depends(current_user), db: Session = Depends(get_db)) -> User:
         if getattr(user, "is_platform_workspace", False):
             return user
         if user.role == "super_admin":
             return user
-        school_grant = None
-        if user.school_id is not None:
-            school_grant = db.scalar(select(RolePermission).where(
-                RolePermission.role == user.role,
-                RolePermission.school_id == user.school_id,
-                RolePermission.module_key == module_key,
-                RolePermission.action == action,
-            ))
-        grant = school_grant or db.scalar(select(RolePermission).where(
-            RolePermission.role == user.role,
-            RolePermission.school_id.is_(None),
-            RolePermission.module_key == module_key,
-            RolePermission.action == action,
-        ))
-        if grant is not None:
-            if grant.enabled:
-                return user
-            raise HTTPException(status_code=403, detail=f"Permission denied: {module_key} / {action}")
 
-        try:
-            from .main import RBAC_MODULES, _default_permission_matrix
-            if module_key in RBAC_MODULES:
-                if _default_permission_matrix(user.role).get(f"{module_key}:{action}", False):
-                    return user
-                raise HTTPException(status_code=403, detail=f"Permission denied: {module_key} / {action}")
-        except ImportError:
-            pass
-
-        if module_key in {"library-books", "library-loans"}:
-            library_roles = {"admin", "principal", "vice_principal", "user", "librarian"}
-            if user.role not in library_roles:
-                raise HTTPException(status_code=403, detail="Library access is restricted to school leadership and librarians")
-            if action == "Delete" and user.role not in {"admin", "user"}:
-                raise HTTPException(status_code=403, detail="Only school administrators can delete library records")
-        if user.role in fallback_roles:
+        decision = resolve_effective_permission(
+            db, user, module_key, action, fallback_roles=fallback_roles
+        )
+        if decision.allowed:
             return user
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied: {module_key} / {action}",
+        )
     return checker
