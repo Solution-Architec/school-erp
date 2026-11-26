@@ -168,3 +168,11 @@ def test_parent_and_school_leadership_self_service_permissions_are_limited():
     assert principal["notifications:Edit"] is True
     assert vice_principal["notifications:Edit"] is True
     assert principal["parent-relationships:View"] is False
+
+
+def test_parent_workspace_creation_permissions_cover_certificate_and_facility_requests():
+    from backend.app.main import _default_permission_matrix
+
+    permissions = _default_permission_matrix("parent")
+    assert permissions["parent-portal:View"] is True
+    assert permissions["parent-portal:Create"] is True
