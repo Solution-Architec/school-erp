@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 import { CheckCircle2, CircleAlert, Layers3, Plus, RefreshCw, Save, ShieldCheck, Tag, X } from 'lucide-react'
 import './DeveloperRoleDesigner.css'
 
@@ -86,7 +87,7 @@ export default function DeveloperRoleDesigner({request}:{request:Request}) {
  function setScope(moduleKey:string,scope:string) {
   setPermissions(current=>current.map(item=>item.module_key===moduleKey?{...item,scope}:item))
  }
- async function createTemplate(e:React.FormEvent) {
+ async function createTemplate(e:FormEvent) {
   e.preventDefault();setBusy(true);setError('');setNotice('')
   try {
    const created=await request('/api/developer/rbac/templates',{method:'POST',body:JSON.stringify({template_key:templateKey,name,description,category})})
