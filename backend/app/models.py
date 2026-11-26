@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from sqlalchemy import String, Integer, Date, DateTime, Boolean, ForeignKey, Text, Numeric, text
+from sqlalchemy import String, Integer, Date, DateTime, Boolean, ForeignKey, Text, Numeric, text, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from .database import Base
 from sqlalchemy import UniqueConstraint, CheckConstraint, Index
@@ -509,3 +509,45 @@ class CertificateIssue(Base):
     certificate_number: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     issued_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RbacInstitutionType(Base):
+    """Canonical institution categories used to scope Developer role templates."""
+    __tablename__ = "rbac_institution_types"
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class RbacModule(Base):
+    """Canonical ERP module catalogue; platform-only modules cannot be tenant-granted."""
+    __tablename__ = "rbac_modules"
+    key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    category: Mapped[str] = mapped_column(String(60), default="general", nullable=False)
+    is_platform_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    institution_types: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class RbacAction(Base):
+    """Canonical permission action vocabulary."""
+    __tablename__ = "rbac_actions"
+    key: Mapped[str] = mapped_column(String(30), primary_key=True)
+    label: Mapped[str] = mapped_column(String(80), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class RbacModuleAction(Base):
+    """Allow-listed action combinations for each registered module."""
+    __tablename__ = "rbac_module_actions"
+    __table_args__ = (
+        ForeignKey("rbac_modules.key", name="fk_rbac_module_action_module"),
+        ForeignKey("rbac_actions.key", name="fk_rbac_module_action_action"),
+    )
+    module_key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    action_key: Mapped[str] = mapped_column(String(30), primary_key=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
