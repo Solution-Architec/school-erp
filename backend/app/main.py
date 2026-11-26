@@ -377,6 +377,8 @@ def _permission_scope_matrix(db: Session, role: str, school_id: int | None = Non
     inherited = dict(effective)
     if school_grants:
         effective.update({f"{g.module_key}:{g.action}": g.enabled for g in school_grants})
+    # Developer Control Centre is a platform-owner workspace, never a tenant role grant.
+    effective["developer-control:View"] = False
     return {"permissions": effective, "configured": bool(school_grants) if school_id is not None else bool(global_grants),
             "global_configured": bool(global_grants), "school_configured": bool(school_grants), "inherited_permissions": inherited}
 
